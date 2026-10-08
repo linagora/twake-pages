@@ -11,6 +11,7 @@ import { useEffect } from 'react'
 import type {
   Move,
   NewPage,
+  NewVersion,
   NewWiki,
   RecentPage,
   Tree,
@@ -233,6 +234,30 @@ export function useSetFavorite(
         queryKey: favoritesKey,
         exact: true
       })
+    }
+  })
+}
+
+/**
+ * The page shows its new version as soon as it is published, and the tree
+ * its title once read again, before the caller opens the page.
+ */
+export function usePublish(
+  wikiId: string,
+  pageId: string
+): UseMutationResult<Page, Error, NewVersion> {
+  const api = usePagesApi()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (version: NewVersion) => api.publish(pageId, version),
+    onSuccess: page => {
+      // At the version of the wiki its last read knew, older than the one
+      // publishing moved it to.
+      queryClient.setQueryData<ReadPage>(pageKey(wikiId, pageId), read => ({
+        page,
+        version: read?.version
+      }))
+      return queryClient.invalidateQueries({ queryKey: treeKey(wikiId) })
     }
   })
 }

@@ -178,6 +178,12 @@
       "question": "Une question encore sans réponse"
     }
   },
+  "editor": {
+    "back": "Retour à la page",
+    "pageTitle": "Titre",
+    "content": "Contenu",
+    "publish": "Publier"
+  },
   "labels": {
     "title": "Pages avec l'étiquette %{name}"
   },

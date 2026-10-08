@@ -178,6 +178,12 @@
       "question": "A question still to answer"
     }
   },
+  "editor": {
+    "back": "Back to the page",
+    "pageTitle": "Title",
+    "content": "Content",
+    "publish": "Publish"
+  },
   "labels": {
     "title": "Pages labelled %{name}"
   },

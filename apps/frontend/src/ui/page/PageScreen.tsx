@@ -2,7 +2,6 @@ import { Alert, Breadcrumbs, Link, Typography } from '@linagora/twake-mui'
 import type { ReactElement } from 'react'
 import { Link as RouterLink, useParams } from 'react-router'
 
-import { ApiError } from '@/application/pages'
 import { PageHeader } from '@/ds/PageHeader'
 import type { Page } from '@/domain/page'
 import { useI18n } from '@/ui/i18n/useI18n'
@@ -11,20 +10,16 @@ import { FavoriteButton } from '@/ui/page/FavoriteButton'
 import { PageContent } from '@/ui/page/PageContent'
 import { PageMenu } from '@/ui/page/PageMenu'
 import { PageVersion } from '@/ui/page/PageVersion'
+import { useWikiPage } from '@/ui/page/useWikiPage'
 import { UnavailableScreen } from '@/ui/shell/Problems'
 import { useDocumentTitle } from '@/ui/useDocumentTitle'
-import { usePage, useWiki } from '@/ui/wiki/queries'
+import { useWiki } from '@/ui/wiki/queries'
 import { useWikiName } from '@/ui/wiki/useWikiName'
 
 export function PageScreen(): ReactElement {
   const { t } = useI18n()
   const { wikiId = '', pageId = '' } = useParams()
-  const page = usePage(wikiId, pageId)
-  // Checked before the data, which a failed reload keeps. A page of another
-  // wiki has no place in this one's tree.
-  const missing =
-    (page.error instanceof ApiError && page.error.status === 404) ||
-    (page.data !== undefined && page.data.wikiId !== wikiId)
+  const { page, missing } = useWikiPage(wikiId, pageId)
   useDocumentTitle(missing ? null : (page.data?.title ?? null))
 
   if (missing || !page.data) {
