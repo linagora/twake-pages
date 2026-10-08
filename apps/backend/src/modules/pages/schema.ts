@@ -233,7 +233,13 @@ export const pageVisits = pgTable.withRLS(
       columns: [table.tenant, table.pageId],
       foreignColumns: [pages.tenant, pages.id]
     }),
-    tenantPolicy(table.organizationId, visiblePage(table.pageId)),
+    // The flag is on while app_trim_visits counts the person's visits, those
+    // of wikis they left among them (see its migration). It writes none.
+    tenantPolicy(
+      table.organizationId,
+      sql`current_setting('app.visits_lookup', true) = 'on' or ${visiblePage(table.pageId)}`,
+      visiblePage(table.pageId)
+    ),
     ownRows(table.userId)
   ]
 )

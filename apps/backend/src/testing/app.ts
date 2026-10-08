@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import { pino } from 'pino'
 import { inject } from 'vitest'
 import { buildApp } from '../app.ts'
@@ -53,6 +53,22 @@ export async function joinWiki(
       email: user.email,
       role
     })
+  )
+}
+
+/** Takes the person out of the wiki, as its admin will by removing them. */
+export async function removeFromWiki(
+  db: Db,
+  admin: TestUser,
+  wikiId: string,
+  user: TestUser
+) {
+  await inTenant(db, admin, tx =>
+    tx
+      .delete(wikiMembers)
+      .where(
+        and(eq(wikiMembers.wikiId, wikiId), eq(wikiMembers.userId, user.userId))
+      )
   )
 }
 

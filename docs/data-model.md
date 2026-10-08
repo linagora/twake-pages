@@ -101,7 +101,7 @@ As in Twake Tasks, about pages: `id, page_id (cascade), wiki_id, org_id, user_id
 
 ### page_favorites, page_visits
 
-`(user_id, page_id)` primary key, `org_id`, `tenant`, `created_at` or `visited_at`; tenant policy on the page and the restrictive `own` policy (`ownRows`) of Twake Tasks. Visits are capped at the 100 most recent per person.
+`(user_id, page_id)` primary key, `org_id`, `tenant`, `created_at` or `visited_at`; tenant policy on the page and the restrictive `own` policy (`ownRows`) of Twake Tasks. Visits are capped at the 100 most recent per person, those of wikis the person left included: `app_trim_visits()` deletes the older ones under `app.visits_lookup`, which the B2C scope of the `page_visits` tenant policy honors in `USING` only, as the `wiki_members` one honors `app.membership_lookup`.
 
 ### Platform tables
 

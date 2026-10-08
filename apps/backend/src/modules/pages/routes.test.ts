@@ -10,6 +10,7 @@ import {
   aUser,
   aWikiOf,
   joinWiki,
+  removeFromWiki,
   startApp,
   type TestUser
 } from '../../testing/app.ts'
@@ -380,5 +381,33 @@ describe('GET /pages/:pageId', () => {
       last: visits[0],
       oldest: visits.at(-1)
     }).toEqual({ count: 100, last: wiki.homePageId, oldest: visited[1] })
+  })
+
+  // A B2C person no longer sees the visits of a wiki they left.
+  it('counts among the 100 the visits of a wiki the person left', async () => {
+    const carol = aB2cUser()
+    const alice = aB2cUser()
+    const left = await aWikiOf(api, carol)
+    await joinWiki(db, carol, left.id, alice, 'viewer')
+    await inTenant(db, alice, tx =>
+      tx.insert(pageVisits).values({
+        pageId: left.homePageId,
+        organizationId: null,
+        userId: alice.userId,
+        visitedAt: new Date(2025, 0, 1)
+      })
+    )
+    await removeFromWiki(db, carol, left.id, alice)
+    const own = await aWikiOf(api, alice)
+    await visitedLongAgo(alice, own.id, 100)
+
+    await pageOf(alice, own.homePageId)
+
+    await joinWiki(db, carol, left.id, alice, 'viewer')
+    const visits = await visitsOf(alice)
+    expect({
+      count: visits.length,
+      left: visits.includes(left.homePageId)
+    }).toEqual({ count: 100, left: false })
   })
 })

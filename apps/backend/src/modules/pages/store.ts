@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, notInArray, sql } from 'drizzle-orm'
+import { and, asc, eq, sql } from 'drizzle-orm'
 import { inTenant, type Db, type Tx } from '../../infra/db.ts'
 import type { Identity } from '../auth/index.ts'
 import { pageFollowers } from '../notifications/schema.ts'
@@ -70,17 +70,9 @@ async function recordVisit(
       target: [pageVisits.userId, pageVisits.pageId],
       set: { visitedAt: sql`now()` }
     })
-  const kept = tx
-    .select({ pageId: pageVisits.pageId })
-    .from(pageVisits)
-    .where(eq(pageVisits.userId, userId))
-    .orderBy(desc(pageVisits.visitedAt))
-    .limit(KEPT_VISITS)
-  await tx
-    .delete(pageVisits)
-    .where(
-      and(eq(pageVisits.userId, userId), notInArray(pageVisits.pageId, kept))
-    )
+  // The function counts the visits of wikis the person left, which the
+  // policies hide from this transaction in B2C.
+  await tx.execute(sql`select app_trim_visits(${KEPT_VISITS})`)
 }
 
 export function createPageStore(db: Db) {
