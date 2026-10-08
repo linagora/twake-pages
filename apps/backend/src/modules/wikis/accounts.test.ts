@@ -134,7 +134,7 @@ const NOTHING_KEPT = {
  * What the reader finds written in the wiki: the titles in its tree, and the
  * versions of its home page and the comments on it, which no route shows yet.
  */
-async function writingsIn(wiki: WikiSummary, reader: TestUser) {
+async function pagesVersionsAndCommentsIn(wiki: WikiSummary, reader: TestUser) {
   const tree = (await api.as(reader).get(`/wikis/${wiki.id}/tree`)).json<{
     pages: { title: string }[]
   }>()
@@ -302,7 +302,7 @@ describe.each(deletions)(
 
       await deliver(routingKey, body(gone))
 
-      expect(await writingsIn(handedOn, editor)).toEqual({
+      expect(await pagesVersionsAndCommentsIn(handedOn, editor)).toEqual({
         titles: ['Onboarding'],
         versions: [{ number: 1, authorId: gone.userId }],
         comments: [{ authorId: gone.userId, body: 'Welcome aboard' }]
@@ -456,8 +456,8 @@ describe('a deleted organization', () => {
     await aSpaceWiki(db, [[colleague, 'admin']])
     const deleted = await aWiki(admin, 'Minutes', [])
     await api.as(admin).delete(`/wikis/${deleted.id}`)
-    const kept = await aWiki(outsider, 'Minutes', [])
-    await api.as(outsider).delete(`/wikis/${kept.id}`)
+    const outsidersWiki = await aWiki(outsider, 'Minutes', [])
+    await api.as(outsider).delete(`/wikis/${outsidersWiki.id}`)
     expect(await jobsOf(organizationId)).not.toEqual([])
 
     await deliver('domain.organization.deleted', {
