@@ -23,13 +23,14 @@ import type {
 import type { Person } from '@/domain/person'
 import { FOUND_END, FOUND_START } from '@/domain/search'
 import { byPosition } from '@/domain/tree'
-import type {
-  Invite,
-  Member,
-  Role,
-  Wiki,
-  WikiKind,
-  WikiSummary
+import {
+  ROLES,
+  type Invite,
+  type Member,
+  type Role,
+  type Wiki,
+  type WikiKind,
+  type WikiSummary
 } from '@/domain/wiki'
 
 type Mocks = { [Key in keyof PagesApi]: Mock<PagesApi[Key]> }
@@ -110,8 +111,6 @@ const STATUS: Record<Refusal, number> = {
 }
 
 const refuse = (refusal: Refusal) => new ApiError(STATUS[refusal], refusal)
-
-const RANK: Record<Role, number> = { viewer: 0, editor: 1, admin: 2 }
 
 interface Membership {
   person: Person
@@ -397,7 +396,7 @@ function signedIn(world: World, person: Person): FakePagesApi {
     const wiki = wikiOf(wikiId)
     const role = wiki?.members.get(person.id)?.role
     if (!wiki || !role) throw refuse('not_found')
-    if (RANK[role] < RANK[needed]) throw refuse('forbidden')
+    if (ROLES.indexOf(role) < ROLES.indexOf(needed)) throw refuse('forbidden')
     return { wiki, role }
   }
 
