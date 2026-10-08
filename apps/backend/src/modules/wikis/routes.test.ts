@@ -11,6 +11,7 @@ import {
   startApp,
   type TestUser
 } from '../../testing/app.ts'
+import { notifications } from '../notifications/schema.ts'
 import { wikiInvites, wikis } from './schema.ts'
 import { purgeWiki } from './store.ts'
 
@@ -63,6 +64,27 @@ const invite = (admin: TestUser, wikiId: string, email: string) =>
     })
   )
 
+// Nor are notifications: this one tells of a version the actor published.
+const notify = (
+  actor: TestUser,
+  wiki: Wiki,
+  user: TestUser,
+  readAt: Date | null = null
+) =>
+  inTenant(db, actor, tx =>
+    tx.insert(notifications).values({
+      pageId: wiki.homePageId,
+      wikiId: wiki.id,
+      organizationId: actor.organizationId,
+      userId: user.userId,
+      reason: 'published',
+      actorId: actor.userId,
+      actorEmail: actor.email,
+      version: 2,
+      readAt
+    })
+  )
+
 const purgeJobOf = async (wikiId: string) => {
   const [job] = await db
     .select()
@@ -90,6 +112,29 @@ const wikiRowsOf = (creator: TestUser, wikiId: string) =>
   )
 
 describe('GET /wikis', () => {
+  it('counts the person’s unread notifications about each wiki', async () => {
+    const alice = aUser()
+    const bob = aUser({ organizationId: alice.organizationId })
+    const carol = aUser({ organizationId: alice.organizationId })
+    const wiki = await aWikiOf(alice)
+    await joinWiki(db, alice, wiki.id, bob, 'editor')
+    await joinWiki(db, alice, wiki.id, carol, 'editor')
+    await notify(alice, wiki, bob)
+    await notify(alice, wiki, bob)
+    await notify(alice, wiki, bob, new Date())
+    await notify(alice, wiki, carol)
+
+    const unread = (await wikisOf(bob)).map(listed => [
+      listed.name,
+      listed.unread
+    ])
+
+    expect(unread).toEqual([
+      ['Personal', 0],
+      ['Handbook', 2]
+    ])
+  })
+
   it.each([
     ['a B2B user', aUser()],
     ['a B2C user, who has no organization', aB2cUser()]
