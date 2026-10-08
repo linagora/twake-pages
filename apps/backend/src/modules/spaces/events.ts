@@ -98,6 +98,22 @@ async function wikiOf(tx: Tx, space: SpaceRef): Promise<string | undefined> {
   return row?.wikiId
 }
 
+/**
+ * The space's wiki, unless deleted. Unlike Twake Tasks, the later events of a
+ * space leave its deleted wiki as it was: no one reaches it again.
+ */
+async function liveWikiOf(
+  tx: Tx,
+  space: SpaceRef
+): Promise<string | undefined> {
+  const [row] = await tx
+    .select({ wikiId: spaces.wikiId })
+    .from(spaces)
+    .innerJoin(wikis, eq(wikis.id, spaces.wikiId))
+    .where(and(eq(spaces.id, space.id), isNull(wikis.deletedAt)))
+  return row?.wikiId
+}
+
 // Names are copied onto memberships at sign-in, so a new membership starts
 // from one the person already has.
 const knownName = (userId: string) =>
@@ -118,7 +134,7 @@ async function upsertMembers(
   space: SpaceRef,
   members: z.infer<typeof member>[]
 ) {
-  const wikiId = await wikiOf(tx, space)
+  const wikiId = await liveWikiOf(tx, space)
   if (!wikiId) return
   // One upsert cannot touch a row twice, so a member listed twice keeps its last entry.
   const byUser = new Map(
@@ -203,7 +219,7 @@ async function provisionSpace(
 }
 
 async function renameSpace(tx: Tx, space: SpaceRef, name: string) {
-  const wikiId = await wikiOf(tx, space)
+  const wikiId = await liveWikiOf(tx, space)
   if (!wikiId) return
   const renamed = await tx
     .update(wikis)
@@ -222,7 +238,7 @@ async function removeMembers(
   space: SpaceRef,
   which: SQL | undefined
 ): Promise<void> {
-  const wikiId = await wikiOf(tx, space)
+  const wikiId = await liveWikiOf(tx, space)
   if (!wikiId) return
   const removed = await tx
     .delete(wikiMembers)

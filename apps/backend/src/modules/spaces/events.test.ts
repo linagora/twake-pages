@@ -346,6 +346,39 @@ describe('twake.space.deleted', () => {
 
     expect(await wikiRowsOf(db, admin, wiki.id)).toEqual(deleted)
   })
+
+  it('leaves the wiki as it was deleted when a later event of the space arrives', async () => {
+    const admin = aUser()
+    const newcomer = aUser({ organizationId: admin.organizationId })
+    const space = { organizationId: admin.organizationId, id: randomUUID() }
+    await deliver('twake.space.created', {
+      ...space,
+      name: 'Ops',
+      members: [member(admin, 'admin')],
+      timestamp: at(0)
+    })
+    const wiki = await spaceWikiOf(admin)
+    await deliver('twake.space.deleted', { ...space, timestamp: at(10) })
+    const deleted = await wikiRowsOf(db, admin, wiki.id)
+
+    await deliver('twake.space.member.added', {
+      ...space,
+      members: [member(newcomer, 'editor')],
+      timestamp: at(10)
+    })
+    await deliver('twake.space.updated', {
+      ...space,
+      name: 'Renamed',
+      timestamp: at(20)
+    })
+    await deliver('twake.space.member.removed', {
+      ...space,
+      members: [{ uuid: admin.userId }],
+      timestamp: at(20)
+    })
+
+    expect(await wikiRowsOf(db, admin, wiki.id)).toEqual(deleted)
+  })
 })
 
 describe('a space wiki through the API', () => {
