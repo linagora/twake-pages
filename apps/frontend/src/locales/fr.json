@@ -85,6 +85,13 @@
     "edit": "Modifier la page",
     "history": "Historique de la page"
   },
+  "newPage": {
+    "title": "Nouvelle page",
+    "pageTitle": "Titre",
+    "cancel": "Annuler",
+    "create": "Créer",
+    "failed": "La page n'a pas pu être créée."
+  },
   "labels": {
     "title": "Pages avec l'étiquette %{name}"
   },

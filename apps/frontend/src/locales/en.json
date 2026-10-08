@@ -85,6 +85,13 @@
     "edit": "Edit page",
     "history": "Page history"
   },
+  "newPage": {
+    "title": "New page",
+    "pageTitle": "Title",
+    "cancel": "Cancel",
+    "create": "Create",
+    "failed": "The page could not be created."
+  },
   "labels": {
     "title": "Pages labelled %{name}"
   },

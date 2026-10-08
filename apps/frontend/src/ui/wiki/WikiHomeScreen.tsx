@@ -1,10 +1,12 @@
-import { Typography } from '@linagora/twake-mui'
-import type { ReactElement } from 'react'
-import { useParams } from 'react-router'
+import { Icon, Plus } from '@linagora/twake-icons'
+import { Button, Typography } from '@linagora/twake-mui'
+import { useState, type ReactElement } from 'react'
+import { useNavigate, useParams } from 'react-router'
 
 import { ListSkeleton } from '@/ds/EmptyState'
 import { PageHeader } from '@/ds/PageHeader'
 import { useI18n } from '@/ui/i18n/useI18n'
+import { NewPageDialog } from '@/ui/page/NewPageDialog'
 import { PageContent } from '@/ui/page/PageContent'
 import { useDocumentTitle } from '@/ui/useDocumentTitle'
 import { usePage, useWiki } from '@/ui/wiki/queries'
@@ -12,10 +14,13 @@ import { useWikiName } from '@/ui/wiki/useWikiName'
 import { WikiMenu } from '@/ui/wiki/WikiMenu'
 
 export function WikiHomeScreen(): ReactElement {
+  const { t } = useI18n()
+  const navigate = useNavigate()
   const { wikiId = '' } = useParams()
   const wiki = useWiki(wikiId)
   const wikiName = useWikiName()
   const name = wiki.data ? wikiName(wiki.data) : null
+  const [creating, setCreating] = useState(false)
   useDocumentTitle(name)
 
   return (
@@ -36,11 +41,34 @@ export function WikiHomeScreen(): ReactElement {
               </>
             }
             actions={
-              wiki.data.role === 'admin' && <WikiMenu wiki={wiki.data} />
+              wiki.data.role !== 'viewer' && (
+                <>
+                  <Button
+                    startIcon={<Icon icon={Plus} />}
+                    onClick={() => {
+                      setCreating(true)
+                    }}
+                  >
+                    {t('newPage.title')}
+                  </Button>
+                  {wiki.data.role === 'admin' && <WikiMenu wiki={wiki.data} />}
+                </>
+              )
             }
           />
           <HomePage wikiId={wikiId} pageId={wiki.data.homePageId} />
         </>
+      )}
+      {creating && (
+        <NewPageDialog
+          wikiId={wikiId}
+          onClose={() => {
+            setCreating(false)
+          }}
+          onCreated={page => {
+            void navigate(`pages/${page.id}`)
+          }}
+        />
       )}
     </main>
   )

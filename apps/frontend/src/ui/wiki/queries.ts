@@ -8,7 +8,7 @@ import {
 } from '@tanstack/react-query'
 import { useEffect } from 'react'
 
-import type { NewWiki, Tree, WikiChanges } from '@/application/pages'
+import type { NewPage, NewWiki, Tree, WikiChanges } from '@/application/pages'
 import type { Page } from '@/domain/page'
 import type { Wiki, WikiSummary } from '@/domain/wiki'
 import { usePagesApi } from '@/ui/PagesApiProvider'
@@ -133,6 +133,22 @@ export function useTree(wikiId: string): UseQueryResult<Tree> {
   return useQuery({
     queryKey: treeKey(wikiId),
     queryFn: () => api.getTree(wikiId)
+  })
+}
+
+/**
+ * The tree is read again before the caller opens the new page, as Twake
+ * Tasks reads a board again once a task is added to it.
+ */
+export function useCreatePage(
+  wikiId: string
+): UseMutationResult<Page, Error, NewPage> {
+  const api = usePagesApi()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (page: NewPage) => api.createPage(wikiId, page),
+    onSettled: () =>
+      queryClient.invalidateQueries({ queryKey: treeKey(wikiId) })
   })
 }
 
