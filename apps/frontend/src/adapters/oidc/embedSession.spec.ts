@@ -64,9 +64,17 @@ const ALICE = {
 
 // Stands for TwakeSpace, told when the SSO wants the person to sign in
 const onLoginRequired = vi.fn()
+// Stands for the gate, which says the session expired meanwhile
+const onExpired = vi.fn()
 
 const silentFrame = () =>
   document.querySelector<HTMLIFrameElement>(`iframe[name="${SILENT_NAME}"]`)
+
+// A request of the wiki, with a token the backend may refuse
+const wikisRequest = () =>
+  new Request('http://localhost:3000/api/wikis', {
+    headers: { Authorization: 'Bearer old' }
+  })
 
 async function frameOpened() {
   await vi.waitFor(() => {
@@ -190,50 +198,67 @@ describe('embedSession', () => {
       .spyOn(window, 'fetch')
       .mockResolvedValueOnce(new Response(null, { status: 401 }))
       .mockResolvedValueOnce(new Response('ok'))
-    const request = new Request('http://localhost:3000/api/wikis', {
-      headers: { Authorization: 'Bearer old' }
-    })
 
-    const sending = embedSession(config, onLoginRequired).send(request)
+    const sending = embedSession(config, onLoginRequired).send(wikisRequest())
     relay((await frameOpened()).window, '?code=c&state=state')
 
     expect(await (await sending).text()).toBe('ok')
     expect(fetch).toHaveBeenCalledTimes(2)
   })
 
-  it('tells TwakeSpace to sign the person in again when the SSO wants them to sign in', async () => {
-    const starting = embedSession(config, onLoginRequired).start()
+  it('tells TwakeSpace to sign the person in again, and says the session expired, when the SSO wants them to sign in', async () => {
+    const session = embedSession(config, onLoginRequired)
+    session.onExpired(onExpired)
+    const starting = session.start()
 
     relay((await frameOpened()).window, '?error=login_required&state=state')
 
     await expect(starting).rejects.toThrow('login_required')
     expect(onLoginRequired).toHaveBeenCalledOnce()
+    expect(onExpired).toHaveBeenCalledOnce()
   })
 
   it('tells TwakeSpace too when the SSO session ended while the wiki was open', async () => {
     vi.spyOn(window, 'fetch').mockResolvedValueOnce(
       new Response(null, { status: 401 })
     )
-    const request = new Request('http://localhost:3000/api/wikis', {
-      headers: { Authorization: 'Bearer old' }
-    })
 
-    const sending = embedSession(config, onLoginRequired).send(request)
+    const sending = embedSession(config, onLoginRequired).send(wikisRequest())
     relay((await frameOpened()).window, '?error=login_required&state=state')
 
     expect((await sending).status).toBe(401)
     expect(onLoginRequired).toHaveBeenCalledOnce()
   })
 
+  it('tells TwakeSpace once, and asks the SSO nothing more, until TwakeSpace reloads the page', async () => {
+    const fetch = vi
+      .spyOn(window, 'fetch')
+      .mockImplementation(() =>
+        Promise.resolve(new Response(null, { status: 401 }))
+      )
+    const session = embedSession(config, onLoginRequired)
+    const sending = session.send(wikisRequest())
+    relay((await frameOpened()).window, '?error=login_required&state=state')
+    await sending
+
+    expect((await session.send(wikisRequest())).status).toBe(401)
+    expect(client.buildAuthorizationUrl).toHaveBeenCalledOnce()
+    expect(fetch).toHaveBeenCalledTimes(2)
+    expect(onLoginRequired).toHaveBeenCalledOnce()
+  })
+
   it('tells TwakeSpace nothing when the SSO never answers: signing in again would not show it', async () => {
     vi.useFakeTimers()
-    const starting = embedSession(config, onLoginRequired).start()
+    const session = embedSession(config, onLoginRequired)
+    session.onExpired(onExpired)
+    const starting = session.start()
     starting.catch(() => undefined)
 
     await vi.advanceTimersByTimeAsync(10_000)
 
     await expect(starting).rejects.toThrow('no answer from the SSO')
     expect(onLoginRequired).not.toHaveBeenCalled()
+    expect(onExpired).not.toHaveBeenCalled()
   })
 })
 

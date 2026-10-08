@@ -3,7 +3,7 @@ import { useLayoutEffect, useRef, type ReactElement } from 'react'
 
 import { useI18n } from '@/ui/i18n/useI18n'
 
-export type SignInPhase = 'waiting' | 'failed' | 'timeout'
+export type SignInPhase = 'waiting' | 'failed' | 'timeout' | 'expired'
 
 export interface SignInScreenProps {
   phase: SignInPhase
@@ -39,7 +39,7 @@ export function SignInScreen({
   }, [])
 
   const classes = ['splash']
-  if (phase !== 'waiting') classes.push('splash-stopped')
+  if (phase === 'failed' || phase === 'timeout') classes.push('splash-stopped')
   if (leaving) classes.push('splash-leaving')
 
   return (
@@ -69,14 +69,17 @@ export function SignInScreen({
         <>
           <h1 className="splash-title">{t(`session.${phase}.title`)}</h1>
           <p className="splash-hint">{t(`session.${phase}.hint`)}</p>
-          <div className="splash-actions">
-            <Button variant="contained" onClick={onRetry}>
-              {t('session.retry')}
-            </Button>
-            <Button variant="text" onClick={onSignIn}>
-              {t('session.backToSignIn')}
-            </Button>
-          </div>
+          {/* Nothing to do once expired: TwakeSpace signs the person in again */}
+          {phase !== 'expired' && (
+            <div className="splash-actions">
+              <Button variant="contained" onClick={onRetry}>
+                {t('session.retry')}
+              </Button>
+              <Button variant="text" onClick={onSignIn}>
+                {t('session.backToSignIn')}
+              </Button>
+            </div>
+          )}
         </>
       )}
     </div>

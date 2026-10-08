@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { createServer } from 'node:http'
 import { expect, test, type Page } from '@playwright/test'
+import { signOutOfTheSso } from './signIn.ts'
 import { aliceSpaceWiki } from './space.ts'
 
 const APP = 'http://localhost:3500'
@@ -23,6 +24,10 @@ const FRAME = 'twake-embed-pages'
 const SANDBOX =
   'allow-scripts allow-same-origin allow-popups allow-forms allow-downloads'
 const CLIPBOARD = 'clipboard-read; clipboard-write'
+
+const LOGIN_REQUIRED = 'twake-embed:login-required'
+// The hidden frame in which the app signs in without a prompt
+const SILENT_SIGN_IN = 'twake-pages-silent-sign-in'
 
 interface PostedMessage {
   type: string
@@ -185,13 +190,13 @@ test('signs in through a popup when the SSO refuses to be framed by TwakeSpace',
       frame.getByRole('heading', { level: 1, name: 'Search this wiki' })
     ).toBeVisible()
     // Signed in again at the top, the SSO would still not show in the frame
-    expect(await postedOfType(page, 'twake-embed:login-required')).toEqual([])
+    expect(await postedOfType(page, LOGIN_REQUIRED)).toEqual([])
   } finally {
     host.close()
   }
 })
 
-test('tells TwakeSpace to sign the person in again when the SSO wants them to sign in', async ({
+test('says the session expired while TwakeSpace signs the person in again, when the SSO wants them to sign in', async ({
   page
 }) => {
   // Nobody signed in to the SSO in this browser
@@ -200,12 +205,50 @@ test('tells TwakeSpace to sign the person in again when the SSO wants them to si
     await page.goto(host.url)
     const frame = page.frameLocator(`iframe[name="${FRAME}"]`)
 
-    await expect
-      .poll(() => postedOfType(page, 'twake-embed:login-required'))
-      .toEqual([{ type: 'twake-embed:login-required' }])
     await expect(
-      frame.getByRole('heading', { name: 'We couldn’t sign you in' })
+      frame.getByRole('heading', { name: 'Your session has expired' })
     ).toBeVisible()
+    // No popup to open: TwakeSpace signs the person in (ADR 010)
+    await expect(frame.getByRole('button')).toHaveCount(0)
+    await expect
+      .poll(() => postedOfType(page, LOGIN_REQUIRED))
+      .toEqual([{ type: LOGIN_REQUIRED }])
+  } finally {
+    host.close()
+  }
+})
+
+test('says the session expired, telling TwakeSpace once, when the person signs out of the SSO while the wiki is open', async ({
+  page
+}) => {
+  const { wikiId, name } = await aliceSpaceWiki(page)
+
+  const host = await twakeSpace(wikiId, TRUSTED_PORT)
+  try {
+    await page.goto(host.url)
+    const frame = page.frameLocator(`iframe[name="${FRAME}"]`)
+    await expect(frame.getByRole('heading', { level: 1, name })).toBeVisible()
+    await sendNavigate(page, '/trash')
+    await expect(
+      frame.getByRole('heading', { level: 1, name: 'Trash' })
+    ).toBeVisible()
+
+    await signOutOfTheSso(page)
+    // Back on the home page, which the frame loads again: the backend refuses
+    // the token, and the SSO the silent sign-in
+    await sendNavigate(page, '')
+
+    await expect(
+      frame.getByRole('heading', { name: 'Your session has expired' })
+    ).toBeVisible()
+    await expect(frame.getByRole('navigation', { name: 'Wiki' })).toHaveCount(0)
+    await expect(frame.getByRole('button')).toHaveCount(0)
+    // Once the sign-ins under way are over, nothing asks the SSO again
+    const silentSignIns = frame.locator(`iframe[name="${SILENT_SIGN_IN}"]`)
+    await expect(silentSignIns).toHaveCount(0)
+    await expect
+      .poll(() => postedOfType(page, LOGIN_REQUIRED))
+      .toEqual([{ type: LOGIN_REQUIRED }])
   } finally {
     host.close()
   }

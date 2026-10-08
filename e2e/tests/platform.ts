@@ -26,6 +26,16 @@ await sql.end()
 process.stdout.write(JSON.stringify(row ?? null))
 `
 
+const revokedSession = `
+const { default: postgres } = await import('postgres')
+const sql = postgres(process.env.DATABASE_URL)
+await sql\`
+  insert into oidc_revoked_sessions (sid, expires_at)
+  values (\${process.argv[1]}, now() + interval '1 hour')
+  on conflict do nothing\`
+await sql.end()
+`
+
 function inBackend(script: string, ...args: string[]) {
   return execFileSync(
     'docker',
@@ -73,4 +83,12 @@ export function wikiOfSpace(spaceId: string) {
     id: string
     kind: string
   } | null
+}
+
+/**
+ * Revokes an SSO session at the backend, as the back-channel logout of the
+ * SSO does, which the mock SSO does not send.
+ */
+export function revokeAtBackend(sid: string) {
+  inBackend(revokedSession, sid)
 }

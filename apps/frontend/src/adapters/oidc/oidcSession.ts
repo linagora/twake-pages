@@ -82,7 +82,9 @@ export function oidcSession(config: AuthConfig): SessionService {
       return null
     },
     signOut: logOut,
-    onEndedElsewhere: onSessionEndedElsewhere
+    onEndedElsewhere: onSessionEndedElsewhere,
+    // On its own page, the app sends the person to the SSO instead
+    onExpired: () => () => undefined
   }
 }
 

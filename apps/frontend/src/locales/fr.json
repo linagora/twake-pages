@@ -24,6 +24,10 @@
       "title": "Cela prend plus de temps que d’habitude",
       "hint": "Le service de connexion met du temps à répondre."
     },
+    "expired": {
+      "title": "Votre session a expiré",
+      "hint": "Reconnexion en cours…"
+    },
     "retry": "Réessayer",
     "backToSignIn": "Retour à la connexion",
     "signOut": "Se déconnecter"

@@ -32,6 +32,7 @@ export function useSession(): Session {
 type GateState =
   | { status: 'pending' }
   | { status: 'failed' }
+  | { status: 'expired' }
   | { status: 'signedIn'; user: User; sdk: Sdk | null }
 
 type Wait = 'short' | 'slow' | 'timeout'
@@ -78,6 +79,16 @@ export function SessionGate({
   // StrictMode runs effects twice; a second start would find the sign-in spent
   const started = useRef(false)
 
+  // Unlike Tasks, which offers its popup instead: TwakeSpace signs the person
+  // in again and reloads the page, at boot or while the wiki is open
+  useEffect(
+    () =>
+      session.onExpired(() => {
+        setState({ status: 'expired' })
+      }),
+    [session]
+  )
+
   useEffect(() => {
     if (started.current) return
     started.current = true
@@ -88,9 +99,10 @@ export function SessionGate({
       (error: unknown) => {
         console.error('Sign-in failed:', error)
         // Unlike Tasks, keeps the sign-in the person made meanwhile: the gate
-        // offers it before a silent sign-in in TwakeSpace gives up.
+        // offers it before a silent sign-in in TwakeSpace gives up. Keeps
+        // saying the session expired too.
         setState(state =>
-          state.status === 'signedIn' ? state : { status: 'failed' }
+          state.status === 'pending' ? { status: 'failed' } : state
         )
       }
     )
@@ -146,6 +158,7 @@ export function SessionGate({
       : destination?.kind === 'wiki'
         ? t('session.opening.wiki')
         : t('session.signingIn')
+  const expired = state.status === 'expired'
 
   return (
     <>
@@ -156,14 +169,16 @@ export function SessionGate({
           {children}
         </SessionContext>
       )}
-      {!screenGone && (
+      {(expired || !screenGone) && (
         <SignInScreen
           phase={
-            !signedIn && wait === 'timeout'
-              ? 'timeout'
-              : state.status === 'failed'
-                ? 'failed'
-                : 'waiting'
+            expired
+              ? 'expired'
+              : !signedIn && wait === 'timeout'
+                ? 'timeout'
+                : state.status === 'failed'
+                  ? 'failed'
+                  : 'waiting'
           }
           status={status}
           leaving={signedIn}

@@ -24,6 +24,10 @@
       "title": "This is taking longer than usual",
       "hint": "The sign-in service is slow to answer."
     },
+    "expired": {
+      "title": "Your session has expired",
+      "hint": "Signing you in again…"
+    },
     "retry": "Try again",
     "backToSignIn": "Back to sign-in",
     "signOut": "Sign out"

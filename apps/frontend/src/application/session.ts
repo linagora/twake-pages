@@ -14,4 +14,9 @@ export interface SessionService {
   signIn: () => Promise<User | null>
   signOut: () => Promise<void>
   onEndedElsewhere: (onEnded: () => void) => () => void
+  /**
+   * The SSO wants the person to sign in again, which the page around the app
+   * does: TwakeSpace, which then reloads the page.
+   */
+  onExpired: (onExpired: () => void) => () => void
 }

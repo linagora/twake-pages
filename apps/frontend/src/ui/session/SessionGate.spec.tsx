@@ -1,6 +1,11 @@
 import { readFileSync } from 'node:fs'
 
-import { act, fireEvent, screen } from '@testing-library/react'
+import {
+  act,
+  fireEvent,
+  screen,
+  waitForElementToBeRemoved
+} from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { fakeSession, fakeUser } from '@/testing/fakeSession'
@@ -205,6 +210,41 @@ describe('SessionGate', () => {
     })
 
     expect(screen.getByText('app')).toBeInTheDocument()
+  })
+
+  it('says the session expired, with nothing to do, while TwakeSpace signs the person in again', async () => {
+    vi.useFakeTimers()
+    const session = neverSignedIn()
+    renderWithProviders(<p>app</p>, { session })
+    await pastTheTimeout()
+
+    // As the session tells the gate before the sign-in fails
+    await act(async () => {
+      session.expire()
+      session.giveUp()
+      await Promise.resolve()
+    })
+
+    expect(
+      screen.getByRole('heading', { name: 'Your session has expired' })
+    ).toBeInTheDocument()
+    expect(screen.getByText('Signing you in again…')).toBeInTheDocument()
+    expect(screen.queryByRole('button')).not.toBeInTheDocument()
+  })
+
+  it('leaves the app for the same screen when the session expires while the wiki is open', async () => {
+    const session = fakeSession()
+    renderWithProviders(<p>app</p>, { session })
+    await waitForElementToBeRemoved(() => screen.queryByText('Twake Pages'))
+
+    act(() => {
+      session.expire()
+    })
+
+    expect(screen.queryByText('app')).not.toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { name: 'Your session has expired' })
+    ).toBeInTheDocument()
   })
 
   it('signs in again when another tab signs out', async () => {

@@ -11,8 +11,9 @@ export const fakeUser = (idToken: string | null = null): User => ({
 
 export function fakeSession(
   start: () => Promise<User | null> = () => Promise.resolve(fakeUser())
-): SessionService & { endElsewhere: () => void } {
+): SessionService & { endElsewhere: () => void; expire: () => void } {
   let onEnded: (() => void) | null = null
+  let onExpired: (() => void) | null = null
   return {
     start: vi.fn(start),
     signIn: vi.fn(() => Promise.resolve<User | null>(null)),
@@ -23,6 +24,13 @@ export function fakeSession(
         onEnded = null
       }
     },
-    endElsewhere: () => onEnded?.()
+    onExpired: callback => {
+      onExpired = callback
+      return () => {
+        onExpired = null
+      }
+    },
+    endElsewhere: () => onEnded?.(),
+    expire: () => onExpired?.()
   }
 }

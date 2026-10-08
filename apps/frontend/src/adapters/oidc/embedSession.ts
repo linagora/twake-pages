@@ -32,6 +32,10 @@ export function embedSession(
   onLoginRequired: () => void
 ): EmbedSession {
   configureAuth(config)
+  // TwakeSpace is told once per load of the frame, which asks the SSO nothing
+  // more until TwakeSpace reloads it
+  let expired = false
+  const expiredListeners = new Set<() => void>()
 
   // Unlike Tasks, which only has its popup: when the SSO wants the person to
   // sign in, TwakeSpace signs them in again at the top level and reloads its
@@ -39,7 +43,13 @@ export function embedSession(
   // signing in again would not let it show in the frame.
   const signInSilentlyOrTellTwakeSpace = () =>
     signInSilently(config).catch((error: unknown) => {
-      if (isLoginRequired(error)) onLoginRequired()
+      if (isLoginRequired(error) && !expired) {
+        expired = true
+        onLoginRequired()
+        expiredListeners.forEach(listener => {
+          listener()
+        })
+      }
       throw error
     })
 
@@ -62,11 +72,21 @@ export function embedSession(
     },
     signOut: logOut,
     onEndedElsewhere: onSessionEndedElsewhere,
+    onExpired(listener) {
+      expiredListeners.add(listener)
+      return () => {
+        expiredListeners.delete(listener)
+      }
+    },
     async send(request) {
       const retry = request.clone()
       addAuthorization(request)
       const response = await fetch(request)
-      if (response.status !== 401 || !request.headers.has('Authorization')) {
+      if (
+        expired ||
+        response.status !== 401 ||
+        !request.headers.has('Authorization')
+      ) {
         return response
       }
       try {
