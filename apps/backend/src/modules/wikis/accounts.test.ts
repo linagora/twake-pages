@@ -1,10 +1,12 @@
 import { randomUUID } from 'node:crypto'
+import { eq } from 'drizzle-orm'
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest'
 import type { PlatformEvent } from '../../events/envelope.ts'
 import { RejectedEventError } from '../../events/router.ts'
 import { createDb, inTenant } from '../../infra/db.ts'
 import {
   aB2cUser,
+  aPageIn,
   aSpaceWiki,
   aUser,
   joinWiki,
@@ -15,7 +17,8 @@ import {
   type TestUser,
   type WikiSummary
 } from '../../testing/app.ts'
-import { pageFavorites, pageVisits } from '../pages/schema.ts'
+import { comments } from '../comments/schema.ts'
+import { pageFavorites, pageVersions, pageVisits } from '../pages/schema.ts'
 import { keepSettings } from '../settings/events.ts'
 import type { Role } from './access.ts'
 import { accountRoutes } from './accounts.ts'
@@ -82,6 +85,32 @@ const favoritesAndRecentOf = (user: TestUser) =>
       .from(pageFavorites),
     recent: await tx.select({ pageId: pageVisits.pageId }).from(pageVisits)
   }))
+
+/**
+ * What the reader finds written in the wiki: the titles in its tree, and the
+ * versions of its home page and the comments on it, which no route shows yet.
+ */
+async function writingsIn(wiki: WikiSummary, reader: TestUser) {
+  const tree = (await api.as(reader).get(`/wikis/${wiki.id}/tree`)).json<{
+    pages: { title: string }[]
+  }>()
+  return {
+    titles: tree.pages.map(page => page.title),
+    ...(await inTenant(db, reader, async tx => ({
+      versions: await tx
+        .select({
+          number: pageVersions.number,
+          authorId: pageVersions.authorId
+        })
+        .from(pageVersions)
+        .where(eq(pageVersions.pageId, wiki.homePageId)),
+      comments: await tx
+        .select({ authorId: comments.authorId, body: comments.body })
+        .from(comments)
+        .where(eq(comments.pageId, wiki.homePageId))
+    })))
+  }
+}
 
 describe.each([
   {
@@ -169,6 +198,33 @@ describe.each([
     await deliver(routingKey, body(gone))
 
     expect(await purgeJobOf(db, deleted.id)).toEqual(job)
+  })
+
+  it('leaves the pages, versions and comments it wrote', async () => {
+    const gone = makeUser()
+    const editor = aPeerOf(gone)
+    const handedOn = await aWiki(gone, 'Handbook', [[editor, 'editor']])
+    await aPageIn(db, gone, handedOn.id, {
+      title: 'Onboarding',
+      position: 'a0'
+    })
+    await inTenant(db, gone, tx =>
+      tx.insert(comments).values({
+        pageId: handedOn.homePageId,
+        organizationId: gone.organizationId,
+        authorId: gone.userId,
+        authorEmail: gone.email,
+        body: 'Welcome aboard'
+      })
+    )
+
+    await deliver(routingKey, body(gone))
+
+    expect(await writingsIn(handedOn, editor)).toEqual({
+      titles: ['Onboarding'],
+      versions: [{ number: 1, authorId: gone.userId }],
+      comments: [{ authorId: gone.userId, body: 'Welcome aboard' }]
+    })
   })
 
   it('loses its favorites and recent pages', async () => {
