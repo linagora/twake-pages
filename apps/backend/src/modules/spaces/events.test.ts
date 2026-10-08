@@ -1,12 +1,13 @@
 import { randomUUID } from 'node:crypto'
-import { eq, sql as raw } from 'drizzle-orm'
+import { and, eq, sql as raw } from 'drizzle-orm'
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest'
 import type { PlatformEvent } from '../../events/envelope.ts'
+import { MalformedEventError } from '../../events/router.ts'
 import { outbox } from '../../events/schema.ts'
 import { createDb, inTenant } from '../../infra/db.ts'
 import { jobs } from '../../scheduler/schema.ts'
 import { aPageIn, aUser, startApp, type TestUser } from '../../testing/app.ts'
-import { wikis } from '../wikis/schema.ts'
+import { wikiMembers, wikis } from '../wikis/schema.ts'
 import { purgeWiki } from '../wikis/store.ts'
 import { spaceRoutes } from './events.ts'
 
@@ -99,6 +100,18 @@ const wikiRowsOf = (someone: TestUser, wikiId: string) =>
       .where(eq(wikis.id, wikiId))
   )
 
+/** A space of the person's organization, with them as its admin. */
+async function aSpaceOf(admin: TestUser) {
+  if (!admin.organizationId) throw new Error('spaces are B2B')
+  const space = { organizationId: admin.organizationId, id: randomUUID() }
+  await deliver('twake.space.created', {
+    ...space,
+    name: 'Ops',
+    members: [member(admin, 'admin')]
+  })
+  return space
+}
+
 describe('twake.space.created', () => {
   it('creates the wiki of the space, named after it, with its members in their space roles', async () => {
     const admin = aUser()
@@ -157,6 +170,12 @@ describe('twake.space.created', () => {
     expect(replayed).toEqual(first)
     expect(more).toEqual([])
   })
+
+  it('drops an event without a space id', async () => {
+    await expect(
+      deliver('twake.space.created', { organizationId: 'org', name: 'Ops' })
+    ).rejects.toThrow(MalformedEventError)
+  })
 })
 
 describe('space members', () => {
@@ -185,6 +204,36 @@ describe('space members', () => {
     expect(await spaceWikis(newcomer)).toEqual([
       expect.objectContaining({ name: 'Ops', role: 'editor' })
     ])
+  })
+
+  it('names a person added to the space as they last signed in', async () => {
+    const admin = aUser()
+    const newcomer = aUser({
+      organizationId: admin.organizationId,
+      name: 'Nina Dupont'
+    })
+    await api.as(newcomer).get('/wikis')
+    const space = await aSpaceOf(admin)
+
+    await deliver('twake.space.member.added', {
+      ...space,
+      members: [member(newcomer, 'editor')]
+    })
+
+    // No route serves the members yet: this reads them as the list will.
+    const wiki = await spaceWikiOf(admin)
+    const [membership] = await inTenant(db, admin, tx =>
+      tx
+        .select({ name: wikiMembers.name })
+        .from(wikiMembers)
+        .where(
+          and(
+            eq(wikiMembers.wikiId, wiki.id),
+            eq(wikiMembers.userId, newcomer.userId)
+          )
+        )
+    )
+    expect(membership).toEqual({ name: 'Nina Dupont' })
   })
 
   it('takes the wiki from a person removed from the space, and keeps the pages they wrote', async () => {
@@ -294,6 +343,31 @@ describe('twake.space.deleted', () => {
     await db.transaction(tx => purgeWiki(job.payload, tx))
 
     expect(await wikiRowsOf(admin, wiki.id)).toEqual([])
+  })
+})
+
+describe('a space wiki through the API', () => {
+  it('can be neither renamed nor deleted by its admin', async () => {
+    const admin = aUser()
+    await aSpaceOf(admin)
+    const wiki = await spaceWikiOf(admin)
+
+    const renamed = await api.as(admin).patch(`/wikis/${wiki.id}`, {
+      name: 'Mine'
+    })
+    const deleted = await api.as(admin).delete(`/wikis/${wiki.id}`)
+
+    expect([renamed.statusCode, renamed.json()]).toEqual([
+      409,
+      { error: 'managed' }
+    ])
+    expect([deleted.statusCode, deleted.json()]).toEqual([
+      409,
+      { error: 'managed' }
+    ])
+    expect(await spaceWikis(admin)).toEqual([
+      expect.objectContaining({ name: 'Ops' })
+    ])
   })
 })
 
@@ -467,6 +541,17 @@ describe('the order of space events', () => {
 
     expect(await spaceWikis(admin)).toEqual([])
   })
+
+  it('drops a space event without a timestamp', async () => {
+    await expect(
+      deliver('twake.space.updated', {
+        organizationId: 'org',
+        id: randomUUID(),
+        name: 'Ops',
+        timestamp: undefined
+      })
+    ).rejects.toThrow(MalformedEventError)
+  })
 })
 
 describe('twake.space.synced', () => {
@@ -604,18 +689,6 @@ describe('twake.space.synced', () => {
     expect(await provisionedEvents(space.id)).toHaveLength(1)
   })
 })
-
-/** A space of the person's organization, with them as its admin. */
-async function aSpaceOf(admin: TestUser) {
-  if (!admin.organizationId) throw new Error('spaces are B2B')
-  const space = { organizationId: admin.organizationId, id: randomUUID() }
-  await deliver('twake.space.created', {
-    ...space,
-    name: 'Ops',
-    members: [member(admin, 'admin')]
-  })
-  return space
-}
 
 describe('twake.space.sync.completed', () => {
   it('deletes the wikis of the spaces of the organization it does not list, except newer ones', async () => {
