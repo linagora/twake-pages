@@ -5,6 +5,7 @@ import {
   pgPolicy,
   text,
   timestamp,
+  uuid,
   type AnyPgColumn
 } from 'drizzle-orm/pg-core'
 import { drizzle } from 'drizzle-orm/postgres-js'
@@ -13,6 +14,11 @@ import postgres from 'postgres'
 
 export const timestamptz = (name: string) =>
   timestamp(name, { withTimezone: true })
+
+export const id = () =>
+  uuid()
+    .primaryKey()
+    .default(sql`uuidv7()`)
 
 // Fractional keys must compare byte by byte, whatever the database locale.
 export const sortKey = customType<{ data: string }>({

@@ -1,9 +1,17 @@
 import { PostgreSqlContainer } from '@testcontainers/postgresql'
-import { sql as statement } from 'drizzle-orm'
+import { eq, sql as statement, type SQL } from 'drizzle-orm'
 import { pgTable, text, uuid } from 'drizzle-orm/pg-core'
 import { drizzle } from 'drizzle-orm/postgres-js'
 import postgres from 'postgres'
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest'
+import { notifications } from '../modules/notifications/schema.ts'
+import {
+  labels,
+  pageFavorites,
+  pages,
+  pageVisits
+} from '../modules/pages/schema.ts'
+import { wikiMembers, wikis } from '../modules/wikis/schema.ts'
 import { aB2cUser, aUser, type TestUser } from '../testing/app.ts'
 import {
   assertRowLevelSecurity,
@@ -109,6 +117,270 @@ describe('inTenant', () => {
       )
     ).toEqual([{ organization: null }])
   })
+})
+
+function aWikiRow(owner: TestUser) {
+  return {
+    organizationId: owner.organizationId,
+    name: 'Secret',
+    kind: 'shared',
+    createdBy: owner.userId
+  } as const
+}
+
+async function aWikiOf(owner: TestUser) {
+  return inTenant(db, owner, async tx => {
+    const [wiki] = await tx
+      .insert(wikis)
+      .values(aWikiRow(owner))
+      .returning({ id: wikis.id })
+    if (!wiki) throw new Error('no wiki')
+    await tx.insert(wikiMembers).values({
+      wikiId: wiki.id,
+      organizationId: owner.organizationId,
+      userId: owner.userId,
+      email: owner.email,
+      role: 'admin'
+    })
+    const [page] = await tx
+      .insert(pages)
+      .values({
+        wikiId: wiki.id,
+        organizationId: owner.organizationId,
+        kind: 'document',
+        title: 'Plans',
+        position: 'a0',
+        createdBy: owner.userId,
+        updatedBy: owner.userId
+      })
+      .returning({ id: pages.id })
+    if (!page) throw new Error('no page')
+    return { wikiId: wiki.id, pageId: page.id }
+  })
+}
+
+const wikisSeenBy = (user: TestUser) =>
+  inTenant(db, user, tx =>
+    tx.select({ organizationId: wikis.organizationId }).from(wikis)
+  )
+
+const pagesSeenBy = (user: TestUser) =>
+  inTenant(db, user, tx =>
+    tx.select({ organizationId: pages.organizationId }).from(pages)
+  )
+
+const join = (wikiId: string, user: TestUser, organizationId: string | null) =>
+  ({
+    wikiId,
+    organizationId,
+    userId: user.userId,
+    email: user.email,
+    role: 'viewer'
+  }) as const
+
+describe('the tenant policies', () => {
+  it('only shows the wikis and pages of the current organization', async () => {
+    const acme = aUser()
+    const globex = aUser()
+    await aWikiOf(acme)
+    await aWikiOf(aB2cUser())
+
+    expect(await wikisSeenBy(globex)).toEqual([])
+    expect(await pagesSeenBy(globex)).toEqual([])
+    expect(await wikisSeenBy(acme)).toEqual([
+      { organizationId: acme.organizationId }
+    ])
+    expect(await pagesSeenBy(acme)).toEqual([
+      { organizationId: acme.organizationId }
+    ])
+  })
+
+  it('refuses to write a wiki for another organization', async () => {
+    const acme = aUser()
+
+    await expect(
+      inTenant(db, aUser(), tx => tx.insert(wikis).values(aWikiRow(acme)))
+    ).rejects.toThrow()
+    await expect(
+      inTenant(db, aB2cUser(), tx => tx.insert(wikis).values(aWikiRow(acme)))
+    ).rejects.toThrow()
+  })
+
+  it('never shows a B2C row to a request of an organization', async () => {
+    const alice = aB2cUser()
+    await aWikiOf(alice)
+    const atWork = { ...alice, organizationId: aUser().organizationId }
+
+    expect(await wikisSeenBy(atWork)).toEqual([])
+    expect(await pagesSeenBy(atWork)).toEqual([])
+  })
+
+  it('keeps B2C users to the wikis they are members of', async () => {
+    const alice = aB2cUser()
+    const bob = aB2cUser()
+    const { wikiId } = await aWikiOf(alice)
+
+    expect(await wikisSeenBy(alice)).toEqual([{ organizationId: null }])
+    expect(await pagesSeenBy(alice)).toEqual([{ organizationId: null }])
+    expect(await wikisSeenBy(bob)).toEqual([])
+    expect(await pagesSeenBy(bob)).toEqual([])
+    await expect(
+      inTenant(db, bob, tx =>
+        tx.insert(wikiMembers).values(join(wikiId, bob, null))
+      )
+    ).rejects.toThrow()
+  })
+
+  it('shows a shared B2C wiki to its members', async () => {
+    const alice = aB2cUser()
+    const bob = aB2cUser()
+    const { wikiId } = await aWikiOf(alice)
+    await inTenant(db, alice, tx =>
+      tx.insert(wikiMembers).values(join(wikiId, bob, null))
+    )
+
+    expect(await wikisSeenBy(bob)).toEqual([{ organizationId: null }])
+    expect(await pagesSeenBy(bob)).toEqual([{ organizationId: null }])
+    expect(
+      await inTenant(db, bob, tx =>
+        tx
+          .select({ email: wikiMembers.email })
+          .from(wikiMembers)
+          .where(eq(wikiMembers.wikiId, wikiId))
+      )
+    ).toHaveLength(2)
+  })
+
+  it('shows B2C people their own personal wiki', async () => {
+    const alice = aB2cUser()
+    await inTenant(db, alice, tx =>
+      tx.insert(wikis).values({ ...aWikiRow(alice), kind: 'personal' })
+    )
+
+    expect(await wikisSeenBy(alice)).toEqual([{ organizationId: null }])
+    expect(await wikisSeenBy(aB2cUser())).toEqual([])
+  })
+
+  it('keeps each person’s notifications, favorites and visits to themselves', async () => {
+    const alice = aUser()
+    const bob = aUser({ organizationId: alice.organizationId })
+    const { wikiId, pageId } = await aWikiOf(alice)
+    const own = (user: TestUser) => ({
+      pageId,
+      organizationId: alice.organizationId,
+      userId: user.userId
+    })
+    await inTenant(db, alice, async tx => {
+      await tx
+        .insert(wikiMembers)
+        .values(join(wikiId, bob, alice.organizationId))
+      await tx.insert(pageFavorites).values(own(alice))
+      await tx.insert(pageVisits).values(own(alice))
+    })
+    // Anyone who sees the page notifies its followers, as publishing does.
+    await inTenant(db, bob, tx =>
+      tx.insert(notifications).values({
+        ...own(alice),
+        wikiId,
+        reason: 'published',
+        actorId: bob.userId,
+        actorEmail: bob.email,
+        version: 2
+      })
+    )
+    const notificationsOf = (user: TestUser) =>
+      inTenant(db, user, tx =>
+        tx.select({ readAt: notifications.readAt }).from(notifications)
+      )
+
+    await inTenant(db, bob, tx =>
+      tx.update(notifications).set({ readAt: new Date() })
+    )
+    expect(await notificationsOf(alice)).toEqual([{ readAt: null }])
+    expect(await notificationsOf(bob)).toEqual([])
+    expect(
+      await inTenant(db, bob, tx => tx.select().from(pageFavorites))
+    ).toEqual([])
+    expect(await inTenant(db, bob, tx => tx.select().from(pageVisits))).toEqual(
+      []
+    )
+    await expect(
+      inTenant(db, bob, tx => tx.insert(pageFavorites).values(own(alice)))
+    ).rejects.toThrow()
+    await expect(
+      inTenant(db, bob, tx => tx.insert(pageVisits).values(own(alice)))
+    ).rejects.toThrow()
+  })
+})
+
+describe('tenant foreign keys', () => {
+  const FOREIGN_KEY_VIOLATION = '23503'
+  const stray: Record<
+    string,
+    (ids: { wikiId: string; pageId: string; labelId: string }) => SQL
+  > = {
+    wiki_members: ({ wikiId }) =>
+      statement`insert into wiki_members (wiki_id, org_id, user_id, email, role)
+         values (${wikiId}, null, uuidv7(), 'stray@example.com', 'viewer')`,
+    wiki_invites: ({ wikiId }) =>
+      statement`insert into wiki_invites (wiki_id, org_id, email, role, invited_by)
+         values (${wikiId}, null, 'stray@example.com', 'viewer', uuidv7())`,
+    pages: ({ wikiId }) =>
+      statement`insert into pages (wiki_id, org_id, kind, title, position, created_by, updated_by)
+         values (${wikiId}, null, 'document', 'Stray', 'z0', uuidv7(), uuidv7())`,
+    labels: ({ wikiId }) =>
+      statement`insert into labels (wiki_id, org_id, name)
+         values (${wikiId}, null, 'stray')`,
+    page_versions: ({ pageId }) =>
+      statement`insert into page_versions (page_id, org_id, number, title, author_id, author_email)
+         values (${pageId}, null, 99, 'Stray', uuidv7(), 'stray@example.com')`,
+    page_labels: ({ pageId, labelId }) =>
+      statement`insert into page_labels (page_id, label_id, org_id)
+         values (${pageId}, ${labelId}, null)`,
+    page_favorites: ({ pageId }) =>
+      statement`insert into page_favorites (page_id, org_id, user_id)
+         values (${pageId}, null, uuidv7())`,
+    page_visits: ({ pageId }) =>
+      statement`insert into page_visits (page_id, org_id, user_id)
+         values (${pageId}, null, uuidv7())`,
+    comments: ({ pageId }) =>
+      statement`insert into comments (page_id, org_id, author_id, author_email, body)
+         values (${pageId}, null, uuidv7(), 'stray@example.com', 'Stray')`,
+    page_followers: ({ pageId }) =>
+      statement`insert into page_followers (page_id, org_id, user_id)
+         values (${pageId}, null, uuidv7())`,
+    notifications: ({ wikiId, pageId }) =>
+      statement`insert into notifications (page_id, wiki_id, org_id, user_id, reason, actor_id, actor_email)
+         values (${pageId}, ${wikiId}, null, uuidv7(), 'published', uuidv7(), 'stray@example.com')`,
+    spaces: ({ wikiId }) =>
+      statement`insert into spaces (id, org_id, wiki_id)
+         values (uuidv7(), 'org-stray', ${wikiId})`
+  }
+
+  // Row level security already refuses these, so it is lifted to reach the keys.
+  it.each(Object.entries(stray))(
+    'refuses a row in %s that points into another tenant',
+    async (table, insert) => {
+      const owner = aUser()
+      const { wikiId, pageId } = await aWikiOf(owner)
+      const [label] = await inTenant(db, owner, tx =>
+        tx
+          .insert(labels)
+          .values({ wikiId, organizationId: owner.organizationId, name: 'ops' })
+          .returning({ id: labels.id })
+      )
+
+      await expect(
+        db.transaction(async tx => {
+          await tx.execute(
+            statement`alter table ${statement.identifier(table)} no force row level security`
+          )
+          await tx.execute(insert({ wikiId, pageId, labelId: label?.id ?? '' }))
+          tx.rollback()
+        })
+      ).rejects.toHaveProperty('cause.code', FOREIGN_KEY_VIOLATION)
+    }
+  )
 })
 
 describe('assertRowLevelSecurity', () => {
