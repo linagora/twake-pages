@@ -3,6 +3,7 @@ import {
   eq,
   inArray,
   isNull,
+  lte,
   ne,
   notInArray,
   or,
@@ -47,6 +48,12 @@ const person = z
   .refine(p => p.uuid ?? p.email, 'needs a uuid or an email')
 
 const membersRemoved = spaceEvent.extend({ members: z.array(person).min(1) })
+
+const syncCompleted = z.looseObject({
+  organizationId: z.string().min(1),
+  spaceIds: z.array(z.uuid()),
+  timestamp
+})
 
 type SpaceRef = Pick<z.infer<typeof spaceEvent>, 'organizationId' | 'id'>
 
@@ -322,6 +329,30 @@ export function spaceRoutes(): ReadonlyMap<string, Handler<PlatformEvent>> {
 
   const onSynced = inOrder(spaceCreated, matchSpace)
 
+  // A space with an event newer than the snapshot may be missing from it.
+  const onSyncCompleted: Handler<PlatformEvent> = async (event, tx) => {
+    const sync = parseOrDrop(syncCompleted, event.body, event.routingKey)
+    await asOrganization(tx, sync.organizationId)
+    const gone = await tx
+      .select({ id: spaces.id })
+      .from(spaces)
+      .innerJoin(wikis, eq(wikis.id, spaces.wikiId))
+      .where(
+        and(
+          eq(spaces.organizationId, sync.organizationId),
+          isNull(wikis.deletedAt),
+          notInArray(spaces.id, sync.spaceIds),
+          or(
+            isNull(spaces.lastEventAt),
+            lte(spaces.lastEventAt, sql`${sync.timestamp}::timestamptz`)
+          )
+        )
+      )
+    for (const { id } of gone) {
+      await deleteSpace(tx, { organizationId: sync.organizationId, id })
+    }
+  }
+
   return new Map([
     ['twake.space.created', onCreated],
     ['twake.space.updated', onUpdated],
@@ -329,6 +360,7 @@ export function spaceRoutes(): ReadonlyMap<string, Handler<PlatformEvent>> {
     ['twake.space.member.added', onMembersChanged],
     ['twake.space.member.role.changed', onMembersChanged],
     ['twake.space.member.removed', onMembersRemoved],
-    ['twake.space.synced', onSynced]
+    ['twake.space.synced', onSynced],
+    ['twake.space.sync.completed', onSyncCompleted]
   ])
 }

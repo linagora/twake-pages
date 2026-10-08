@@ -604,3 +604,59 @@ describe('twake.space.synced', () => {
     expect(await provisionedEvents(space.id)).toHaveLength(1)
   })
 })
+
+/** A space of the person's organization, with them as its admin. */
+async function aSpaceOf(admin: TestUser) {
+  if (!admin.organizationId) throw new Error('spaces are B2B')
+  const space = { organizationId: admin.organizationId, id: randomUUID() }
+  await deliver('twake.space.created', {
+    ...space,
+    name: 'Ops',
+    members: [member(admin, 'admin')]
+  })
+  return space
+}
+
+describe('twake.space.sync.completed', () => {
+  it('deletes the wikis of the spaces of the organization it does not list, except newer ones', async () => {
+    const listedAdmin = aUser()
+    const goneAdmin = aUser({ organizationId: listedAdmin.organizationId })
+    const newerAdmin = aUser({ organizationId: listedAdmin.organizationId })
+    const elsewhere = aUser()
+    const listed = await aSpaceOf(listedAdmin)
+    await aSpaceOf(goneAdmin)
+    const newer = await aSpaceOf(newerAdmin)
+    await aSpaceOf(elsewhere)
+    await deliver('twake.space.updated', {
+      ...newer,
+      name: 'Newer',
+      timestamp: '2999-01-01T00:00:00.000Z'
+    })
+    const gone = await spaceWikiOf(goneAdmin)
+
+    await deliver('twake.space.sync.completed', {
+      organizationId: listedAdmin.organizationId,
+      spaceIds: [listed.id]
+    })
+
+    expect(await spaceWikis(goneAdmin)).toEqual([])
+    await expect(purgeJobOf(gone.id)).resolves.toEqual(
+      expect.objectContaining({ kind: 'purge-wiki' })
+    )
+    expect(await spaceWikis(listedAdmin)).toHaveLength(1)
+    expect(await spaceWikis(newerAdmin)).toHaveLength(1)
+    expect(await spaceWikis(elsewhere)).toHaveLength(1)
+  })
+
+  it('deletes every space wiki of an organization that has no space left', async () => {
+    const admin = aUser()
+    await aSpaceOf(admin)
+
+    await deliver('twake.space.sync.completed', {
+      organizationId: admin.organizationId,
+      spaceIds: []
+    })
+
+    expect(await spaceWikis(admin)).toEqual([])
+  })
+})
