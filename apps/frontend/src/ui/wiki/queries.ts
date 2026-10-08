@@ -1,4 +1,9 @@
-import { useQuery, type UseQueryResult } from '@tanstack/react-query'
+import {
+  useQuery,
+  useQueryClient,
+  type UseQueryResult
+} from '@tanstack/react-query'
+import { useEffect } from 'react'
 
 import type { Tree } from '@/application/pages'
 import type { Page } from '@/domain/page'
@@ -8,6 +13,7 @@ import { usePagesApi } from '@/ui/PagesApiProvider'
 export const wikisKey = ['wikis']
 // What is shown of a wiki sits below its key, to reload it all at once.
 const wikiKey = (wikiId: string) => ['wikis', wikiId] as const
+const treeKey = (wikiId: string) => [...wikiKey(wikiId), 'tree'] as const
 
 export function useWikis(): UseQueryResult<WikiSummary[]> {
   const api = usePagesApi()
@@ -22,10 +28,36 @@ export function useWiki(wikiId: string): UseQueryResult<Wiki> {
   })
 }
 
+/**
+ * Reloads what is shown of the wiki on a newer version: a change made
+ * elsewhere, or one missed while the stream was reconnecting. Called once
+ * for the open wiki, where Twake Tasks watches in useBoard: a wiki shows in
+ * several queries, each of which would open its own stream.
+ */
+export function useLiveWiki(wikiId: string): void {
+  const api = usePagesApi()
+  const queryClient = useQueryClient()
+  useEffect(
+    () =>
+      api.watchWiki(wikiId, version => {
+        // The wiki and its tree are read apart, each at its own version: the
+        // older one tells what may be missing.
+        const shown = [
+          queryClient.getQueryData<Wiki>(wikiKey(wikiId))?.version,
+          queryClient.getQueryData<Tree>(treeKey(wikiId))?.version
+        ].filter(read => read !== undefined)
+        if (shown.length > 0 && version > Math.min(...shown)) {
+          void queryClient.invalidateQueries({ queryKey: wikiKey(wikiId) })
+        }
+      }),
+    [api, queryClient, wikiId]
+  )
+}
+
 export function useTree(wikiId: string): UseQueryResult<Tree> {
   const api = usePagesApi()
   return useQuery({
-    queryKey: [...wikiKey(wikiId), 'tree'],
+    queryKey: treeKey(wikiId),
     queryFn: () => api.getTree(wikiId)
   })
 }

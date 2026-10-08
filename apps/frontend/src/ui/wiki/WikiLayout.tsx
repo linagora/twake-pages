@@ -16,13 +16,14 @@ import { useI18n } from '@/ui/i18n/useI18n'
 import { BackToWikis } from '@/ui/shell/Problems'
 import { EntryLink } from '@/ui/shell/SidebarLink'
 import { PageTree } from '@/ui/wiki/PageTree'
-import { useWiki } from '@/ui/wiki/queries'
+import { useLiveWiki, useWiki } from '@/ui/wiki/queries'
 
 /** `back` leads to the person's wikis, which the frame of TwakeSpace has not. */
 export function WikiLayout({ back = true }: { back?: boolean }): ReactElement {
   const { t } = useI18n()
   const { wikiId = '' } = useParams()
   const wiki = useWiki(wikiId)
+  useLiveWiki(wikiId)
   // Checked before the data, which a failed reload keeps.
   const missing = wiki.error instanceof ApiError && wiki.error.status === 404
 
