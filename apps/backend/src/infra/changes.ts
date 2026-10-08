@@ -62,7 +62,7 @@ export function versionStreams(app: HttpServer): StreamVersions {
     })
     const send = (version: number) => {
       stream.write(
-        `id: ${String(version)}\ndata: ${JSON.stringify({ version })}\n\n`
+        `event: version\nid: ${String(version)}\ndata: ${JSON.stringify({ version })}\n\n`
       )
     }
     // Subscribed before reading, so a change committed in between still arrives.

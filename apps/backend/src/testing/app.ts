@@ -10,6 +10,7 @@ import { anIdentity } from '../modules/auth/testing.ts'
 import { pages } from '../modules/pages/schema.ts'
 import { SETTINGS_CHANNEL } from '../modules/settings/routes.ts'
 import type { Role } from '../modules/wikis/access.ts'
+import { WIKI_CHANNEL } from '../modules/wikis/live.ts'
 import { wikiMembers, wikis } from '../modules/wikis/schema.ts'
 import { addHomePage } from '../modules/wikis/store.ts'
 
@@ -134,10 +135,12 @@ export async function aPageIn(
 export async function startApp() {
   const { sql, db } = createDb(inject('databaseUrl'))
   const settingsChanges = await listenToChanges(sql, SETTINGS_CHANNEL)
+  const wikiChanges = await listenToChanges(sql, WIKI_CHANNEL)
   const app = await buildApp({
     logger: pino({ level: 'silent' }),
     db,
     settingsChanges,
+    wikiChanges,
     provider: {
       identify: () => Promise.resolve(null),
       verifyLogoutToken: () => Promise.reject(new Error('not in tests'))
@@ -187,6 +190,7 @@ export async function startApp() {
     close: async () => {
       await app.close()
       await settingsChanges.close()
+      await wikiChanges.close()
       await sql.end()
     }
   }

@@ -9,12 +9,14 @@ import {
   type IdentityProvider
 } from './modules/auth/index.ts'
 import { registerSettings } from './modules/settings/routes.ts'
+import { registerLive } from './modules/wikis/live.ts'
 import { registerWikis } from './modules/wikis/routes.ts'
 
 export async function buildApp(deps: {
   logger: Logger
   db: Db
   settingsChanges: Changes
+  wikiChanges: Changes
   provider: IdentityProvider
   authenticate: Authenticate
   isReady: () => Promise<boolean>
@@ -30,6 +32,12 @@ export async function buildApp(deps: {
       })
       const streamVersions = versionStreams(api)
       registerWikis(api, { db: deps.db, requireIdentity })
+      registerLive(api, {
+        db: deps.db,
+        requireIdentity,
+        changes: deps.wikiChanges,
+        streamVersions
+      })
       registerSettings(api, {
         db: deps.db,
         requireIdentity,

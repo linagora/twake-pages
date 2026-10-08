@@ -11,6 +11,7 @@ import { startConsumer, startPublisher } from './infra/rabbitmq.ts'
 import { connectIdentityProvider } from './modules/auth/index.ts'
 import { settingsRoutes } from './modules/settings/events.ts'
 import { SETTINGS_CHANNEL } from './modules/settings/routes.ts'
+import { WIKI_CHANNEL } from './modules/wikis/live.ts'
 import { PURGE_WIKI_JOB, purgeWiki } from './modules/wikis/store.ts'
 import { createScheduler } from './scheduler/scheduler.ts'
 
@@ -23,10 +24,12 @@ await migrateDb(db)
 
 let accepting = false
 const settingsChanges = await listenToChanges(sql, SETTINGS_CHANNEL)
+const wikiChanges = await listenToChanges(sql, WIKI_CHANNEL)
 const server = await buildApp({
   logger,
   db,
   settingsChanges,
+  wikiChanges,
   ...(await connectIdentityProvider({
     db,
     oidc: {
@@ -93,6 +96,7 @@ async function shutdown(signal: string): Promise<void> {
     await publisher.close()
     await server.close()
     await settingsChanges.close()
+    await wikiChanges.close()
     await sql.end({ timeout: 5 })
   } catch (error) {
     logger.error({ err: error }, 'shutdown failed')
