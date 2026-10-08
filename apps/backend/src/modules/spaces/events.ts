@@ -175,10 +175,12 @@ async function provisioned(tx: Tx, space: SpaceRef): Promise<OutgoingEvent> {
   }
 }
 
-// The space writes the home page: no person did.
+// The first admin with a uuid writes the home page, as ADR 005 takes the
+// space's first admin for a calendar's domain; the space does when the event
+// names none. The wiki's creator, which no route shows, stays the space.
 async function provisionSpace(
   tx: Tx,
-  space: SpaceRef & { name: string }
+  space: SpaceRef & { name: string; members: z.infer<typeof member>[] }
 ): Promise<void> {
   if (await wikiOf(tx, space)) return
   const [wiki] = await tx
@@ -208,7 +210,11 @@ async function provisionSpace(
     await tx.delete(wikis).where(eq(wikis.id, wiki.id))
     return
   }
-  await addHomePage(tx, { userId: space.id, email: '', name: space.name }, wiki)
+  const admin = space.members.find(m => m.role === 'admin' && m.uuid)
+  const author = admin?.uuid
+    ? { userId: admin.uuid, email: admin.email, name: null }
+    : { userId: space.id, email: '', name: space.name }
+  await addHomePage(tx, author, wiki)
 }
 
 async function renameSpace(tx: Tx, space: SpaceRef, name: string) {

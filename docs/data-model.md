@@ -27,6 +27,8 @@ PostgreSQL 18, drizzle, with the conventions of Twake Tasks (`apps/backend/src/i
 - `wikis_one_personal_per_user`: unique `(coalesce(org_id, ''), created_by) where kind = 'personal'`
 - B2C scope: `created_by = currentUser or id = any((select app_member_wiki_ids())::uuid[])`
 
+A space wiki's `created_by` is its space id, which no route shows and the purge job runs as, while its home page is written by the first admin with a `uuid` in the event that creates the wiki (`twake.space.created` or `twake.space.synced`), or by the space, with its id and name, when that event names none.
+
 ### wiki_members, wiki_invites
 
 Same columns, keys and policies as `project_members` and `project_invites` of Twake Tasks, with `wiki_id`, but for one deliberate difference: the B2C scope of `wiki_invites` matches the person's email in `USING` only, not in `WITH CHECK`. The email lets a B2C person see the invites to them, which `app_claim_invites()` deletes; in `WITH CHECK` it would let them write an invite to their own email on any B2C wiki, or raise the role of one sent to them, then claim it. `app_member_wiki_ids()` and `app_claim_invites()` are the Twake Tasks functions with the names changed.

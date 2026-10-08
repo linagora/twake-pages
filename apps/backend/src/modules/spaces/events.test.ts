@@ -14,6 +14,7 @@ import {
   type TestUser,
   type WikiSummary
 } from '../../testing/app.ts'
+import { pages, pageVersions } from '../pages/schema.ts'
 import { wikiMembers } from '../wikis/schema.ts'
 import { PURGE_WIKI_JOB, purgeWiki } from '../wikis/store.ts'
 import { knowsAnySpace, spaceRoutes } from './events.ts'
@@ -79,6 +80,27 @@ async function provisionedEvents(spaceId: string) {
     .where(raw`${outbox.event} -> 'data' ->> 'space_id' = ${spaceId}`)
     .orderBy(outbox.id)
   return queued.map(row => row.event)
+}
+
+/**
+ * Who wrote the home page of the person's space wiki. No route serves a page
+ * yet: this reads it as the page will show it.
+ */
+async function homePageAuthorOf(user: TestUser) {
+  const wiki = await spaceWikiOf(user)
+  const [author] = await inTenant(db, user, tx =>
+    tx
+      .select({
+        createdBy: pages.createdBy,
+        authorId: pageVersions.authorId,
+        authorEmail: pageVersions.authorEmail,
+        authorName: pageVersions.authorName
+      })
+      .from(pages)
+      .innerJoin(pageVersions, eq(pageVersions.pageId, pages.id))
+      .where(eq(pages.id, wiki.homePageId))
+  )
+  return author
 }
 
 /** A space of the person's organization, with them as its admin. */
@@ -153,6 +175,52 @@ describe('twake.space.created', () => {
     })
     expect(replayed).toEqual(first)
     expect(more).toEqual([])
+  })
+
+  it('writes the home page as the first admin with a uuid in the event', async () => {
+    const admin = aUser()
+    const viewer = aUser({ organizationId: admin.organizationId })
+    const second = aUser({ organizationId: admin.organizationId })
+
+    await deliver('twake.space.created', {
+      organizationId: admin.organizationId,
+      id: randomUUID(),
+      name: 'Ops',
+      members: [
+        member(viewer, 'viewer'),
+        { email: 'no-uuid@example.com', role: 'admin' },
+        member(admin, 'admin'),
+        member(second, 'admin')
+      ]
+    })
+
+    expect(await homePageAuthorOf(admin)).toEqual({
+      createdBy: admin.userId,
+      authorId: admin.userId,
+      authorEmail: admin.email,
+      authorName: null
+    })
+  })
+
+  it('writes the home page as the space when the event names no admin with a uuid', async () => {
+    const viewer = aUser()
+    const space = { organizationId: viewer.organizationId, id: randomUUID() }
+
+    await deliver('twake.space.created', {
+      ...space,
+      name: 'Ops',
+      members: [
+        member(viewer, 'viewer'),
+        { email: 'no-uuid@example.com', role: 'admin' }
+      ]
+    })
+
+    expect(await homePageAuthorOf(viewer)).toEqual({
+      createdBy: space.id,
+      authorId: space.id,
+      authorEmail: '',
+      authorName: 'Ops'
+    })
   })
 
   it('drops an event without a space id', async () => {
@@ -586,6 +654,26 @@ describe('twake.space.synced', () => {
         data: { space_id: space.id, resource: { kind: 'wiki', id: wiki.id } }
       })
     ])
+  })
+
+  it('writes the home page of the wiki it creates as the first admin with a uuid in the snapshot', async () => {
+    const admin = aUser()
+    const viewer = aUser({ organizationId: admin.organizationId })
+
+    await deliver('twake.space.synced', {
+      organizationId: admin.organizationId,
+      id: randomUUID(),
+      name: 'Roadmap',
+      members: [member(viewer, 'viewer'), member(admin, 'admin')],
+      groups: []
+    })
+
+    expect(await homePageAuthorOf(admin)).toEqual({
+      createdBy: admin.userId,
+      authorId: admin.userId,
+      authorEmail: admin.email,
+      authorName: null
+    })
   })
 
   it('makes the wiki match the space: name, roles, and who left', async () => {
