@@ -59,11 +59,15 @@ describe('the history of the embedded view', () => {
     })
   }
 
+  // Like TwakeSpace, waits for the first path the app reports: the view shows
+  // before the effect that listens to TwakeSpace has run.
   async function renderEmbed(path: string) {
     window.history.replaceState(null, '', path)
     connectTwakeSpace(space)
     const { router } = renderBrowserRoute()
-    await screen.findByRole('heading', { level: 1 })
+    await waitFor(() => {
+      expect(pathMessages()).not.toEqual([])
+    })
     return router
   }
 
@@ -85,17 +89,15 @@ describe('the history of the embedded view', () => {
   it('reports the first path as a replace', async () => {
     await renderEmbed('/embed/wikis/w1/pages/p1')
 
-    await waitFor(() => {
-      expect(post).toHaveBeenCalledWith(
-        {
-          type: 'twake-embed:path',
-          resourceId: 'w1',
-          path: '/pages/p1',
-          replace: true
-        },
-        SPACE
-      )
-    })
+    expect(post).toHaveBeenCalledWith(
+      {
+        type: 'twake-embed:path',
+        resourceId: 'w1',
+        path: '/pages/p1',
+        replace: true
+      },
+      SPACE
+    )
     expect(post).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'twake-embed:path' }),
       OTHER
