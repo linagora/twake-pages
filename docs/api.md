@@ -147,6 +147,8 @@ interface TrashEntry {
 
 `name` is 1 to 100 characters, trimmed; `description` at most 500.
 
+The personal wiki is stored with the name `Personal`. Clients show a translated label for a wiki of kind `personal` instead of its name, as Twake Tasks shows `t('boards.personalProject')` for a personal project.
+
 ## Sharing
 
 | Method and path | Body | Answer | Who |
