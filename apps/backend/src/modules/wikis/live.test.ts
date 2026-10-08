@@ -48,6 +48,19 @@ describe('live wiki updates', () => {
     })
   })
 
+  it('sends a new version when the admin deletes the wiki', async () => {
+    const alice = aUser()
+    const wiki = await aWikiOf(api, alice)
+    const stream = openWikiStream(alice, wiki.id)
+
+    await stream.messages.next()
+    await api.as(alice).delete(`/wikis/${wiki.id}`)
+    const next = (await stream.messages.next()).value
+    stream.close()
+
+    expect(next).toEqual({ event: 'version', id: '1', data: '{"version":1}' })
+  })
+
   it.each(['viewer', 'editor'] as const)(
     'streams the version to the wiki’s %ss',
     async role => {
