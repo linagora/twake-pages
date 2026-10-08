@@ -355,3 +355,116 @@ describe('live updates', () => {
     expect(await versionOf(admin, wiki.id)).toBe(before)
   })
 })
+
+const at = (minute: number) =>
+  new Date(Date.UTC(2026, 9, 6, 9, minute)).toISOString()
+
+describe('the order of space events', () => {
+  it('ignores an event older than the last one applied to its space', async () => {
+    const admin = aUser()
+    const other = aUser({ organizationId: admin.organizationId })
+    const space = { organizationId: admin.organizationId, id: randomUUID() }
+    await deliver('twake.space.created', {
+      ...space,
+      name: 'Ops',
+      members: [member(admin, 'admin')],
+      timestamp: at(0)
+    })
+    await deliver('twake.space.member.added', {
+      ...space,
+      members: [member(other, 'editor')],
+      timestamp: at(20)
+    })
+
+    await deliver('twake.space.member.removed', {
+      ...space,
+      members: [{ uuid: other.userId }],
+      timestamp: at(10)
+    })
+    await deliver('twake.space.member.role.changed', {
+      ...space,
+      members: [member(other, 'viewer')],
+      timestamp: at(12)
+    })
+    await deliver('twake.space.updated', {
+      ...space,
+      name: 'Stale',
+      timestamp: at(15)
+    })
+
+    expect(await spaceWikis(other)).toEqual([
+      expect.objectContaining({ name: 'Ops', role: 'editor' })
+    ])
+  })
+
+  it('announces the wiki again on a late twake.space.created, changing nothing', async () => {
+    const admin = aUser()
+    const space = { organizationId: admin.organizationId, id: randomUUID() }
+    const created = {
+      ...space,
+      name: 'Ops',
+      members: [member(admin, 'admin')],
+      timestamp: at(0)
+    }
+    await deliver('twake.space.created', created)
+    await deliver('twake.space.member.role.changed', {
+      ...space,
+      members: [member(admin, 'viewer')],
+      timestamp: at(10)
+    })
+
+    await deliver('twake.space.created', created)
+
+    expect(await spaceWikis(admin)).toEqual([
+      expect.objectContaining({ role: 'viewer' })
+    ])
+    expect(await provisionedEvents(space.id)).toHaveLength(2)
+  })
+
+  it('applies events with the same timestamp in the order they arrive', async () => {
+    const admin = aUser()
+    const other = aUser({ organizationId: admin.organizationId })
+    const space = { organizationId: admin.organizationId, id: randomUUID() }
+    await deliver('twake.space.created', {
+      ...space,
+      name: 'Ops',
+      members: [member(admin, 'admin')],
+      timestamp: at(0)
+    })
+
+    await deliver('twake.space.member.added', {
+      ...space,
+      members: [member(other, 'viewer')],
+      timestamp: at(5)
+    })
+    await deliver('twake.space.member.role.changed', {
+      ...space,
+      members: [member(other, 'editor')],
+      timestamp: at(5)
+    })
+
+    expect(await spaceWikis(other)).toEqual([
+      expect.objectContaining({ role: 'editor' })
+    ])
+  })
+
+  it('deletes the wiki even when the deletion is older than the last event of the space', async () => {
+    const admin = aUser()
+    const space = { organizationId: admin.organizationId, id: randomUUID() }
+    await deliver('twake.space.created', {
+      ...space,
+      name: 'Ops',
+      members: [member(admin, 'admin')],
+      timestamp: at(0)
+    })
+    await deliver('twake.space.updated', {
+      ...space,
+      name: 'Renamed',
+      timestamp: at(30)
+    })
+
+    await deliver('twake.space.deleted', { ...space, timestamp: at(10) })
+
+    expect(await spaceWikis(admin)).toEqual([])
+  })
+})
