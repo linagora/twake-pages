@@ -1,4 +1,14 @@
-import { and, eq, inArray, isNull, ne, or, sql, type SQL } from 'drizzle-orm'
+import {
+  and,
+  eq,
+  inArray,
+  isNull,
+  ne,
+  notInArray,
+  or,
+  sql,
+  type SQL
+} from 'drizzle-orm'
 import { z } from 'zod'
 import type { OutgoingEvent, PlatformEvent } from '../../events/envelope.ts'
 import { enqueue } from '../../events/outbox.ts'
@@ -200,6 +210,42 @@ async function deleteSpace(tx: Tx, space: SpaceRef): Promise<void> {
   await planPurge(tx, deleted)
 }
 
+/**
+ * Makes the space's wiki match the whole space, creating it if missing.
+ * A deleted space stays deleted, since space ids are never reused.
+ */
+async function matchSpace(
+  tx: Tx,
+  space: SpaceRef & { name: string; members: z.infer<typeof member>[] }
+): Promise<void> {
+  const wikiId = await wikiOf(tx, space)
+  if (wikiId) {
+    const [wiki] = await tx
+      .select({ deletedAt: wikis.deletedAt })
+      .from(wikis)
+      .where(eq(wikis.id, wikiId))
+    if (wiki?.deletedAt) return
+  }
+  await provisionSpace(tx, space)
+  // Every time, so TwakeSpace learns the wiki even if an earlier event was
+  // lost; it ignores the repeats, which share the event id.
+  await enqueue(tx, await provisioned(tx, space))
+  await renameSpace(tx, space, space.name)
+  await upsertMembers(tx, space, space.members)
+  const uuids = space.members.flatMap(m => (m.uuid ? [m.uuid] : []))
+  await removeMembers(
+    tx,
+    space,
+    and(
+      notInArray(wikiMembers.userId, uuids),
+      notInArray(
+        wikiMembers.email,
+        space.members.map(m => m.email)
+      )
+    )
+  )
+}
+
 type TimedSpace = SpaceRef & { timestamp: string }
 
 // A late or redelivered event must not undo a newer one; equal timestamps
@@ -274,12 +320,15 @@ export function spaceRoutes(): ReadonlyMap<string, Handler<PlatformEvent>> {
     await deleteSpace(tx, space)
   }
 
+  const onSynced = inOrder(spaceCreated, matchSpace)
+
   return new Map([
     ['twake.space.created', onCreated],
     ['twake.space.updated', onUpdated],
     ['twake.space.deleted', onDeleted],
     ['twake.space.member.added', onMembersChanged],
     ['twake.space.member.role.changed', onMembersChanged],
-    ['twake.space.member.removed', onMembersRemoved]
+    ['twake.space.member.removed', onMembersRemoved],
+    ['twake.space.synced', onSynced]
   ])
 }

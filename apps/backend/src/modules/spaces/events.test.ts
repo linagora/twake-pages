@@ -468,3 +468,139 @@ describe('the order of space events', () => {
     expect(await spaceWikis(admin)).toEqual([])
   })
 })
+
+describe('twake.space.synced', () => {
+  it('creates the wiki of a space it never heard of, with its members, and announces it', async () => {
+    const admin = aUser()
+    const viewer = aUser({ organizationId: admin.organizationId })
+    const space = { organizationId: admin.organizationId, id: randomUUID() }
+
+    await deliver('twake.space.synced', {
+      ...space,
+      name: 'Roadmap',
+      members: [member(admin, 'admin'), member(viewer, 'viewer')],
+      groups: []
+    })
+
+    const wiki = await spaceWikiOf(admin)
+    expect(wiki).toEqual(
+      expect.objectContaining({ name: 'Roadmap', role: 'admin' })
+    )
+    expect(await spaceWikis(viewer)).toEqual([
+      expect.objectContaining({ role: 'viewer' })
+    ])
+    expect(await provisionedEvents(space.id)).toEqual([
+      expect.objectContaining({
+        data: { space_id: space.id, resource: { kind: 'wiki', id: wiki.id } }
+      })
+    ])
+  })
+
+  it('makes the wiki match the space: name, roles, and who left', async () => {
+    const admin = aUser()
+    const leaver = aUser({ organizationId: admin.organizationId })
+    const promoted = aUser({ organizationId: admin.organizationId })
+    const joiner = aUser({ organizationId: admin.organizationId })
+    const space = { organizationId: admin.organizationId, id: randomUUID() }
+    await deliver('twake.space.created', {
+      ...space,
+      name: 'Ops',
+      members: [
+        member(admin, 'admin'),
+        member(leaver, 'editor'),
+        member(promoted, 'editor')
+      ]
+    })
+
+    await deliver('twake.space.synced', {
+      ...space,
+      name: 'Operations',
+      members: [
+        member(admin, 'admin'),
+        member(promoted, 'admin'),
+        member(joiner, 'viewer')
+      ],
+      groups: []
+    })
+
+    expect(await spaceWikis(admin)).toEqual([
+      expect.objectContaining({ name: 'Operations', role: 'admin' })
+    ])
+    expect(await spaceWikis(leaver)).toEqual([])
+    expect(await spaceWikis(promoted)).toEqual([
+      expect.objectContaining({ role: 'admin' })
+    ])
+    expect(await spaceWikis(joiner)).toEqual([
+      expect.objectContaining({ role: 'viewer' })
+    ])
+  })
+
+  it('keeps a member the snapshot lists without a uuid', async () => {
+    const admin = aUser()
+    const editor = aUser({ organizationId: admin.organizationId })
+    const space = { organizationId: admin.organizationId, id: randomUUID() }
+    await deliver('twake.space.created', {
+      ...space,
+      name: 'Ops',
+      members: [member(admin, 'admin'), member(editor, 'editor')]
+    })
+
+    await deliver('twake.space.synced', {
+      ...space,
+      name: 'Ops',
+      members: [
+        { email: admin.email, role: 'admin' },
+        { email: editor.email, role: 'editor' }
+      ],
+      groups: []
+    })
+
+    expect(await spaceWikis(admin)).toHaveLength(1)
+    expect(await spaceWikis(editor)).toHaveLength(1)
+  })
+
+  it('ignores a snapshot older than the last event of the space', async () => {
+    const admin = aUser()
+    const space = { organizationId: admin.organizationId, id: randomUUID() }
+    await deliver('twake.space.created', {
+      ...space,
+      name: 'Ops',
+      members: [member(admin, 'admin')],
+      timestamp: at(30)
+    })
+
+    await deliver('twake.space.synced', {
+      ...space,
+      name: 'Stale',
+      members: [],
+      groups: [],
+      timestamp: at(10)
+    })
+
+    expect(await spaceWikis(admin)).toEqual([
+      expect.objectContaining({ name: 'Ops', role: 'admin' })
+    ])
+  })
+
+  it('leaves a deleted space deleted, and its wiki unannounced', async () => {
+    const admin = aUser()
+    const space = { organizationId: admin.organizationId, id: randomUUID() }
+    await deliver('twake.space.created', {
+      ...space,
+      name: 'Ops',
+      members: [member(admin, 'admin')],
+      timestamp: at(0)
+    })
+    await deliver('twake.space.deleted', { ...space, timestamp: at(5) })
+
+    await deliver('twake.space.synced', {
+      ...space,
+      name: 'Ops',
+      members: [member(admin, 'admin')],
+      groups: []
+    })
+
+    expect(await spaceWikis(admin)).toEqual([])
+    expect(await provisionedEvents(space.id)).toHaveLength(1)
+  })
+})
