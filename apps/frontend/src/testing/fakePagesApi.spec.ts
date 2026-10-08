@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { ApiError, EditConflict } from '@/application/pages'
-import { buildTree, type TreeNode } from '@/domain/tree'
+import { buildTree, byPosition, type TreeNode } from '@/domain/tree'
 import {
   fakePagesApi,
   GRIST_ORIGIN,
@@ -293,9 +293,7 @@ describe('fakePagesApi', () => {
       await api.createPage(wiki.id, { title: 'D', ...at(undefined, a.id) })
 
       const { pages } = await api.getTree(wiki.id)
-      const titles = pages
-        .toSorted((x, y) => (x.position < y.position ? -1 : 1))
-        .map(page => page.title)
+      const titles = pages.toSorted(byPosition).map(page => page.title)
       expect(titles).toEqual(['D', 'A', 'C', 'B'])
     })
 

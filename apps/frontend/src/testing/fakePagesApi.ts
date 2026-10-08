@@ -21,6 +21,7 @@ import type {
   VersionSummary
 } from '@/domain/page'
 import type { Person } from '@/domain/person'
+import { byPosition } from '@/domain/tree'
 import type {
   Invite,
   Member,
@@ -184,9 +185,6 @@ interface Content {
   content: Block[]
   gristUrl: string | null
 }
-
-const byPosition = (a: { position: string }, b: { position: string }) =>
-  a.position < b.position ? -1 : a.position > b.position ? 1 : 0
 
 const byEmail = (a: { email: string }, b: { email: string }) =>
   a.email.localeCompare(b.email)

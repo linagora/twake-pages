@@ -6,7 +6,7 @@ export interface TreeNode extends TreePage {
 
 // Fractional keys sort by code unit, as the database's "C" collation does:
 // localeCompare would put 'Zz' after 'a0'.
-const byPosition = (a: TreePage, b: TreePage) =>
+export const byPosition = (a: { position: string }, b: { position: string }) =>
   a.position < b.position ? -1 : a.position > b.position ? 1 : 0
 
 export function buildTree(pages: TreePage[]): TreeNode[] {
