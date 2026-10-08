@@ -27,7 +27,8 @@ const spaceEvent = z.looseObject({
   timestamp
 })
 
-// People are keyed by entryUUID; one sent without it waits for the next sync.
+// People are keyed by entryUUID, which ADR 002 has ldap-rest send in every
+// event that names a user; a member sent without it is skipped.
 const member = z.looseObject({
   uuid: z.uuid().optional(),
   email: z.email(),
