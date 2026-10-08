@@ -1,5 +1,5 @@
 import type { TreePage } from '@/domain/page'
-import type { Wiki, WikiSummary } from '@/domain/wiki'
+import type { Invite, Member, Role, Wiki, WikiSummary } from '@/domain/wiki'
 
 /** The person's Twake Workplace settings; null where they never chose. */
 export interface UserSettings {
@@ -26,6 +26,20 @@ export interface WikiChanges {
 export interface Tree {
   version: number
   pages: TreePage[]
+}
+
+export interface Sharing {
+  members: Member[]
+  /** Shown to admins only: empty for the other members. */
+  invites: Invite[]
+  /** Whether the members come from elsewhere: a personal or space wiki. */
+  managed: boolean
+}
+
+/** Someone of the person's organization, to share a wiki with. */
+export interface PersonMatch {
+  email: string
+  name: string | null
 }
 
 /** Why the backend refused a request: the `error` of its answer. */
@@ -67,6 +81,18 @@ export interface PagesApi {
     wikiId: string,
     onVersion: (version: number) => void
   ) => () => void
+
+  getMembers: (wikiId: string) => Promise<Sharing>
+  /** Admin of a shared wiki; the email joins when it signs in, as `role`. */
+  invite: (wikiId: string, email: string, role: Role) => Promise<void>
+  /** Admin only. */
+  cancelInvite: (wikiId: string, inviteId: string) => Promise<void>
+  /** Admin of a shared wiki, which always keeps an admin (`last_admin`). */
+  setMemberRole: (wikiId: string, userId: string, role: Role) => Promise<void>
+  /** Admin of a shared wiki, or the member leaving it. */
+  removeMember: (wikiId: string, userId: string) => Promise<void>
+  /** People of the person's organization, at most 10. */
+  searchPeople: (query: string) => Promise<PersonMatch[]>
 }
 
 export class ApiError extends Error {

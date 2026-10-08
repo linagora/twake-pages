@@ -8,7 +8,14 @@ import {
 } from '@/application/pages'
 import type { Block, Page, PageKind, TreePage, Version } from '@/domain/page'
 import type { Person } from '@/domain/person'
-import type { Role, Wiki, WikiKind, WikiSummary } from '@/domain/wiki'
+import type {
+  Invite,
+  Member,
+  Role,
+  Wiki,
+  WikiKind,
+  WikiSummary
+} from '@/domain/wiki'
 import { keyBetween } from '@/testing/fractionalKey'
 
 type Mocks = { [Key in keyof PagesApi]: Mock<PagesApi[Key]> }
@@ -89,6 +96,12 @@ const refuse = (refusal: Refusal) => new ApiError(STATUS[refusal], refusal)
 
 const RANK: Record<Role, number> = { viewer: 0, editor: 1, admin: 2 }
 
+interface Membership {
+  person: Person
+  role: Role
+  joinedAt: string
+}
+
 interface StoredWiki {
   id: string
   name: string
@@ -98,7 +111,9 @@ interface StoredWiki {
   createdBy: string
   deleted: boolean
   homePageId: string
-  members: Map<string, { role: Role; joinedAt: string }>
+  /** By person id. */
+  members: Map<string, Membership>
+  invites: Invite[]
 }
 
 interface StoredPage {
@@ -286,7 +301,10 @@ function signedIn(world: World, person: Person): FakePagesApi {
       createdBy: person.id,
       deleted: false,
       homePageId: '',
-      members: new Map([[person.id, { role: 'admin', joinedAt: now() }]])
+      members: new Map([
+        [person.id, { person, role: 'admin', joinedAt: now() }]
+      ]),
+      invites: []
     }
     world.wikis.set(wiki.id, wiki)
     wiki.homePageId = makePage(wiki, { title: name, kind: 'document' }, true).id
@@ -298,6 +316,49 @@ function signedIn(world: World, person: Person): FakePagesApi {
       wiki => wiki.kind === 'personal' && wiki.createdBy === person.id
     ) ?? makeWiki('Personal', '', 'personal')
 
+  // An invitation becomes a membership once its email signs in and looks.
+  const claimInvites = () => {
+    for (const wiki of world.wikis.values()) {
+      const invite = wiki.invites.find(each => each.email === person.email)
+      if (!invite) continue
+      wiki.invites = wiki.invites.filter(each => each !== invite)
+      if (!wiki.members.has(person.id)) {
+        wiki.members.set(person.id, {
+          person,
+          role: invite.role,
+          joinedAt: now()
+        })
+      }
+      bump(wiki)
+    }
+  }
+
+  const sharedWiki = (wikiId: string) => {
+    const { wiki } = access(wikiId, 'admin')
+    if (wiki.kind !== 'shared') throw refuse('managed')
+    return wiki
+  }
+
+  const keepAnAdmin = (wiki: StoredWiki, leaving: string) => {
+    const others = [...wiki.members].filter(
+      ([userId, member]) => userId !== leaving && member.role === 'admin'
+    )
+    if (others.length === 0) throw refuse('last_admin')
+  }
+
+  const memberOf = ({
+    person: member,
+    role,
+    joinedAt
+  }: Membership): Member => ({
+    ...member,
+    role,
+    joinedAt
+  })
+
+  const byEmail = (a: { email: string }, b: { email: string }) =>
+    a.email.localeCompare(b.email)
+
   const mocks: Mocks = {
     settings: vi.fn<PagesApi['settings']>(() =>
       Promise.resolve({ ...NO_SETTINGS })
@@ -307,6 +368,7 @@ function signedIn(world: World, person: Person): FakePagesApi {
     listWikis: vi.fn<PagesApi['listWikis']>(() =>
       answer(() => {
         personalWiki()
+        claimInvites()
         return [...world.wikis.values()]
           .flatMap(wiki => {
             const role = wiki.members.get(person.id)?.role
@@ -378,7 +440,84 @@ function signedIn(world: World, person: Person): FakePagesApi {
       return () => {
         listeners.delete(onVersion)
       }
-    })
+    }),
+
+    getMembers: vi.fn<PagesApi['getMembers']>(wikiId =>
+      answer(() => {
+        const { wiki, role } = access(wikiId)
+        return {
+          members: [...wiki.members.values()].map(memberOf).sort(byEmail),
+          invites: role === 'admin' ? wiki.invites.toSorted(byEmail) : [],
+          managed: wiki.kind !== 'shared'
+        }
+      })
+    ),
+    invite: vi.fn<PagesApi['invite']>((wikiId, email, role) =>
+      answer(() => {
+        const wiki = sharedWiki(wikiId)
+        const address = email.trim().toLowerCase()
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(address)) {
+          throw refuse('invalid_request')
+        }
+        const members = [...wiki.members.values()]
+        if (members.some(member => member.person.email === address)) return
+        const invite = wiki.invites.find(each => each.email === address)
+        if (invite) invite.role = role
+        else {
+          wiki.invites.push({
+            id: nextId(),
+            email: address,
+            role,
+            createdAt: now()
+          })
+        }
+        bump(wiki)
+      })
+    ),
+    cancelInvite: vi.fn<PagesApi['cancelInvite']>((wikiId, inviteId) =>
+      answer(() => {
+        const { wiki } = access(wikiId, 'admin')
+        const kept = wiki.invites.filter(invite => invite.id !== inviteId)
+        if (kept.length === wiki.invites.length) return
+        wiki.invites = kept
+        bump(wiki)
+      })
+    ),
+    setMemberRole: vi.fn<PagesApi['setMemberRole']>((wikiId, userId, role) =>
+      answer(() => {
+        const wiki = sharedWiki(wikiId)
+        if (role !== 'admin') keepAnAdmin(wiki, userId)
+        const member = wiki.members.get(userId)
+        if (!member) throw refuse('not_found')
+        member.role = role
+        bump(wiki)
+      })
+    ),
+    removeMember: vi.fn<PagesApi['removeMember']>((wikiId, userId) =>
+      answer(() => {
+        const wiki =
+          userId === person.id ? access(wikiId).wiki : sharedWiki(wikiId)
+        if (wiki.kind !== 'shared') throw refuse('managed')
+        keepAnAdmin(wiki, userId)
+        if (!wiki.members.delete(userId)) throw refuse('not_found')
+        bump(wiki)
+      })
+    ),
+    searchPeople: vi.fn<PagesApi['searchPeople']>(query =>
+      answer(() => {
+        const words = query.trim().toLowerCase()
+        if (words === '') return []
+        return [...world.people.values()]
+          .filter(
+            each =>
+              each.email.includes(words) ||
+              (each.name?.toLowerCase().includes(words) ?? false)
+          )
+          .sort(byEmail)
+          .slice(0, 10)
+          .map(({ email, name }) => ({ email, name }))
+      })
+    )
   }
 
   const api: FakePagesApi = {
@@ -397,9 +536,11 @@ function signedIn(world: World, person: Person): FakePagesApi {
         kind === 'personal'
           ? personalWiki()
           : makeWiki(name, seededDescription, kind)
-      wiki.members.set(person.id, { role, joinedAt: now() })
+      wiki.members.set(person.id, { person, role, joinedAt: now() })
       for (const [email, memberRole] of Object.entries(members)) {
-        wiki.members.set(personFor(world, email).id, {
+        const member = personFor(world, email)
+        wiki.members.set(member.id, {
+          person: member,
           role: memberRole,
           joinedAt: now()
         })

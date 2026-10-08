@@ -116,4 +116,104 @@ describe('fakePagesApi', () => {
       expect(versions).toEqual([wiki.version, wiki.version + 1])
     })
   })
+
+  describe('sharing', () => {
+    it('shows the members to every member, and the invitations to admins', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki({ members: { 'bob@example.com': 'viewer' } })
+      await api.invite(wiki.id, 'carol@example.com', 'editor')
+
+      const sharing = await api.getMembers(wiki.id)
+
+      expect(
+        sharing.members.map(member => [member.email, member.role])
+      ).toEqual([
+        ['alice@example.com', 'admin'],
+        ['bob@example.com', 'viewer']
+      ])
+      expect(sharing.invites).toMatchObject([
+        { email: 'carol@example.com', role: 'editor' }
+      ])
+      expect(sharing.managed).toBe(false)
+      await expect(
+        api.signedInAs('bob@example.com').getMembers(wiki.id)
+      ).resolves.toMatchObject({ invites: [] })
+    })
+
+    it('makes an invitation a membership when its email signs in', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki({ name: 'Engineering' })
+      await api.invite(wiki.id, 'Carol@Example.com', 'editor')
+
+      const carol = api.signedInAs('carol@example.com', 'Carol Diaz')
+
+      await expect(carol.listWikis()).resolves.toContainEqual(
+        expect.objectContaining({ name: 'Engineering', role: 'editor' })
+      )
+      await expect(api.getMembers(wiki.id)).resolves.toMatchObject({
+        members: [
+          { email: 'alice@example.com' },
+          { email: 'carol@example.com', name: 'Carol Diaz', role: 'editor' }
+        ],
+        invites: []
+      })
+    })
+
+    it('never leaves a shared wiki without an admin', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki({ members: { 'bob@example.com': 'editor' } })
+      const lastAdmin = new ApiError(409, 'last_admin')
+
+      await expect(
+        api.setMemberRole(wiki.id, api.person.id, 'editor')
+      ).rejects.toEqual(lastAdmin)
+      await expect(api.removeMember(wiki.id, api.person.id)).rejects.toEqual(
+        lastAdmin
+      )
+    })
+
+    it('lets a member leave, and only an admin remove someone else', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki({
+        members: { 'bob@example.com': 'editor', 'carol@example.com': 'viewer' }
+      })
+      const bob = api.signedInAs('bob@example.com')
+      const carol = api.signedInAs('carol@example.com')
+
+      await expect(bob.removeMember(wiki.id, carol.person.id)).rejects.toEqual(
+        new ApiError(403, 'forbidden')
+      )
+      await bob.removeMember(wiki.id, bob.person.id)
+
+      await expect(bob.getWiki(wiki.id)).rejects.toEqual(
+        new ApiError(404, 'not_found')
+      )
+    })
+
+    it('leaves the members of a personal or space wiki alone', async () => {
+      const api = fakePagesApi()
+      const space = api.withWiki({ kind: 'space' })
+      const personal = api.withWiki({ kind: 'personal' })
+
+      await expect(
+        api.invite(space.id, 'bob@example.com', 'viewer')
+      ).rejects.toEqual(new ApiError(409, 'managed'))
+      await expect(api.getMembers(personal.id)).resolves.toMatchObject({
+        managed: true
+      })
+    })
+
+    it('finds people of the organization by name or email', async () => {
+      const api = fakePagesApi()
+      api.signedInAs('bob@example.com', 'Bob Stone')
+      api.signedInAs('carol@example.com', 'Carol Diaz')
+
+      await expect(api.searchPeople('STO')).resolves.toEqual([
+        { email: 'bob@example.com', name: 'Bob Stone' }
+      ])
+      await expect(api.searchPeople('carol@')).resolves.toEqual([
+        { email: 'carol@example.com', name: 'Carol Diaz' }
+      ])
+    })
+  })
 })

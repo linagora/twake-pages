@@ -1,4 +1,4 @@
-import { ApiError, type PagesApi } from '@/application/pages'
+import { ApiError, type PagesApi, type PersonMatch } from '@/application/pages'
 import type { WikiSummary } from '@/domain/wiki'
 
 export type Send = (request: Request) => Promise<Response>
@@ -100,6 +100,23 @@ export function httpPagesApi(baseUrl: string, send: Send): PagesApi {
     deleteWiki: wikiId => call('DELETE', `/wikis/${wikiId}`),
     getTree: wikiId => call('GET', `/wikis/${wikiId}/tree`),
     watchWiki: (wikiId, onVersion) =>
-      watch(`/wikis/${wikiId}/stream`, onVersion)
+      watch(`/wikis/${wikiId}/stream`, onVersion),
+
+    getMembers: wikiId => call('GET', `/wikis/${wikiId}/members`),
+    invite: (wikiId, email, role) =>
+      call('POST', `/wikis/${wikiId}/invites`, { email, role }).then(
+        () => undefined
+      ),
+    cancelInvite: (wikiId, inviteId) =>
+      call('DELETE', `/wikis/${wikiId}/invites/${inviteId}`),
+    setMemberRole: (wikiId, userId, role) =>
+      call('PATCH', `/wikis/${wikiId}/members/${userId}`, { role }),
+    removeMember: (wikiId, userId) =>
+      call('DELETE', `/wikis/${wikiId}/members/${userId}`),
+    searchPeople: query =>
+      call<{ people: PersonMatch[] }>(
+        'GET',
+        `/people?${new URLSearchParams({ q: query }).toString()}`
+      ).then(({ people }) => people)
   }
 }

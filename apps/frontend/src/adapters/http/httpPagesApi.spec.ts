@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { httpPagesApi, type Send } from '@/adapters/http/httpPagesApi'
-import { ApiError, type PagesApi } from '@/application/pages'
+import { ApiError, type PagesApi, type Sharing } from '@/application/pages'
 import type { TreePage } from '@/domain/page'
 import type { Wiki, WikiSummary } from '@/domain/wiki'
 
@@ -62,6 +62,26 @@ const treePage: TreePage = {
   title: 'Onboarding',
   kind: 'document'
 }
+const sharing: Sharing = {
+  members: [
+    {
+      id: 'u1',
+      email: 'alice@example.com',
+      name: 'Alice Martin',
+      role: 'admin',
+      joinedAt: '2026-10-08T07:30:00.000Z'
+    }
+  ],
+  invites: [
+    {
+      id: 'i1',
+      email: 'bob@example.com',
+      role: 'editor',
+      createdAt: '2026-10-08T07:31:00.000Z'
+    }
+  ],
+  managed: false
+}
 
 interface Exchange {
   call: (api: PagesApi) => Promise<unknown>
@@ -118,6 +138,47 @@ const exchanges: Record<string, Exchange> = {
     path: '/wikis/w1/tree',
     answer: { version: 3, pages: [treePage] },
     resolves: { version: 3, pages: [treePage] }
+  },
+  getMembers: {
+    call: api => api.getMembers('w1'),
+    method: 'GET',
+    path: '/wikis/w1/members',
+    answer: sharing,
+    resolves: sharing
+  },
+  invite: {
+    call: api => api.invite('w1', 'bob@example.com', 'editor'),
+    method: 'POST',
+    path: '/wikis/w1/invites',
+    body: { email: 'bob@example.com', role: 'editor' },
+    status: 202,
+    answer: { status: 'invited' }
+  },
+  cancelInvite: {
+    call: api => api.cancelInvite('w1', 'i1'),
+    method: 'DELETE',
+    path: '/wikis/w1/invites/i1',
+    status: 204
+  },
+  setMemberRole: {
+    call: api => api.setMemberRole('w1', 'u2', 'viewer'),
+    method: 'PATCH',
+    path: '/wikis/w1/members/u2',
+    body: { role: 'viewer' },
+    status: 204
+  },
+  removeMember: {
+    call: api => api.removeMember('w1', 'u2'),
+    method: 'DELETE',
+    path: '/wikis/w1/members/u2',
+    status: 204
+  },
+  searchPeople: {
+    call: api => api.searchPeople('Ana L'),
+    method: 'GET',
+    path: '/people?q=Ana+L',
+    answer: { people: [{ email: 'ana@example.com', name: 'Ana Lopez' }] },
+    resolves: [{ email: 'ana@example.com', name: 'Ana Lopez' }]
   }
 }
 
