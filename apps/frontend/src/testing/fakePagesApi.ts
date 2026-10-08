@@ -11,6 +11,7 @@ import type {
   Block,
   Page,
   PageKind,
+  TrashEntry,
   TreePage,
   Version,
   VersionSummary
@@ -149,6 +150,15 @@ interface StoredPage {
   followers: Set<string>
   /** When each person marked it, by person id. */
   favoredBy: Map<string, string>
+  /** Null while the page is live. */
+  deletion: Deletion | null
+}
+
+interface Deletion {
+  /** The root of the branch the page went to the trash with: itself for the root. */
+  rootId: string
+  at: string
+  by: Person
 }
 
 interface World {
@@ -292,6 +302,13 @@ function signedIn(world: World, person: Person): FakePagesApi {
     return { page, ...access(page.wikiId, needed) }
   }
 
+  // As pageAccess, for changes that a page in the trash refuses.
+  const liveAccess = (pageId: string, needed: Role = 'editor') => {
+    const found = pageAccess(pageId, needed)
+    if (found.page.deletion) throw refuse('in_trash')
+    return found
+  }
+
   const bump = (wiki: StoredWiki) => {
     wiki.version += 1
     for (const listener of world.watchers.get(wiki.id) ?? []) {
@@ -317,16 +334,19 @@ function signedIn(world: World, person: Person): FakePagesApi {
   const pagesOf = (wikiId: string) =>
     [...world.pages.values()].filter(page => page.wikiId === wikiId)
 
+  const livePagesOf = (wikiId: string) =>
+    pagesOf(wikiId).filter(page => !page.deletion)
+
   const siblingsOf = (wikiId: string, parentId: string | null) =>
-    pagesOf(wikiId)
+    livePagesOf(wikiId)
       .filter(page => !page.home && page.parentId === parentId)
       .sort(byPosition)
 
-  // A page of the wiki other than its home page, or null for the top.
+  // A live page of the wiki other than its home page, or null for the top.
   const parentFor = (wikiId: string, parentId: string | null) => {
     if (parentId === null) return undefined
     const parent = world.pages.get(parentId)
-    if (parent?.wikiId !== wikiId || parent.home) {
+    if (parent?.wikiId !== wikiId || parent.home || parent.deletion) {
       throw refuse('invalid_parent')
     }
     return parent
@@ -350,6 +370,15 @@ function signedIn(world: World, person: Person): FakePagesApi {
       .reverse()
       .map(ancestor => ({ id: ancestor.id, title: currentOf(ancestor).title }))
 
+  const descendantsOf = (page: StoredPage) =>
+    pagesOf(page.wikiId).filter(
+      other => other !== page && lineOf(other).includes(page)
+    )
+
+  // The root of a deleted branch and the pages that went to the trash with it.
+  const branchOf = (root: StoredPage) =>
+    pagesOf(root.wikiId).filter(page => page.deletion?.rootId === root.id)
+
   const pageFor = (page: StoredPage): Page => {
     const version = currentOf(page)
     return {
@@ -370,7 +399,7 @@ function signedIn(world: World, person: Person): FakePagesApi {
       ancestors: ancestorsOf(page),
       following: page.followers.has(person.id),
       favorite: page.favoredBy.has(person.id),
-      deletedAt: null
+      deletedAt: page.deletion?.at ?? null
     }
   }
 
@@ -406,7 +435,8 @@ function signedIn(world: World, person: Person): FakePagesApi {
         }
       ],
       followers: new Set([person.id]),
-      favoredBy: new Map()
+      favoredBy: new Map(),
+      deletion: null
     }
     world.pages.set(page.id, page)
     bump(wiki)
@@ -566,7 +596,7 @@ function signedIn(world: World, person: Person): FakePagesApi {
     getTree: vi.fn<PagesApi['getTree']>(wikiId =>
       answer(() => {
         const { wiki } = access(wikiId)
-        const pages = pagesOf(wikiId)
+        const pages = livePagesOf(wikiId)
           .filter(page => !page.home)
           .sort(byPosition)
           .map((page): TreePage => ({
@@ -697,7 +727,7 @@ function signedIn(world: World, person: Person): FakePagesApi {
     publish: vi.fn<PagesApi['publish']>((pageId, draft) =>
       answer(() => {
         const title = text(draft.title, 200)
-        const { page, wiki } = pageAccess(pageId, 'editor')
+        const { page, wiki } = liveAccess(pageId)
         if ((page.kind === 'document') !== 'content' in draft) {
           throw refuse('invalid_request')
         }
@@ -728,7 +758,7 @@ function signedIn(world: World, person: Person): FakePagesApi {
     ),
     restoreVersion: vi.fn<PagesApi['restoreVersion']>((pageId, number) =>
       answer(() => {
-        const { page, wiki } = pageAccess(pageId, 'editor')
+        const { page, wiki } = liveAccess(pageId)
         const version = page.versions.find(each => each.number === number)
         if (!version) throw refuse('not_found')
         const { title, content, gristUrl } = version
@@ -738,7 +768,7 @@ function signedIn(world: World, person: Person): FakePagesApi {
     ),
     movePage: vi.fn<PagesApi['movePage']>((pageId, move) =>
       answer(() => {
-        const { page, wiki } = pageAccess(pageId, 'editor')
+        const { page, wiki } = liveAccess(pageId)
         if (page.home) throw refuse('home_page')
         const parent = parentFor(page.wikiId, move.parentId)
         if (parent && lineOf(parent).includes(page)) {
@@ -752,6 +782,18 @@ function signedIn(world: World, person: Person): FakePagesApi {
         page.parentId = move.parentId
         bump(wiki)
         return { parentId: page.parentId, position: page.position }
+      })
+    ),
+    deletePage: vi.fn<PagesApi['deletePage']>(pageId =>
+      answer(() => {
+        const { page, wiki } = liveAccess(pageId)
+        if (page.home) throw refuse('home_page')
+        const deletion = { rootId: page.id, at: now(), by: { ...person } }
+        for (const each of [page, ...descendantsOf(page)]) {
+          // Descendants deleted before stay in their own branch.
+          each.deletion ??= deletion
+        }
+        bump(wiki)
       })
     ),
     setFollowing: vi.fn<PagesApi['setFollowing']>((pageId, following) =>
@@ -768,6 +810,59 @@ function signedIn(world: World, person: Person): FakePagesApi {
         else if (!page.favoredBy.has(person.id)) {
           page.favoredBy.set(person.id, now())
         }
+      })
+    ),
+
+    listTrash: vi.fn<PagesApi['listTrash']>(wikiId =>
+      answer(() => {
+        access(wikiId)
+        return pagesOf(wikiId)
+          .flatMap(page =>
+            page.deletion?.rootId === page.id
+              ? [{ root: page, deletion: page.deletion }]
+              : []
+          )
+          .sort((a, b) => (a.deletion.at < b.deletion.at ? 1 : -1))
+          .map(({ root, deletion }): TrashEntry => ({
+            id: root.id,
+            title: currentOf(root).title,
+            deletedAt: deletion.at,
+            deletedBy: deletion.by,
+            descendants: branchOf(root).length - 1
+          }))
+      })
+    ),
+    restorePage: vi.fn<PagesApi['restorePage']>(pageId =>
+      answer(() => {
+        const { page, wiki } = pageAccess(pageId, 'editor')
+        if (page.deletion?.rootId !== page.id) throw refuse('not_in_trash')
+        const parent = parentOf(page)
+        const parentId = parent && !parent.deletion ? parent.id : null
+        const position = positionBetween(siblingsOf(page.wikiId, parentId))
+        for (const each of branchOf(page)) each.deletion = null
+        page.parentId = parentId
+        page.position = position
+        bump(wiki)
+        return { parentId, position }
+      })
+    ),
+    purgePage: vi.fn<PagesApi['purgePage']>((wikiId, pageId) =>
+      answer(() => {
+        const { wiki } = access(wikiId, 'admin')
+        const page = world.pages.get(pageId)
+        if (page?.wikiId !== wikiId) throw refuse('not_found')
+        if (page.deletion?.rootId !== page.id) throw refuse('not_in_trash')
+        for (const each of branchOf(page)) world.pages.delete(each.id)
+        bump(wiki)
+      })
+    ),
+    emptyTrash: vi.fn<PagesApi['emptyTrash']>(wikiId =>
+      answer(() => {
+        const { wiki } = access(wikiId, 'admin')
+        for (const page of pagesOf(wikiId)) {
+          if (page.deletion) world.pages.delete(page.id)
+        }
+        bump(wiki)
       })
     )
   }

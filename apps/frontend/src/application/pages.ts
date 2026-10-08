@@ -2,6 +2,7 @@ import type {
   Block,
   Page,
   PageKind,
+  TrashEntry,
   TreePage,
   Version,
   VersionSummary
@@ -146,9 +147,20 @@ export interface PagesApi {
   restoreVersion: (pageId: string, number: number) => Promise<Page>
   /** Editor; with its descendants, never under one of them nor the home page. */
   movePage: (pageId: string, move: Move) => Promise<Placement>
+  /** Editor; the page and its live descendants go to the trash as one branch. */
+  deletePage: (pageId: string) => Promise<void>
   /** Whether the person is notified of the page's versions and comments. */
   setFollowing: (pageId: string, following: boolean) => Promise<void>
   setFavorite: (pageId: string, favorite: boolean) => Promise<void>
+
+  /** The wiki's deleted branches, newest first. */
+  listTrash: (wikiId: string) => Promise<TrashEntry[]>
+  /** Editor; a branch goes back last under its parent if live, else at the top. */
+  restorePage: (pageId: string) => Promise<Placement>
+  /** Admin; deletes a branch for good. */
+  purgePage: (wikiId: string, pageId: string) => Promise<void>
+  /** Admin; deletes every branch of the trash for good. */
+  emptyTrash: (wikiId: string) => Promise<void>
 }
 
 export class ApiError extends Error {

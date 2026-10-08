@@ -7,7 +7,13 @@ import {
   type PagesApi,
   type Sharing
 } from '@/application/pages'
-import type { Page, TreePage, Version, VersionSummary } from '@/domain/page'
+import type {
+  Page,
+  TrashEntry,
+  TreePage,
+  Version,
+  VersionSummary
+} from '@/domain/page'
 import type { Person } from '@/domain/person'
 import type { Wiki, WikiSummary } from '@/domain/wiki'
 
@@ -122,6 +128,13 @@ const versionSummary: VersionSummary = {
   restoredFrom: null
 }
 const version: Version = { ...versionSummary, content, gristUrl: null }
+const trashEntry: TrashEntry = {
+  id: 'p1',
+  title: 'Onboarding',
+  deletedAt: '2026-10-08T07:50:00.000Z',
+  deletedBy: alice,
+  descendants: 2
+}
 
 interface Exchange {
   call: (api: PagesApi) => Promise<unknown>
@@ -312,6 +325,39 @@ const exchanges: Record<string, Exchange> = {
     call: api => api.setFavorite('p1', false),
     method: 'DELETE',
     path: '/pages/p1/favorite',
+    status: 204
+  },
+  deletePage: {
+    call: api => api.deletePage('p1'),
+    method: 'DELETE',
+    path: '/pages/p1',
+    status: 204
+  },
+  listTrash: {
+    call: api => api.listTrash('w1'),
+    method: 'GET',
+    path: '/wikis/w1/trash',
+    answer: { pages: [trashEntry] },
+    resolves: [trashEntry]
+  },
+  restorePage: {
+    call: api => api.restorePage('p1'),
+    method: 'POST',
+    path: '/pages/p1/restore',
+    body: {},
+    answer: { parentId: null, position: 'a2' },
+    resolves: { parentId: null, position: 'a2' }
+  },
+  purgePage: {
+    call: api => api.purgePage('w1', 'p1'),
+    method: 'DELETE',
+    path: '/wikis/w1/trash/p1',
+    status: 204
+  },
+  emptyTrash: {
+    call: api => api.emptyTrash('w1'),
+    method: 'DELETE',
+    path: '/wikis/w1/trash',
     status: 204
   }
 }

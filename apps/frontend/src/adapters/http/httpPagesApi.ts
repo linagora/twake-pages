@@ -4,7 +4,7 @@ import {
   type PagesApi,
   type PersonMatch
 } from '@/application/pages'
-import type { VersionSummary } from '@/domain/page'
+import type { TrashEntry, VersionSummary } from '@/domain/page'
 import type { WikiSummary } from '@/domain/wiki'
 
 export type Send = (request: Request) => Promise<Response>
@@ -144,9 +144,19 @@ export function httpPagesApi(baseUrl: string, send: Send): PagesApi {
     restoreVersion: (pageId, number) =>
       call('POST', `/pages/${pageId}/versions/${String(number)}/restore`, {}),
     movePage: (pageId, move) => call('POST', `/pages/${pageId}/move`, move),
+    deletePage: pageId => call('DELETE', `/pages/${pageId}`),
     setFollowing: (pageId, following) =>
       call(following ? 'PUT' : 'DELETE', `/pages/${pageId}/follow`),
     setFavorite: (pageId, favorite) =>
-      call(favorite ? 'PUT' : 'DELETE', `/pages/${pageId}/favorite`)
+      call(favorite ? 'PUT' : 'DELETE', `/pages/${pageId}/favorite`),
+
+    listTrash: wikiId =>
+      call<{ pages: TrashEntry[] }>('GET', `/wikis/${wikiId}/trash`).then(
+        ({ pages }) => pages
+      ),
+    restorePage: pageId => call('POST', `/pages/${pageId}/restore`, {}),
+    purgePage: (wikiId, pageId) =>
+      call('DELETE', `/wikis/${wikiId}/trash/${pageId}`),
+    emptyTrash: wikiId => call('DELETE', `/wikis/${wikiId}/trash`)
   }
 }

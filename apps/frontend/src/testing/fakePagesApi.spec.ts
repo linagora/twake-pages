@@ -462,6 +462,7 @@ describe('fakePagesApi', () => {
       await expect(api.movePage(page.id, { parentId: null })).rejects.toEqual(
         forbidden
       )
+      await expect(api.deletePage(page.id)).rejects.toEqual(forbidden)
     })
   })
 
@@ -588,6 +589,176 @@ describe('fakePagesApi', () => {
       await expect(bob.getPage(page.id)).resolves.toMatchObject({
         favorite: false
       })
+    })
+  })
+
+  describe('trash', () => {
+    it('puts a page and its live descendants in the trash, as one branch', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki()
+      const onboarding = api.withPage(wiki.id, { title: 'Onboarding' })
+      const laptop = api.withPage(wiki.id, {
+        title: 'Laptop',
+        parentId: onboarding.id
+      })
+      api.withPage(wiki.id, { title: 'Setup', parentId: laptop.id })
+      api.withPage(wiki.id, { title: 'FAQ' })
+
+      await api.deletePage(onboarding.id)
+
+      await expect(outlineOf(api, wiki.id)).resolves.toEqual(['FAQ'])
+      await expect(api.listTrash(wiki.id)).resolves.toMatchObject([
+        {
+          id: onboarding.id,
+          title: 'Onboarding',
+          deletedBy: api.person,
+          descendants: 2
+        }
+      ])
+      const deleted = await api.getPage(laptop.id)
+      expect(deleted.deletedAt).not.toBeNull()
+    })
+
+    it('lists the deleted branches newest first, each with its own pages', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki()
+      const onboarding = api.withPage(wiki.id, { title: 'Onboarding' })
+      const laptop = api.withPage(wiki.id, {
+        title: 'Laptop',
+        parentId: onboarding.id
+      })
+      api.withPage(wiki.id, { title: 'Setup', parentId: laptop.id })
+
+      await api.deletePage(laptop.id)
+      await api.deletePage(onboarding.id)
+
+      const trash = await api.listTrash(wiki.id)
+      expect(trash.map(entry => [entry.title, entry.descendants])).toEqual([
+        ['Onboarding', 0],
+        ['Laptop', 1]
+      ])
+    })
+
+    it('restores a branch last under its parent while it is live, else at the top', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki()
+      const onboarding = api.withPage(wiki.id, { title: 'Onboarding' })
+      const laptop = api.withPage(wiki.id, {
+        title: 'Laptop',
+        parentId: onboarding.id
+      })
+      api.withPage(wiki.id, { title: 'Setup', parentId: laptop.id })
+      api.withPage(wiki.id, { title: 'Badge', parentId: onboarding.id })
+      api.withPage(wiki.id, { title: 'FAQ' })
+
+      await api.deletePage(laptop.id)
+      await expect(api.restorePage(laptop.id)).resolves.toMatchObject({
+        parentId: onboarding.id
+      })
+      await expect(outlineOf(api, wiki.id)).resolves.toEqual([
+        'Onboarding',
+        ['Badge', 'Laptop', ['Setup']],
+        'FAQ'
+      ])
+
+      await api.deletePage(laptop.id)
+      await api.deletePage(onboarding.id)
+      await expect(api.restorePage(laptop.id)).resolves.toMatchObject({
+        parentId: null
+      })
+      await expect(outlineOf(api, wiki.id)).resolves.toEqual([
+        'FAQ',
+        'Laptop',
+        ['Setup']
+      ])
+      await expect(api.listTrash(wiki.id)).resolves.toMatchObject([
+        { title: 'Onboarding', descendants: 1 }
+      ])
+    })
+
+    it('restores and purges only the root of a deleted branch', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki()
+      const onboarding = api.withPage(wiki.id, { title: 'Onboarding' })
+      const laptop = api.withPage(wiki.id, {
+        title: 'Laptop',
+        parentId: onboarding.id
+      })
+      const faq = api.withPage(wiki.id, { title: 'FAQ' })
+      const notInTrash = new ApiError(409, 'not_in_trash')
+      await api.deletePage(onboarding.id)
+
+      await expect(api.restorePage(laptop.id)).rejects.toEqual(notInTrash)
+      await expect(api.restorePage(faq.id)).rejects.toEqual(notInTrash)
+      await expect(api.purgePage(wiki.id, laptop.id)).rejects.toEqual(
+        notInTrash
+      )
+    })
+
+    it('lets admins delete branches for good', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki({ members: { 'bob@example.com': 'editor' } })
+      const onboarding = api.withPage(wiki.id, { title: 'Onboarding' })
+      const laptop = api.withPage(wiki.id, {
+        title: 'Laptop',
+        parentId: onboarding.id
+      })
+      const faq = api.withPage(wiki.id, { title: 'FAQ' })
+      await api.deletePage(onboarding.id)
+      await api.deletePage(faq.id)
+
+      await expect(
+        api.signedInAs('bob@example.com').purgePage(wiki.id, onboarding.id)
+      ).rejects.toEqual(new ApiError(403, 'forbidden'))
+      await api.purgePage(wiki.id, onboarding.id)
+
+      await expect(api.listTrash(wiki.id)).resolves.toMatchObject([
+        { title: 'FAQ' }
+      ])
+      await expect(api.getPage(laptop.id)).rejects.toEqual(
+        new ApiError(404, 'not_found')
+      )
+      await api.emptyTrash(wiki.id)
+      await expect(api.listTrash(wiki.id)).resolves.toEqual([])
+    })
+
+    it('never deletes the home page', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki()
+
+      await expect(api.deletePage(wiki.homePageId)).rejects.toEqual(
+        new ApiError(409, 'home_page')
+      )
+    })
+
+    it('leaves the pages in the trash as they are', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki()
+      const onboarding = api.withPage(wiki.id, { title: 'Onboarding' })
+      await api.deletePage(onboarding.id)
+      const inTrash = new ApiError(409, 'in_trash')
+
+      await expect(
+        api.publish(onboarding.id, {
+          baseVersion: 1,
+          title: 'New',
+          content: []
+        })
+      ).rejects.toEqual(inTrash)
+      await expect(api.restoreVersion(onboarding.id, 1)).rejects.toEqual(
+        inTrash
+      )
+      await expect(
+        api.movePage(onboarding.id, { parentId: null })
+      ).rejects.toEqual(inTrash)
+      await expect(api.deletePage(onboarding.id)).rejects.toEqual(inTrash)
+      await expect(
+        api.createPage(wiki.id, {
+          title: 'Laptop',
+          kind: 'document',
+          parentId: onboarding.id
+        })
+      ).rejects.toEqual(new ApiError(400, 'invalid_parent'))
     })
   })
 })
