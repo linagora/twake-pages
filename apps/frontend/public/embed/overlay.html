@@ -1,0 +1,23 @@
+<!doctype html>
+<!--
+  Overlay of Twake Pages in TwakeSpace. TwakeSpace frames this empty page over
+  its whole window; Twake Pages, in its own frame on the same origin, renders
+  its dialogs and side panels into it with React portals, and tells
+  TwakeSpace the region to show. The page itself boots nothing.
+-->
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Twake Pages</title>
+    <style>
+      /* The theme's baseline gives the body a background: the overlay stays see-through */
+      html,
+      body {
+        margin: 0;
+        background: transparent !important;
+        color-scheme: normal !important;
+      }
+    </style>
+  </head>
+  <body></body>
+</html>

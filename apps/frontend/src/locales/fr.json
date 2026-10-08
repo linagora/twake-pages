@@ -1,0 +1,47 @@
+{
+  "problems": {
+    "notFound": "Page introuvable",
+    "notFoundHint": "Le lien est peut-être cassé, ou la page a été déplacée.",
+    "crash": "Un problème est survenu",
+    "crashHint": "Cet écran a rencontré un problème. Recharger la page suffit en général.",
+    "reload": "Recharger"
+  },
+  "app": {
+    "name": "Twake Pages",
+    "loading": "Chargement"
+  },
+  "session": {
+    "signingIn": "Connexion en cours…",
+    "opening": {
+      "wiki": "Ouverture de votre wiki…"
+    },
+    "slow": "Connexion à votre compte toujours en cours…",
+    "failed": {
+      "title": "Impossible de vous connecter",
+      "hint": "Un problème est survenu lors de la connexion à votre compte."
+    },
+    "timeout": {
+      "title": "Cela prend plus de temps que d’habitude",
+      "hint": "Le service de connexion met du temps à répondre."
+    },
+    "retry": "Réessayer",
+    "backToSignIn": "Retour à la connexion",
+    "signOut": "Se déconnecter"
+  },
+  "wikis": {
+    "title": "Wikis",
+    "back": "Retour aux wikis",
+    "loadFailed": "Les wikis n'ont pas pu être chargés.",
+    "empty": "Aucun wiki pour l'instant",
+    "emptyHint": "Les wikis partagés avec vous s'afficheront ici."
+  },
+  "wiki": {
+    "placeholder": "Ce wiki arrive bientôt",
+    "placeholderHint": "Ses pages s'afficheront ici."
+  },
+  "shortcuts": {
+    "title": "Raccourcis clavier",
+    "then": "g puis %{key}",
+    "close": "Fermer"
+  }
+}

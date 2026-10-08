@@ -1,0 +1,47 @@
+{
+  "problems": {
+    "notFound": "Page not found",
+    "notFoundHint": "The link may be broken, or the page was moved.",
+    "crash": "Something went wrong",
+    "crashHint": "This screen ran into a problem. Reloading usually fixes it.",
+    "reload": "Reload"
+  },
+  "app": {
+    "name": "Twake Pages",
+    "loading": "Loading"
+  },
+  "session": {
+    "signingIn": "Signing you in…",
+    "opening": {
+      "wiki": "Opening your wiki…"
+    },
+    "slow": "Still connecting to your account…",
+    "failed": {
+      "title": "We couldn’t sign you in",
+      "hint": "Something went wrong while connecting to your account."
+    },
+    "timeout": {
+      "title": "This is taking longer than usual",
+      "hint": "The sign-in service is slow to answer."
+    },
+    "retry": "Try again",
+    "backToSignIn": "Back to sign-in",
+    "signOut": "Sign out"
+  },
+  "wikis": {
+    "title": "Wikis",
+    "back": "Back to wikis",
+    "loadFailed": "The wikis could not be loaded.",
+    "empty": "No wikis yet",
+    "emptyHint": "The wikis shared with you will show here."
+  },
+  "wiki": {
+    "placeholder": "This wiki is on its way",
+    "placeholderHint": "Its pages will show here."
+  },
+  "shortcuts": {
+    "title": "Keyboard shortcuts",
+    "then": "g then %{key}",
+    "close": "Close"
+  }
+}
