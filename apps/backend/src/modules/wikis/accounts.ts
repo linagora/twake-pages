@@ -9,6 +9,7 @@ import {
 } from '../../events/router.ts'
 import { asOrganization, asTenant, type Tx } from '../../infra/db.ts'
 import { jobs } from '../../scheduler/schema.ts'
+import { notifications, pageFollowers } from '../notifications/schema.ts'
 import { pageFavorites, pageVisits } from '../pages/schema.ts'
 import { userSettings } from '../settings/schema.ts'
 import { bumpWiki } from './live.ts'
@@ -140,6 +141,11 @@ async function forget(tx: Tx, organizationId: string | null, userId: string) {
   )
   await tx.delete(pageFavorites).where(eq(pageFavorites.userId, userId))
   await tx.delete(pageVisits).where(eq(pageVisits.userId, userId))
+  // Unlike Twake Tasks, which keeps them, the person's follows and
+  // notifications go as their favorites do, since they serve only them. The
+  // notifications their changes sent to others are those others', and stay.
+  await tx.delete(pageFollowers).where(eq(pageFollowers.userId, userId))
+  await tx.delete(notifications).where(eq(notifications.userId, userId))
   await tx
     .delete(wikis)
     .where(and(eq(wikis.createdBy, userId), eq(wikis.kind, 'personal')))

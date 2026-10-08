@@ -20,6 +20,8 @@ import {
   type WikiSummary
 } from '../../testing/app.ts'
 import { comments } from '../comments/schema.ts'
+import { notifications, pageFollowers } from '../notifications/schema.ts'
+import { notify } from '../notifications/testing.ts'
 import { pageFavorites, pageVersions, pageVisits } from '../pages/schema.ts'
 import { keepSettings } from '../settings/events.ts'
 import type { Role } from './access.ts'
@@ -86,16 +88,31 @@ const membersOf = (reader: TestUser, wikiId: string) =>
   )
 
 /**
- * The pages the person keeps as favorites and recent pages, which no route
- * lists yet.
+ * What Pages keeps for the person about pages: their favorites, recent pages,
+ * follows and notifications, which no route lists yet.
  */
-const favoritesAndRecentOf = (user: TestUser) =>
+const keptFor = (user: TestUser) =>
   inTenant(db, user, async tx => ({
     favorites: await tx
       .select({ pageId: pageFavorites.pageId })
       .from(pageFavorites),
-    recent: await tx.select({ pageId: pageVisits.pageId }).from(pageVisits)
+    recent: await tx.select({ pageId: pageVisits.pageId }).from(pageVisits),
+    // Anyone who sees a page sees who follows it.
+    follows: await tx
+      .select({ pageId: pageFollowers.pageId })
+      .from(pageFollowers)
+      .where(eq(pageFollowers.userId, user.userId)),
+    notifications: await tx
+      .select({ pageId: notifications.pageId })
+      .from(notifications)
   }))
+
+const NOTHING_KEPT = {
+  favorites: [],
+  recent: [],
+  follows: [],
+  notifications: []
+}
 
 /**
  * What the reader finds written in the wiki: the titles in its tree, and the
@@ -276,28 +293,44 @@ describe.each(deletions)(
       })
     })
 
-    it('loses its favorites and recent pages', async () => {
+    it('loses its favorites, recent pages, follows and notifications', async () => {
       const gone = makeUser()
       const editor = aPeerOf(gone)
       // A wiki the person created, once handed on, still shows its pages to them
       // in B2C, so what they kept on those pages can be read as them.
       const handedOn = await aWiki(gone, 'Handbook', [[editor, 'editor']])
+      const pageId = await aPageIn(db, editor, handedOn.id, {
+        title: 'Onboarding',
+        position: 'a0'
+      })
       const kept = {
-        pageId: handedOn.homePageId,
+        pageId,
         organizationId: gone.organizationId,
         userId: gone.userId
       }
       await inTenant(db, gone, async tx => {
         await tx.insert(pageFavorites).values(kept)
         await tx.insert(pageVisits).values(kept)
+        await tx.insert(pageFollowers).values(kept)
       })
+      await notify(db, editor, handedOn, gone)
 
       await deliver(routingKey, body(gone))
 
-      expect(await favoritesAndRecentOf(gone)).toEqual({
-        favorites: [],
-        recent: []
-      })
+      expect(await keptFor(gone)).toEqual(NOTHING_KEPT)
+    })
+
+    it('leaves the notifications its changes sent to others', async () => {
+      const gone = makeUser()
+      const editor = aPeerOf(gone)
+      const handedOn = await aWiki(gone, 'Handbook', [[editor, 'editor']])
+      await notify(db, gone, handedOn, editor)
+
+      await deliver(routingKey, body(gone))
+
+      expect(await sharedWikisOf(editor)).toEqual([
+        expect.objectContaining({ name: 'Handbook', unread: 1 })
+      ])
     })
 
     it('loses its Twake Workplace settings', async () => {
@@ -437,10 +470,7 @@ describe('a deleted organization', () => {
 
     expect(await wikisHeldBy(organizationId)).toEqual([])
     expect(await jobsOf(organizationId)).toEqual([])
-    expect(await favoritesAndRecentOf(colleague)).toEqual({
-      favorites: [],
-      recent: []
-    })
+    expect(await keptFor(colleague)).toEqual(NOTHING_KEPT)
     expect(await wikisHeldBy(outsider.organizationId)).not.toEqual([])
     expect(await jobsOf(outsider.organizationId)).not.toEqual([])
   })
