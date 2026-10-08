@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { Refused } from '../../infra/refusals.ts'
 
 // A page's blocks are BlockNote's JSON, stored as sent: the server reads them
-// to check them, and never rewrites them.
+// to check them and to keep their text, and never rewrites them.
 
 /** Over this many bytes of JSON, blocks are refused. */
 export const MAX_BLOCKS_BYTES = 2 * 1024 * 1024
@@ -84,14 +84,56 @@ function blocksAllowed(
   return true
 }
 
+// Styled text and the text of a link, or plain strings, which BlockNote takes
+// for short and templates use.
+function inlineText(content: unknown): string {
+  if (typeof content === 'string') return content
+  if (!isList(content)) return ''
+  return content
+    .map(item => {
+      if (typeof item === 'string') return item
+      if (!isFields(item)) return ''
+      return typeof item.text === 'string'
+        ? item.text
+        : inlineText(item.content)
+    })
+    .join('')
+}
+
+function addLines(block: unknown, lines: string[]) {
+  if (!isFields(block)) return
+  const { content, children } = block
+  if (isFields(content) && isList(content.rows)) {
+    for (const row of content.rows) {
+      const cells = isFields(row) && isList(row.cells) ? row.cells : []
+      for (const cell of cells) {
+        lines.push(inlineText(isFields(cell) ? cell.content : cell))
+      }
+    }
+  } else {
+    lines.push(inlineText(content))
+  }
+  if (isList(children)) {
+    for (const child of children) addLines(child, lines)
+  }
+}
+
+/** The text of the blocks, a line per block and per table cell. */
+function plainText(blocks: Blocks): string {
+  const lines: string[] = []
+  for (const block of blocks) addLines(block, lines)
+  return lines.filter(line => line.trim() !== '').join('\n')
+}
+
 /**
  * The one way in for blocks, which every write of them takes: the blocks as
- * the store keeps them, or `invalid_content` when they fail its checks.
+ * the store keeps them, with their plain text for search and previews, or
+ * `invalid_content` when they fail its checks.
  */
 export function checkBlocks(
   blocks: Blocks,
   gristOrigins: readonly string[]
-): { content: Blocks } {
+): { content: Blocks; text: string } {
   if (!blocksAllowed(blocks, gristOrigins)) throw new Refused('invalid_content')
-  return { content: blocks }
+  return { content: blocks, text: plainText(blocks) }
 }

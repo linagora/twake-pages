@@ -26,6 +26,7 @@ import {
   pageFavorites,
   pageLabels,
   pages,
+  pageVersions,
   pageVisits
 } from './schema.ts'
 
@@ -143,6 +144,22 @@ const visitsOf = async (user: TestUser) => {
   )
   return visits.map(visit => visit.pageId)
 }
+
+// Nor is search, so the plain text of a page and of its versions is read from
+// their tables, the first version first.
+const textsOf = (user: TestUser, pageId: string) =>
+  inTenant(db, user, async tx => {
+    const [page] = await tx
+      .select({ text: pages.text })
+      .from(pages)
+      .where(eq(pages.id, pageId))
+    const versions = await tx
+      .select({ text: pageVersions.text })
+      .from(pageVersions)
+      .where(eq(pageVersions.pageId, pageId))
+      .orderBy(pageVersions.number)
+    return { page: page?.text, versions: versions.map(({ text }) => text) }
+  })
 
 /** Pages of the wiki the person visited one after the other, long ago. */
 const visitedLongAgo = async (
@@ -785,6 +802,35 @@ describe('POST /wikis/:wikiId/pages', () => {
       expect(page.content).toEqual(blocks)
     })
 
+    // An image's caption is no text of the page.
+    it('keeps their plain text, a line per block and per table cell', async () => {
+      const alice = aUser()
+      const wiki = await aWikiOf(api, alice)
+
+      const created = await createPage(api, alice, wiki.id, {
+        title: 'Onboarding',
+        content: [
+          aBlock('heading', { content: [styled('Steps')] }),
+          aBlock('paragraph', {
+            content: [styled('Read '), aLink('https://example.com/guide')],
+            children: [aBlock('paragraph', { content: 'Then ask' })]
+          }),
+          aBlock('paragraph', { content: [] }),
+          aTable(['Laptop', 'Badge']),
+          aBlock('image', {
+            props: { url: 'https://example.com/desk.png', caption: 'A desk' }
+          }),
+          aBlock('codeBlock', { content: [styled('npm ci')] })
+        ]
+      })
+
+      const text = 'Steps\nRead the guide\nThen ask\nLaptop\nBadge\nnpm ci'
+      expect(await textsOf(alice, created.json<Page>().id)).toEqual({
+        page: text,
+        versions: [text]
+      })
+    })
+
     /** A paragraph of blocks that weigh `bytes` in JSON. */
     const weighing = (bytes: number) => {
       const block = aBlock('paragraph', { content: [styled('')] })
@@ -792,8 +838,8 @@ describe('POST /wikis/:wikiId/pages', () => {
       return [{ ...block, content: [styled(filler)] }]
     }
 
-    // The page and its version each keep the blocks: 4 MiB to write, which a
-    // busy machine takes seconds over.
+    // The page and its version each keep the blocks and their text: 8 MiB to
+    // write, which a busy machine takes seconds over.
     it('takes 2 MiB of them in JSON', { timeout: 30_000 }, async () => {
       const alice = aUser()
       const wiki = await aWikiOf(api, alice)

@@ -172,6 +172,7 @@ export async function addPage(
     organizationId: string | null
     title: string
     content?: Blocks
+    text?: string
     home?: true
     parentId?: string | null
     position?: string
@@ -199,6 +200,7 @@ export async function addPage(
     number: 1,
     title: added.title,
     content: page.content,
+    text: page.text,
     authorId: author.userId,
     authorEmail: author.email,
     authorName: author.name
