@@ -178,6 +178,15 @@ export async function versionOf(
   }>().version
 }
 
+/** The person's wikis, as `GET /wikis` lists them. */
+export async function wikisOf(
+  api: Awaited<ReturnType<typeof startApp>>,
+  user: TestUser
+) {
+  return (await api.as(user).get('/wikis')).json<{ wikis: WikiSummary[] }>()
+    .wikis
+}
+
 export async function startApp() {
   const { sql, db } = createDb(inject('databaseUrl'))
   const settingsChanges = await listenToChanges(sql, SETTINGS_CHANNEL)

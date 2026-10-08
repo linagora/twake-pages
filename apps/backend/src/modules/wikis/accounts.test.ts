@@ -15,6 +15,7 @@ import {
   startApp,
   versionOf,
   wikiRowsOf,
+  wikisOf,
   type TestUser,
   type WikiSummary
 } from '../../testing/app.ts'
@@ -44,11 +45,8 @@ function deliver(routingKey: string, body: object) {
   return db.transaction(tx => handler(event, tx))
 }
 
-const wikisOf = async (user: TestUser) =>
-  (await api.as(user).get('/wikis')).json<{ wikis: WikiSummary[] }>().wikis
-
 const sharedWikisOf = async (user: TestUser) =>
-  (await wikisOf(user)).filter(wiki => wiki.kind !== 'personal')
+  (await wikisOf(api, user)).filter(wiki => wiki.kind !== 'personal')
 
 /** Someone of the person's tenant: their organization, or B2C. */
 const aPeerOf = (user: TestUser): TestUser =>
@@ -71,7 +69,9 @@ async function aWiki(
 }
 
 async function personalWikiOf(user: TestUser) {
-  const personal = (await wikisOf(user)).find(wiki => wiki.kind === 'personal')
+  const personal = (await wikisOf(api, user)).find(
+    wiki => wiki.kind === 'personal'
+  )
   if (!personal) throw new Error('no personal wiki')
   return personal
 }
@@ -255,7 +255,7 @@ describe.each([
 
   it('loses its Twake Workplace settings', async () => {
     const gone = makeUser()
-    await wikisOf(gone)
+    await wikisOf(api, gone)
     await db.transaction(tx =>
       keepSettings(tx, 1, {
         email: gone.email.toLowerCase(),
@@ -290,7 +290,7 @@ describe('a deleted account in a space wiki', () => {
       uuid: gone.userId
     })
 
-    expect(await wikisOf(viewer)).toEqual(
+    expect(await wikisOf(api, viewer)).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ name: 'Marketing', role: 'viewer' })
       ])

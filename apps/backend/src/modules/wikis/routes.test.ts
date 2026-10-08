@@ -9,6 +9,7 @@ import {
   purgeJobOf,
   startApp,
   wikiRowsOf,
+  wikisOf,
   type TestUser,
   type WikiSummary
 } from '../../testing/app.ts'
@@ -34,14 +35,11 @@ interface Wiki extends WikiSummary {
   version: number
 }
 
-const wikisOf = async (user: TestUser) =>
-  (await api.as(user).get('/wikis')).json<{ wikis: WikiSummary[] }>().wikis
-
 const aWikiOf = async (admin: TestUser, name = 'Handbook') =>
   (await api.as(admin).post('/wikis', { name })).json<Wiki>()
 
 const roles = async (user: TestUser) =>
-  (await wikisOf(user)).map(wiki => [wiki.name, wiki.role])
+  (await wikisOf(api, user)).map(wiki => [wiki.name, wiki.role])
 
 // Sharing is not served yet, so invites are written as it will write them.
 const invite = (admin: TestUser, wikiId: string, email: string) =>
@@ -100,7 +98,7 @@ describe('GET /wikis', () => {
     await notify(alice, wiki, bob, new Date())
     await notify(alice, wiki, carol)
 
-    const unread = (await wikisOf(bob)).map(listed => [
+    const unread = (await wikisOf(api, bob)).map(listed => [
       listed.name,
       listed.unread
     ])
@@ -136,8 +134,8 @@ describe('GET /wikis', () => {
   it('keeps the same personal wiki on later calls', async () => {
     const alice = aUser()
 
-    const [first] = await wikisOf(alice)
-    const again = await wikisOf(alice)
+    const [first] = await wikisOf(api, alice)
+    const again = await wikisOf(api, alice)
 
     expect(again).toEqual([first])
   })
@@ -147,7 +145,7 @@ describe('GET /wikis', () => {
     await aWikiOf(alice, 'Zoning')
     await aWikiOf(alice, 'Archives')
 
-    expect((await wikisOf(alice)).map(wiki => wiki.name)).toEqual([
+    expect((await wikisOf(api, alice)).map(wiki => wiki.name)).toEqual([
       'Personal',
       'Archives',
       'Zoning'
@@ -275,7 +273,7 @@ describe('GET /wikis/:wikiId', () => {
 
   it('hides the personal wiki of someone else of the organization', async () => {
     const alice = aUser()
-    const [personal] = await wikisOf(alice)
+    const [personal] = await wikisOf(api, alice)
 
     const response = await api
       .as(aUser({ organizationId: alice.organizationId }))
@@ -381,7 +379,7 @@ describe('DELETE /wikis/:wikiId', () => {
 
     expect(response.statusCode).toBe(204)
     expect((await api.as(alice).get(`/wikis/${wiki.id}`)).statusCode).toBe(404)
-    expect((await wikisOf(alice)).map(listed => listed.name)).toEqual([
+    expect((await wikisOf(api, alice)).map(listed => listed.name)).toEqual([
       'Personal'
     ])
     const job = await purgeJobOf(db, wiki.id)
@@ -414,7 +412,7 @@ describe('DELETE /wikis/:wikiId', () => {
   it.each([
     [
       'a personal wiki',
-      async (alice: TestUser) => (await wikisOf(alice))[0]?.id ?? ''
+      async (alice: TestUser) => (await wikisOf(api, alice))[0]?.id ?? ''
     ],
     ['a space’s wiki', (alice: TestUser) => aSpaceWiki(db, [[alice, 'admin']])]
   ])('refuses to delete %s', async (_case, aWikiOfKind) => {
