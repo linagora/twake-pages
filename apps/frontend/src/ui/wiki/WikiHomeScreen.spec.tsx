@@ -71,6 +71,19 @@ describe('WikiHomeScreen', () => {
 
     expect(await screen.findByText('This page is empty.')).toBeVisible()
   })
+
+  it('shows the number of the version of its home page', async () => {
+    const pagesApi = fakePagesApi()
+    const wiki = pagesApi.withWiki({ name: 'Handbook' })
+    await pagesApi.publish(wiki.homePageId, {
+      baseVersion: 1,
+      title: 'Handbook',
+      content: []
+    })
+    renderRoute(`/wikis/${wiki.id}`, { pagesApi })
+
+    expect(await screen.findByText('Version 2')).toBeVisible()
+  })
 })
 
 describe('the admin of a wiki', () => {

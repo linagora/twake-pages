@@ -54,6 +54,18 @@ describe('a page', () => {
     ).toBeVisible()
   })
 
+  it('shows the number of its version', async () => {
+    const { pagesApi, wiki, checklist } = handbook()
+    await pagesApi.publish(checklist.id, {
+      baseVersion: 1,
+      title: 'Release checklist',
+      content: []
+    })
+    renderRoute(`/wikis/${wiki.id}/pages/${checklist.id}`, { pagesApi })
+
+    expect(await screen.findByText('Version 2')).toBeVisible()
+  })
+
   it('shows its blocks, read only', async () => {
     openChecklistOf([
       { type: 'heading', content: 'Before the release' },

@@ -10,6 +10,7 @@ import { EditAction } from '@/ui/page/EditAction'
 import { FavoriteButton } from '@/ui/page/FavoriteButton'
 import { NewPageDialog } from '@/ui/page/NewPageDialog'
 import { PageContent } from '@/ui/page/PageContent'
+import { PageVersion } from '@/ui/page/PageVersion'
 import { useDocumentTitle } from '@/ui/useDocumentTitle'
 import { usePage, useWiki } from '@/ui/wiki/queries'
 import { useWikiName } from '@/ui/wiki/useWikiName'
@@ -40,6 +41,7 @@ export function WikiHomeScreen(): ReactElement {
                     {wiki.data.description}
                   </Typography>
                 )}
+                <PageVersion wikiId={wikiId} pageId={wiki.data.homePageId} />
               </>
             }
             actions={

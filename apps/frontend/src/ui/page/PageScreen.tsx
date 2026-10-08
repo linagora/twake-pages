@@ -10,6 +10,7 @@ import { EditAction } from '@/ui/page/EditAction'
 import { FavoriteButton } from '@/ui/page/FavoriteButton'
 import { PageContent } from '@/ui/page/PageContent'
 import { PageMenu } from '@/ui/page/PageMenu'
+import { PageVersion } from '@/ui/page/PageVersion'
 import { UnavailableScreen } from '@/ui/shell/Problems'
 import { useDocumentTitle } from '@/ui/useDocumentTitle'
 import { usePage, useWiki } from '@/ui/wiki/queries'
@@ -42,9 +43,12 @@ export function PageScreen(): ReactElement {
       <PageHeader
         back={<PagePath ancestors={page.data.ancestors} />}
         title={
-          <Typography variant="h3" component="h1">
-            {page.data.title}
-          </Typography>
+          <>
+            <Typography variant="h3" component="h1">
+              {page.data.title}
+            </Typography>
+            <PageVersion wikiId={wikiId} pageId={pageId} />
+          </>
         }
         actions={
           <>

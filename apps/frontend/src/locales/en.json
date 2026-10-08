@@ -90,6 +90,7 @@
     "inTrash": "This page is in the trash.",
     "favorite": "Add to favorites",
     "unfavorite": "Remove from favorites",
+    "version": "Version %{number}",
     "edit": "Edit page",
     "history": "Page history",
     "menu": "Page options",
