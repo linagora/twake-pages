@@ -4,17 +4,12 @@ import { describe, expect, it } from 'vitest'
 import { ApiError } from '@/application/pages'
 import { findEmptyState } from '@/testing/emptyState'
 import { fakePagesApi } from '@/testing/fakePagesApi'
+import { typeIn } from '@/testing/forms'
 import { renderRoute } from '@/testing/renderWithProviders'
 
 async function openNewWiki(): Promise<HTMLElement> {
   fireEvent.click(await screen.findByRole('button', { name: 'New wiki' }))
   return screen.getByRole('dialog', { name: 'New wiki' })
-}
-
-function typeIn(dialog: HTMLElement, field: string, value: string): void {
-  fireEvent.change(within(dialog).getByRole('textbox', { name: field }), {
-    target: { value }
-  })
 }
 
 describe('HomeScreen', () => {

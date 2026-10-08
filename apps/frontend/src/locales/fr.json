@@ -41,7 +41,10 @@
     "nav": "Wiki",
     "home": "Page d'accueil",
     "notFound": "Ce wiki n'existe pas, ou vous ne pouvez pas l'ouvrir.",
-    "loadFailed": "Le wiki n'a pas pu être chargé."
+    "loadFailed": "Le wiki n'a pas pu être chargé.",
+    "menu": "Options du wiki",
+    "edit": "Modifier",
+    "delete": "Supprimer"
   },
   "wikiDialog": {
     "name": "Nom",
@@ -52,6 +55,18 @@
     "title": "Nouveau wiki",
     "create": "Créer",
     "failed": "Le wiki n'a pas pu être créé."
+  },
+  "editWiki": {
+    "title": "Modifier le wiki",
+    "save": "Enregistrer",
+    "failed": "Le wiki n'a pas pu être enregistré."
+  },
+  "deleteWiki": {
+    "title": "Supprimer %{name} ?",
+    "text": "Ses pages partent avec lui, pour tous ses membres. Cette action est irréversible.",
+    "confirm": "Supprimer",
+    "cancel": "Annuler",
+    "failed": "Le wiki n'a pas pu être supprimé."
   },
   "tree": {
     "title": "Pages",

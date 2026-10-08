@@ -9,6 +9,7 @@ import { PageContent } from '@/ui/page/PageContent'
 import { useDocumentTitle } from '@/ui/useDocumentTitle'
 import { usePage, useWiki } from '@/ui/wiki/queries'
 import { useWikiName } from '@/ui/wiki/useWikiName'
+import { WikiMenu } from '@/ui/wiki/WikiMenu'
 
 export function WikiHomeScreen(): ReactElement {
   const { wikiId = '' } = useParams()
@@ -33,6 +34,9 @@ export function WikiHomeScreen(): ReactElement {
                   </Typography>
                 )}
               </>
+            }
+            actions={
+              wiki.data.role === 'admin' && <WikiMenu wiki={wiki.data} />
             }
           />
           <HomePage wikiId={wikiId} pageId={wiki.data.homePageId} />

@@ -1,8 +1,27 @@
-import { screen, waitFor } from '@testing-library/react'
+import {
+  act,
+  fireEvent,
+  screen,
+  waitFor,
+  waitForElementToBeRemoved,
+  within
+} from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
+import { ApiError } from '@/application/pages'
 import { fakePagesApi } from '@/testing/fakePagesApi'
+import { typeIn } from '@/testing/forms'
 import { renderRoute } from '@/testing/renderWithProviders'
+
+const OPTIONS = 'Wiki options'
+const WIKI_NOT_FOUND = "This wiki doesn't exist, or you can't open it."
+
+/** Chooses an item of the wiki's menu, and finds the dialog it opens. */
+async function choose(item: string, dialog: string): Promise<HTMLElement> {
+  fireEvent.click(await screen.findByRole('button', { name: OPTIONS }))
+  fireEvent.click(screen.getByRole('menuitem', { name: item }))
+  return screen.findByRole('dialog', { name: dialog })
+}
 
 describe('WikiHomeScreen', () => {
   it('shows the wiki under its name, with what it is for', async () => {
@@ -52,4 +71,171 @@ describe('WikiHomeScreen', () => {
 
     expect(await screen.findByText('This page is empty.')).toBeVisible()
   })
+})
+
+describe('the admin of a wiki', () => {
+  it('renames a shared wiki, and says what it is for', async () => {
+    const pagesApi = fakePagesApi()
+    const wiki = pagesApi.withWiki({ name: 'Handbook' })
+    renderRoute(`/wikis/${wiki.id}`, { pagesApi })
+
+    const dialog = await choose('Edit', 'Edit wiki')
+    expect(within(dialog).getByRole('textbox', { name: 'Name' })).toHaveValue(
+      'Handbook'
+    )
+    typeIn(dialog, 'Name', 'Guide')
+    typeIn(dialog, 'Description', 'How we work')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+
+    await waitForElementToBeRemoved(dialog)
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Guide' })
+    ).toBeVisible()
+    expect(screen.getByText('How we work')).toBeVisible()
+  })
+
+  it.each([
+    ['personal', '/wikis'],
+    ['space', '/wikis'],
+    ['space', '/embed/wikis']
+  ] as const)(
+    'says what a %s wiki is for at %s/<wiki>, and leaves its name alone',
+    async (kind, base) => {
+      const pagesApi = fakePagesApi()
+      const wiki = pagesApi.withWiki({ name: 'Design Sprint', kind })
+      renderRoute(`${base}/${wiki.id}`, { pagesApi })
+
+      const dialog = await choose('Edit', 'Edit wiki')
+      expect(
+        within(dialog).queryByRole('textbox', { name: 'Name' })
+      ).not.toBeInTheDocument()
+      typeIn(dialog, 'Description', 'Our sprint notes')
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+
+      await waitForElementToBeRemoved(dialog)
+      expect(screen.getByText('Our sprint notes')).toBeVisible()
+      expect(pagesApi.renameWiki).toHaveBeenCalledWith(wiki.id, {
+        description: 'Our sprint notes'
+      })
+    }
+  )
+
+  it('says so when the wiki cannot be saved', async () => {
+    const pagesApi = fakePagesApi()
+    const wiki = pagesApi.withWiki({ name: 'Handbook' })
+    pagesApi.renameWiki.mockRejectedValue(new ApiError(400, 'invalid_request'))
+    renderRoute(`/wikis/${wiki.id}`, { pagesApi })
+
+    const dialog = await choose('Edit', 'Edit wiki')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+      'The wiki could not be saved.'
+    )
+  })
+
+  it('deletes a shared wiki once sure, and goes back to the wikis', async () => {
+    const pagesApi = fakePagesApi()
+    pagesApi.withWiki({ name: 'Handbook' })
+    const { router } = renderRoute('/', { pagesApi })
+
+    fireEvent.click(await screen.findByRole('link', { name: 'Handbook' }))
+    const dialog = await choose('Delete', 'Delete Handbook?')
+    expect(dialog).toHaveTextContent(
+      'Its pages go with it, for every member. This cannot be undone.'
+    )
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }))
+
+    const wikis = await screen.findByRole('list', { name: 'Wikis' })
+    expect(router.state.location.pathname).toBe('/')
+    expect(
+      within(wikis)
+        .getAllByRole('listitem')
+        .map(item => item.textContent)
+    ).toEqual(['Personal'])
+  })
+
+  it('goes back to the wikis when the stream tells the wiki gone before its answer does', async () => {
+    const pagesApi = fakePagesApi()
+    const wiki = pagesApi.withWiki({ name: 'Handbook' })
+    const deleteWiki = pagesApi.deleteWiki.getMockImplementation()
+    let answer = (): void => undefined
+    pagesApi.deleteWiki.mockImplementationOnce(async wikiId => {
+      await deleteWiki?.(wikiId)
+      await new Promise<void>(resolve => {
+        answer = resolve
+      })
+    })
+    const { router } = renderRoute(`/wikis/${wiki.id}`, { pagesApi })
+
+    const dialog = await choose('Delete', 'Delete Handbook?')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }))
+    expect(await screen.findByText(WIKI_NOT_FOUND)).toBeVisible()
+    act(() => {
+      answer()
+    })
+
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe('/')
+    })
+  })
+
+  it('keeps the wiki when not sure', async () => {
+    const pagesApi = fakePagesApi()
+    const wiki = pagesApi.withWiki({ name: 'Handbook' })
+    renderRoute(`/wikis/${wiki.id}`, { pagesApi })
+
+    const dialog = await choose('Delete', 'Delete Handbook?')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+
+    await waitFor(() => {
+      expect(dialog).not.toBeInTheDocument()
+    })
+    expect(pagesApi.deleteWiki).not.toHaveBeenCalled()
+  })
+
+  it('says so when the wiki cannot be deleted', async () => {
+    const pagesApi = fakePagesApi()
+    const wiki = pagesApi.withWiki({ name: 'Handbook' })
+    pagesApi.deleteWiki.mockRejectedValue(new ApiError(403, 'forbidden'))
+    renderRoute(`/wikis/${wiki.id}`, { pagesApi })
+
+    const dialog = await choose('Delete', 'Delete Handbook?')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }))
+
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+      'The wiki could not be deleted.'
+    )
+  })
+
+  it.each(['personal', 'space'] as const)(
+    'cannot delete a %s wiki, which goes with its person or space',
+    async kind => {
+      const pagesApi = fakePagesApi()
+      const wiki = pagesApi.withWiki({ name: 'Design Sprint', kind })
+      renderRoute(`/wikis/${wiki.id}`, { pagesApi })
+
+      fireEvent.click(await screen.findByRole('button', { name: OPTIONS }))
+
+      expect(screen.getByRole('menuitem', { name: 'Edit' })).toBeVisible()
+      expect(
+        screen.queryByRole('menuitem', { name: 'Delete' })
+      ).not.toBeInTheDocument()
+    }
+  )
+
+  it.each(['editor', 'viewer'] as const)(
+    'is the only one with the options of the wiki, not an %s',
+    async role => {
+      const pagesApi = fakePagesApi()
+      const wiki = pagesApi.withWiki({ name: 'Handbook', role })
+      renderRoute(`/wikis/${wiki.id}`, { pagesApi })
+
+      await screen.findByRole('heading', { level: 1, name: 'Handbook' })
+
+      expect(
+        screen.queryByRole('button', { name: OPTIONS })
+      ).not.toBeInTheDocument()
+    }
+  )
 })

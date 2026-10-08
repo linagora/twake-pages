@@ -2,12 +2,13 @@ import {
   useMutation,
   useQuery,
   useQueryClient,
+  type QueryClient,
   type UseMutationResult,
   type UseQueryResult
 } from '@tanstack/react-query'
 import { useEffect } from 'react'
 
-import type { NewWiki, Tree } from '@/application/pages'
+import type { NewWiki, Tree, WikiChanges } from '@/application/pages'
 import type { Page } from '@/domain/page'
 import type { Wiki, WikiSummary } from '@/domain/wiki'
 import { usePagesApi } from '@/ui/PagesApiProvider'
@@ -30,13 +31,45 @@ export function useWiki(wikiId: string): UseQueryResult<Wiki> {
   })
 }
 
+// The answer is the wiki as it now is, which the list shows by name.
+function showWiki(queryClient: QueryClient, wiki: Wiki): Promise<void> {
+  queryClient.setQueryData(wikiKey(wiki.id), wiki)
+  return queryClient.invalidateQueries({ queryKey: wikisKey, exact: true })
+}
+
 export function useCreateWiki(): UseMutationResult<Wiki, Error, NewWiki> {
   const api = usePagesApi()
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (wiki: NewWiki) => api.createWiki(wiki),
-    onSuccess: wiki => {
-      queryClient.setQueryData(wikiKey(wiki.id), wiki)
+    onSuccess: wiki => showWiki(queryClient, wiki)
+  })
+}
+
+export function useEditWiki(
+  wikiId: string
+): UseMutationResult<Wiki, Error, WikiChanges> {
+  const api = usePagesApi()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (changes: WikiChanges) => api.renameWiki(wikiId, changes),
+    onSuccess: wiki => showWiki(queryClient, wiki)
+  })
+}
+
+export function useDeleteWiki(
+  wikiId: string
+): UseMutationResult<void, Error, void> {
+  const api = usePagesApi()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: () => api.deleteWiki(wikiId),
+    onSuccess: () => {
+      // The home screen the admin lands on lists it no more, even before
+      // the list is read again.
+      queryClient.setQueryData<WikiSummary[]>(wikisKey, shown =>
+        shown?.filter(wiki => wiki.id !== wikiId)
+      )
       return queryClient.invalidateQueries({ queryKey: wikisKey, exact: true })
     }
   })

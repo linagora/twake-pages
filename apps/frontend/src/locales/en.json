@@ -41,7 +41,10 @@
     "nav": "Wiki",
     "home": "Home page",
     "notFound": "This wiki doesn't exist, or you can't open it.",
-    "loadFailed": "The wiki could not be loaded."
+    "loadFailed": "The wiki could not be loaded.",
+    "menu": "Wiki options",
+    "edit": "Edit",
+    "delete": "Delete"
   },
   "wikiDialog": {
     "name": "Name",
@@ -52,6 +55,18 @@
     "title": "New wiki",
     "create": "Create",
     "failed": "The wiki could not be created."
+  },
+  "editWiki": {
+    "title": "Edit wiki",
+    "save": "Save",
+    "failed": "The wiki could not be saved."
+  },
+  "deleteWiki": {
+    "title": "Delete %{name}?",
+    "text": "Its pages go with it, for every member. This cannot be undone.",
+    "confirm": "Delete",
+    "cancel": "Cancel",
+    "failed": "The wiki could not be deleted."
   },
   "tree": {
     "title": "Pages",
