@@ -1,0 +1,7 @@
+node_modules/
+dist/
+coverage/
+.env
+apps/frontend/public/.env.js
+*.tsbuildinfo
+.scratch/
