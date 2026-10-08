@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import type { Db } from '../../infra/db.ts'
 import type { HttpServer } from '../../infra/http.ts'
+import { refuse } from '../../infra/refusals.ts'
 import type { RequireIdentity } from '../auth/index.ts'
 import { createWikiStore } from './store.ts'
 
@@ -12,6 +13,8 @@ const newWiki = z.object({
   name: wikiName,
   description: wikiDescription.default('')
 })
+
+const wikiParams = z.object({ wikiId: z.uuid() })
 
 export function registerWikis(
   app: HttpServer,
@@ -40,6 +43,19 @@ export function registerWikis(
         return reply.code(400).send({ error: 'invalid_request' })
       }
       return reply.code(201).send(await store.createWiki(identity, body.data))
+    }
+  )
+
+  app.get(
+    '/wikis/:wikiId',
+    { preHandler: deps.requireIdentity },
+    async (request, reply) => {
+      const identity = request.identity
+      if (!identity) return reply.code(401).send()
+      const params = wikiParams.safeParse(request.params)
+      if (!params.success) return refuse(reply, 'not_found')
+      const wiki = await store.wiki(identity, params.data.wikiId)
+      return wiki ?? refuse(reply, 'not_found')
     }
   )
 }

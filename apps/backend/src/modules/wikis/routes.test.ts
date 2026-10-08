@@ -1,8 +1,11 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest'
+import { createDb, inTenant } from '../../infra/db.ts'
 import { aB2cUser, aUser, startApp, type TestUser } from '../../testing/app.ts'
+import { wikiInvites } from './schema.ts'
 
 let api: Awaited<ReturnType<typeof startApp>>
 let baseUrl: string
+const { sql, db } = createDb(inject('databaseUrl'))
 
 beforeAll(async () => {
   api = await startApp()
@@ -11,6 +14,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await api.close()
+  await sql.end()
 })
 
 interface WikiSummary {
@@ -32,6 +36,21 @@ const wikisOf = async (user: TestUser) =>
 
 const aWikiOf = async (owner: TestUser, name = 'Handbook') =>
   (await api.as(owner).post('/wikis', { name })).json<Wiki>()
+
+const roles = async (user: TestUser) =>
+  (await wikisOf(user)).map(wiki => [wiki.name, wiki.role])
+
+// Sharing is not served yet, so invites are written as it will write them.
+const invite = (admin: TestUser, wikiId: string, email: string) =>
+  inTenant(db, admin, tx =>
+    tx.insert(wikiInvites).values({
+      wikiId,
+      organizationId: admin.organizationId,
+      email: email.toLowerCase(),
+      role: 'editor',
+      invitedBy: admin.userId
+    })
+  )
 
 describe('GET /wikis', () => {
   it.each([
@@ -77,6 +96,37 @@ describe('GET /wikis', () => {
     ])
   })
 
+  it('turns the invites of the person’s email into memberships', async () => {
+    const alice = aUser()
+    const bob = aUser({
+      organizationId: alice.organizationId,
+      email: `Bob-${crypto.randomUUID()}@Example.com`
+    })
+    const wiki = await aWikiOf(alice)
+    await invite(alice, wiki.id, bob.email)
+
+    expect(await roles(bob)).toEqual([
+      ['Personal', 'admin'],
+      ['Handbook', 'editor']
+    ])
+  })
+
+  it('claims an invite only in its own tenant', async () => {
+    const alice = aUser()
+    const carol = aB2cUser()
+    const wiki = await aWikiOf(alice)
+    const shared = await aWikiOf(carol, 'Recipes')
+    const email = `dave-${crypto.randomUUID()}@example.com`
+    await invite(alice, wiki.id, email)
+    await invite(carol, shared.id, email)
+
+    expect(await roles(aUser({ email }))).toEqual([['Personal', 'admin']])
+    expect(await roles(aUser({ email, organizationId: null }))).toEqual([
+      ['Personal', 'admin'],
+      ['Recipes', 'editor']
+    ])
+  })
+
   it('asks for a bearer token', async () => {
     const response = await fetch(`${baseUrl}/api/wikis`)
 
@@ -108,6 +158,7 @@ describe('POST /wikis', () => {
 
   it.each([
     ['no name', {}],
+    ['a name that is no string', { name: 42 }],
     ['a blank name', { name: '   ' }],
     ['a name over 100 characters', { name: 'x'.repeat(101) }],
     [
@@ -119,5 +170,51 @@ describe('POST /wikis', () => {
 
     expect(response.statusCode).toBe(400)
     expect(response.json()).toEqual({ error: 'invalid_request' })
+  })
+})
+
+describe('GET /wikis/:wikiId', () => {
+  it('shows a wiki to its members', async () => {
+    const alice = aUser()
+    const wiki = await aWikiOf(alice)
+
+    const response = await api.as(alice).get(`/wikis/${wiki.id}`)
+
+    expect(response.statusCode).toBe(200)
+    expect(response.json()).toEqual(wiki)
+  })
+
+  it.each([
+    ['someone of its organization who is no member', aUser(), true],
+    ['someone of another organization', aUser(), false],
+    ['a B2C user', aB2cUser(), false]
+  ])('hides a wiki from %s', async (_case, stranger, colleague) => {
+    const owner = colleague
+      ? aUser({ organizationId: stranger.organizationId })
+      : aUser()
+    const wiki = await aWikiOf(owner)
+
+    const response = await api.as(stranger).get(`/wikis/${wiki.id}`)
+
+    expect(response.statusCode).toBe(404)
+    expect(response.json()).toEqual({ error: 'not_found' })
+  })
+
+  it('hides the personal wiki of someone else of the organization', async () => {
+    const alice = aUser()
+    const [personal] = await wikisOf(alice)
+
+    const response = await api
+      .as(aUser({ organizationId: alice.organizationId }))
+      .get(`/wikis/${personal?.id ?? ''}`)
+
+    expect(response.statusCode).toBe(404)
+  })
+
+  it('answers not_found for an id that is no uuid', async () => {
+    const response = await api.as(aUser()).get('/wikis/handbook')
+
+    expect(response.statusCode).toBe(404)
+    expect(response.json()).toEqual({ error: 'not_found' })
   })
 })

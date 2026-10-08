@@ -153,6 +153,10 @@ export function createWikiStore(db: Db) {
       })
     },
 
+    wiki(identity: Identity, wikiId: string): Promise<Wiki | null> {
+      return inTenant(db, identity, tx => wikiOf(tx, identity.userId, wikiId))
+    },
+
     createWiki(
       identity: Identity,
       input: { name: string; description: string }
