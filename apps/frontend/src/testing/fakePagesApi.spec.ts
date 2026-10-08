@@ -1210,6 +1210,24 @@ describe('fakePagesApi', () => {
       expect(recent[0]?.title).toBe('Page 21')
       expect(recent.at(-1)?.title).toBe('Page 2')
     })
+
+    it('keeps the 100 latest visits, those of pages in the trash among them', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki()
+      const first = api.withPage(wiki.id, { title: 'First' })
+      const archive = api.withPage(wiki.id, { title: 'Archive' })
+      await api.getPage(first.id)
+      for (let number = 1; number <= 100; number += 1) {
+        const page = api.withPage(wiki.id, {
+          title: `Page ${String(number)}`,
+          parentId: archive.id
+        })
+        await api.getPage(page.id)
+      }
+      await api.deletePage(archive.id)
+
+      await expect(api.recent()).resolves.toEqual([])
+    })
   })
 
   describe('search', () => {

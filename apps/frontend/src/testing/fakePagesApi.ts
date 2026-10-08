@@ -937,6 +937,17 @@ function signedIn(world: World, person: Person): FakePagesApi {
       answer(() => {
         const { page } = pageAccess(pageId)
         page.visitedBy.set(person.id, now())
+        // The backend keeps the person's 100 latest visits, those of pages in
+        // the trash and of wikis they left among them.
+        const visits = [...world.pages.values()]
+          .flatMap(visited => {
+            const at = visited.visitedBy.get(person.id)
+            return at ? [{ visited, at }] : []
+          })
+          .sort((a, b) => (a.at < b.at ? 1 : -1))
+        for (const { visited } of visits.slice(100)) {
+          visited.visitedBy.delete(person.id)
+        }
         return pageFor(page)
       })
     ),
