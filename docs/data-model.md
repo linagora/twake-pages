@@ -114,3 +114,5 @@ Copied from Twake Tasks with the names it uses: `spaces` (space id, organization
 ## Purge
 
 A `jobs` row per deleted branch, due 30 days after its deletion, and per deleted wiki. The purge job deletes the pages of the branch (cascading versions, labels, comments, followers, notifications, favorites, visits) or the wiki.
+
+An account deletion purges at once, rather than 30 days later, the wikis it removes: the person's personal wiki, and a shared wiki they were the only admin of, with no editor to pass it to. Twake Tasks does so under ADR 009. A wiki already deleted keeps its job. An organization's deletion purges its wikis at once, deleted or not, and drops its jobs.
