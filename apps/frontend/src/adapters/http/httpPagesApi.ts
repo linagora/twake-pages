@@ -142,6 +142,11 @@ export function httpPagesApi(baseUrl: string, send: Send): PagesApi {
     getVersion: (pageId, number) =>
       call('GET', `/pages/${pageId}/versions/${String(number)}`),
     restoreVersion: (pageId, number) =>
-      call('POST', `/pages/${pageId}/versions/${String(number)}/restore`, {})
+      call('POST', `/pages/${pageId}/versions/${String(number)}/restore`, {}),
+    movePage: (pageId, move) => call('POST', `/pages/${pageId}/move`, move),
+    setFollowing: (pageId, following) =>
+      call(following ? 'PUT' : 'DELETE', `/pages/${pageId}/follow`),
+    setFavorite: (pageId, favorite) =>
+      call(favorite ? 'PUT' : 'DELETE', `/pages/${pageId}/favorite`)
   }
 }

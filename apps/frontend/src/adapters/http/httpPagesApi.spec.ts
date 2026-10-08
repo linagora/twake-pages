@@ -281,6 +281,38 @@ const exchanges: Record<string, Exchange> = {
     status: 201,
     answer: page,
     resolves: page
+  },
+  movePage: {
+    call: api => api.movePage('p1', { parentId: 'p2', afterId: 'p3' }),
+    method: 'POST',
+    path: '/pages/p1/move',
+    body: { parentId: 'p2', afterId: 'p3' },
+    answer: { parentId: 'p2', position: 'a1' },
+    resolves: { parentId: 'p2', position: 'a1' }
+  },
+  'setFollowing on': {
+    call: api => api.setFollowing('p1', true),
+    method: 'PUT',
+    path: '/pages/p1/follow',
+    status: 204
+  },
+  'setFollowing off': {
+    call: api => api.setFollowing('p1', false),
+    method: 'DELETE',
+    path: '/pages/p1/follow',
+    status: 204
+  },
+  'setFavorite on': {
+    call: api => api.setFavorite('p1', true),
+    method: 'PUT',
+    path: '/pages/p1/favorite',
+    status: 204
+  },
+  'setFavorite off': {
+    call: api => api.setFavorite('p1', false),
+    method: 'DELETE',
+    path: '/pages/p1/favorite',
+    status: 204
   }
 }
 

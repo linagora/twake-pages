@@ -147,6 +147,8 @@ interface StoredPage {
   versions: Version[]
   /** By person id. */
   followers: Set<string>
+  /** When each person marked it, by person id. */
+  favoredBy: Map<string, string>
 }
 
 interface World {
@@ -320,23 +322,33 @@ function signedIn(world: World, person: Person): FakePagesApi {
       .filter(page => !page.home && page.parentId === parentId)
       .sort(byPosition)
 
-  const checkParent = (wikiId: string, parentId: string | null) => {
-    if (parentId === null) return
+  // A page of the wiki other than its home page, or null for the top.
+  const parentFor = (wikiId: string, parentId: string | null) => {
+    if (parentId === null) return undefined
     const parent = world.pages.get(parentId)
     if (parent?.wikiId !== wikiId || parent.home) {
       throw refuse('invalid_parent')
     }
+    return parent
   }
 
-  const ancestorsOf = (page: StoredPage) => {
-    const ancestors: { id: string; title: string }[] = []
-    let parent = page.parentId ? world.pages.get(page.parentId) : undefined
-    while (parent) {
-      ancestors.unshift({ id: parent.id, title: currentOf(parent).title })
-      parent = parent.parentId ? world.pages.get(parent.parentId) : undefined
+  const parentOf = (page: StoredPage) =>
+    page.parentId === null ? undefined : world.pages.get(page.parentId)
+
+  // The page, its parent, and so on up to the top of the tree.
+  const lineOf = (page: StoredPage) => {
+    const line = [page]
+    for (let parent = parentOf(page); parent; parent = parentOf(parent)) {
+      line.push(parent)
     }
-    return ancestors
+    return line
   }
+
+  const ancestorsOf = (page: StoredPage) =>
+    lineOf(page)
+      .slice(1)
+      .reverse()
+      .map(ancestor => ({ id: ancestor.id, title: currentOf(ancestor).title }))
 
   const pageFor = (page: StoredPage): Page => {
     const version = currentOf(page)
@@ -357,7 +369,7 @@ function signedIn(world: World, person: Person): FakePagesApi {
       labels: [],
       ancestors: ancestorsOf(page),
       following: page.followers.has(person.id),
-      favorite: false,
+      favorite: page.favoredBy.has(person.id),
       deletedAt: null
     }
   }
@@ -393,7 +405,8 @@ function signedIn(world: World, person: Person): FakePagesApi {
           gristUrl: fields.gristUrl
         }
       ],
-      followers: new Set([person.id])
+      followers: new Set([person.id]),
+      favoredBy: new Map()
     }
     world.pages.set(page.id, page)
     bump(wiki)
@@ -658,7 +671,7 @@ function signedIn(world: World, person: Person): FakePagesApi {
       answer(() => {
         const { wiki } = access(wikiId, 'editor')
         const title = text(input.title, 200)
-        checkParent(wikiId, input.parentId)
+        parentFor(wikiId, input.parentId)
         const position = positionBetween(
           siblingsOf(wikiId, input.parentId),
           input.afterId,
@@ -721,6 +734,40 @@ function signedIn(world: World, person: Person): FakePagesApi {
         const { title, content, gristUrl } = version
         addVersion(page, wiki, { title, content, gristUrl }, number)
         return pageFor(page)
+      })
+    ),
+    movePage: vi.fn<PagesApi['movePage']>((pageId, move) =>
+      answer(() => {
+        const { page, wiki } = pageAccess(pageId, 'editor')
+        if (page.home) throw refuse('home_page')
+        const parent = parentFor(page.wikiId, move.parentId)
+        if (parent && lineOf(parent).includes(page)) {
+          throw refuse('invalid_parent')
+        }
+        // The client names the neighbours it sees once the page is lifted out.
+        const siblings = siblingsOf(page.wikiId, move.parentId).filter(
+          sibling => sibling !== page
+        )
+        page.position = positionBetween(siblings, move.afterId, move.beforeId)
+        page.parentId = move.parentId
+        bump(wiki)
+        return { parentId: page.parentId, position: page.position }
+      })
+    ),
+    setFollowing: vi.fn<PagesApi['setFollowing']>((pageId, following) =>
+      answer(() => {
+        const { page } = pageAccess(pageId)
+        if (following) page.followers.add(person.id)
+        else page.followers.delete(person.id)
+      })
+    ),
+    setFavorite: vi.fn<PagesApi['setFavorite']>((pageId, favorite) =>
+      answer(() => {
+        const { page } = pageAccess(pageId)
+        if (!favorite) page.favoredBy.delete(person.id)
+        else if (!page.favoredBy.has(person.id)) {
+          page.favoredBy.set(person.id, now())
+        }
       })
     )
   }

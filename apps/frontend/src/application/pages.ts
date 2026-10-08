@@ -68,6 +68,19 @@ export type NewVersion = { baseVersion: number; title: string } & (
   { content: Block[] } | { gristUrl: string }
 )
 
+/** Where a page goes: last under `parentId`, unless next to a sibling. */
+export interface Move {
+  parentId: string | null
+  afterId?: string
+  beforeId?: string
+}
+
+/** A page's place in the tree. */
+export interface Placement {
+  parentId: string | null
+  position: string
+}
+
 /** Why the backend refused a request: the `error` of its answer. */
 export type Refusal =
   | 'not_found'
@@ -131,6 +144,11 @@ export interface PagesApi {
   getVersion: (pageId: string, number: number) => Promise<Version>
   /** Editor; publishes that version's title and content again. */
   restoreVersion: (pageId: string, number: number) => Promise<Page>
+  /** Editor; with its descendants, never under one of them nor the home page. */
+  movePage: (pageId: string, move: Move) => Promise<Placement>
+  /** Whether the person is notified of the page's versions and comments. */
+  setFollowing: (pageId: string, following: boolean) => Promise<void>
+  setFavorite: (pageId: string, favorite: boolean) => Promise<void>
 }
 
 export class ApiError extends Error {

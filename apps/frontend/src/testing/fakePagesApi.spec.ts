@@ -1,7 +1,27 @@
 import { describe, expect, it } from 'vitest'
 
 import { ApiError, EditConflict } from '@/application/pages'
-import { fakePagesApi, GRIST_ORIGIN, paragraph } from '@/testing/fakePagesApi'
+import { buildTree, type TreeNode } from '@/domain/tree'
+import {
+  fakePagesApi,
+  GRIST_ORIGIN,
+  paragraph,
+  type FakePagesApi
+} from '@/testing/fakePagesApi'
+
+type Outline = (string | Outline)[]
+
+// Titles in tree order, each page's children in a list after it.
+const outline = (nodes: TreeNode[]): Outline =>
+  nodes.flatMap(node =>
+    node.children.length > 0
+      ? [node.title, outline(node.children)]
+      : [node.title]
+  )
+
+async function outlineOf(api: FakePagesApi, wikiId: string) {
+  return outline(buildTree((await api.getTree(wikiId)).pages))
+}
 
 describe('fakePagesApi', () => {
   describe('wikis', () => {
@@ -439,6 +459,135 @@ describe('fakePagesApi', () => {
       await expect(
         api.publish(page.id, { baseVersion: 1, title: 'New', content: [] })
       ).rejects.toEqual(forbidden)
+      await expect(api.movePage(page.id, { parentId: null })).rejects.toEqual(
+        forbidden
+      )
+    })
+  })
+
+  describe('moving', () => {
+    it('moves a page under another parent, between two of its children', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki()
+      const onboarding = api.withPage(wiki.id, { title: 'Onboarding' })
+      const laptop = api.withPage(wiki.id, {
+        title: 'Laptop',
+        parentId: onboarding.id
+      })
+      api.withPage(wiki.id, { title: 'Badge', parentId: onboarding.id })
+      const faq = api.withPage(wiki.id, { title: 'FAQ' })
+
+      const placement = await api.movePage(faq.id, {
+        parentId: onboarding.id,
+        afterId: laptop.id
+      })
+
+      await expect(outlineOf(api, wiki.id)).resolves.toEqual([
+        'Onboarding',
+        ['Laptop', 'FAQ', 'Badge']
+      ])
+      const { pages } = await api.getTree(wiki.id)
+      expect(pages.find(page => page.id === faq.id)).toMatchObject(placement)
+      await expect(api.getPage(faq.id)).resolves.toMatchObject({
+        ancestors: [{ id: onboarding.id, title: 'Onboarding' }]
+      })
+    })
+
+    it('moves a page among its siblings, the neighbours seen without it', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki()
+      const a = api.withPage(wiki.id, { title: 'A' })
+      const b = api.withPage(wiki.id, { title: 'B' })
+      const c = api.withPage(wiki.id, { title: 'C' })
+      const d = api.withPage(wiki.id, { title: 'D' })
+
+      await api.movePage(b.id, {
+        parentId: null,
+        afterId: c.id,
+        beforeId: d.id
+      })
+      await expect(outlineOf(api, wiki.id)).resolves.toEqual([
+        'A',
+        'C',
+        'B',
+        'D'
+      ])
+      await api.movePage(b.id, {
+        parentId: null,
+        afterId: a.id,
+        beforeId: c.id
+      })
+      await expect(outlineOf(api, wiki.id)).resolves.toEqual([
+        'A',
+        'B',
+        'C',
+        'D'
+      ])
+      await api.movePage(a.id, { parentId: null })
+      await expect(outlineOf(api, wiki.id)).resolves.toEqual([
+        'B',
+        'C',
+        'D',
+        'A'
+      ])
+    })
+
+    it('never moves the home page, nor a page under itself', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki()
+      const onboarding = api.withPage(wiki.id, { title: 'Onboarding' })
+      const laptop = api.withPage(wiki.id, {
+        title: 'Laptop',
+        parentId: onboarding.id
+      })
+      const invalidParent = new ApiError(400, 'invalid_parent')
+
+      await expect(
+        api.movePage(wiki.homePageId, { parentId: onboarding.id })
+      ).rejects.toEqual(new ApiError(409, 'home_page'))
+      await expect(
+        api.movePage(onboarding.id, { parentId: onboarding.id })
+      ).rejects.toEqual(invalidParent)
+      await expect(
+        api.movePage(onboarding.id, { parentId: laptop.id })
+      ).rejects.toEqual(invalidParent)
+    })
+  })
+
+  describe('following and favorites', () => {
+    it('lets a member follow a page, and stop following it', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki({ members: { 'bob@example.com': 'viewer' } })
+      const page = api.withPage(wiki.id)
+      const bob = api.signedInAs('bob@example.com')
+
+      await bob.setFollowing(page.id, true)
+      await api.setFollowing(page.id, false)
+
+      await expect(bob.getPage(page.id)).resolves.toMatchObject({
+        following: true
+      })
+      await expect(api.getPage(page.id)).resolves.toMatchObject({
+        following: false
+      })
+    })
+
+    it("marks a page as one of the person's favorites", async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki({ members: { 'bob@example.com': 'viewer' } })
+      const page = api.withPage(wiki.id)
+      const bob = api.signedInAs('bob@example.com')
+
+      await api.setFavorite(page.id, true)
+      await bob.setFavorite(page.id, true)
+      await bob.setFavorite(page.id, false)
+
+      await expect(api.getPage(page.id)).resolves.toMatchObject({
+        favorite: true
+      })
+      await expect(bob.getPage(page.id)).resolves.toMatchObject({
+        favorite: false
+      })
     })
   })
 })
