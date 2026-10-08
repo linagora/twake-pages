@@ -4,19 +4,20 @@ import { NavLink as RouterNavLink } from 'react-router'
 
 import { SidebarEntry } from '@/ds/AppFrame'
 
-// The router link is the one focusable, named element; the NavLink of
-// twake-mui is a div with role button, so it only draws the entry.
-export function SidebarLink({
+interface Entry {
+  to: string
+  end?: boolean
+  label?: string | undefined
+}
+
+// The router link is the one focusable, named element: what it holds only
+// draws the entry, with no role and out of the tab order.
+export function EntryLink({
   to,
   end = false,
   label,
   children
-}: {
-  to: string
-  end?: boolean
-  label?: string | undefined
-  children: ReactNode
-}): ReactElement {
+}: Entry & { children: (active: boolean) => ReactNode }): ReactElement {
   return (
     <SidebarEntry>
       <RouterNavLink
@@ -24,12 +25,24 @@ export function SidebarLink({
         end={end}
         {...(label ? { 'aria-label': label } : {})}
       >
-        {({ isActive }) => (
-          <NavLink selected={isActive} role="presentation" tabIndex={-1}>
-            {children}
-          </NavLink>
-        )}
+        {({ isActive }) => children(isActive)}
       </RouterNavLink>
     </SidebarEntry>
+  )
+}
+
+// The NavLink of twake-mui is a div with role button.
+export function SidebarLink({
+  children,
+  ...entry
+}: Entry & { children: ReactNode }): ReactElement {
+  return (
+    <EntryLink {...entry}>
+      {active => (
+        <NavLink selected={active} role="presentation" tabIndex={-1}>
+          {children}
+        </NavLink>
+      )}
+    </EntryLink>
   )
 }

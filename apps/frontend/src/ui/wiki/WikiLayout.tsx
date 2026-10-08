@@ -5,11 +5,11 @@ import {
   ListItemText
 } from '@linagora/twake-mui'
 import type { ReactElement } from 'react'
-import { NavLink, Outlet } from 'react-router'
+import { Outlet } from 'react-router'
 
-import { SidebarEntry } from '@/ds/AppFrame'
 import { WikiFrame } from '@/ds/WikiFrame'
 import { useI18n } from '@/ui/i18n/useI18n'
+import { EntryLink } from '@/ui/shell/SidebarLink'
 
 export function WikiLayout(): ReactElement {
   const { t } = useI18n()
@@ -30,8 +30,8 @@ export function WikiLayout(): ReactElement {
   )
 }
 
-// As SidebarLink: the router link is the focusable element, and the list
-// button only draws it.
+// Not SidebarLink: below lg, the NavLink of twake-mui draws an entry of the
+// phone bottom bar, and this column is a list at every width.
 function WikiLink({
   to,
   end = false,
@@ -43,19 +43,13 @@ function WikiLink({
 }): ReactElement {
   return (
     <ListItem disablePadding>
-      <SidebarEntry>
-        <NavLink to={to} end={end}>
-          {({ isActive }) => (
-            <ListItemButton
-              selected={isActive}
-              role="presentation"
-              tabIndex={-1}
-            >
-              <ListItemText primary={label} />
-            </ListItemButton>
-          )}
-        </NavLink>
-      </SidebarEntry>
+      <EntryLink to={to} end={end}>
+        {active => (
+          <ListItemButton selected={active} role="presentation" tabIndex={-1}>
+            <ListItemText primary={label} />
+          </ListItemButton>
+        )}
+      </EntryLink>
     </ListItem>
   )
 }
