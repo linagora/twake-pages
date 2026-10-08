@@ -21,12 +21,7 @@ import {
 
 const SPACE = 'https://space.example.com'
 
-beforeEach(() => {
-  window.TWAKE_SPACE_ORIGIN = `${SPACE} http://localhost:3000`
-})
-
 afterEach(() => {
-  delete window.TWAKE_SPACE_ORIGIN
   vi.restoreAllMocks()
 })
 
@@ -92,20 +87,20 @@ describe('the history of the embedded view', () => {
     post.mock.calls
       .map(([message]) => message as { type: string })
       .filter(message => message.type === 'twake-embed:path')
-  const tell = (data: unknown, origin = SPACE) => {
+  const tell = (data: unknown) => {
     act(() => {
       window.dispatchEvent(
         new MessageEvent('message', {
           data,
-          origin,
+          origin: SPACE,
           source: space
         })
       )
     })
   }
 
-  const greet = (origin = SPACE) => {
-    tell({ type: 'twake-embed:hello' }, origin)
+  const greet = () => {
+    tell({ type: 'twake-embed:hello' })
   }
 
   // Like TwakeSpace, greets the frame and waits for the first path the app
@@ -255,13 +250,9 @@ describe('the history of the embedded view', () => {
     expect(router.state.location.pathname).toBe('/embed/wikis/w1')
   })
 
-  it('ignores other origins and windows, and paths that leave the embed route', async () => {
+  it('ignores other windows, and paths that leave the embed route', async () => {
     const router = await renderEmbed('/embed/wikis/w1')
 
-    tell(
-      { type: 'twake-embed:load', resourceId: 'w2', path: '' },
-      'https://evil.example.com'
-    )
     for (const path of ['//evil.test', '/../../wikis', 'wikis', 3]) {
       tell({ type: 'twake-embed:load', resourceId: 'w1', path })
     }

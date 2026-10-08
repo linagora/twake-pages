@@ -69,5 +69,4 @@ services:
       SSO_REDIRECT_URI: http://localhost:3500/auth/callback
       SSO_POST_LOGOUT_REDIRECT: http://localhost:3500/
       # The pages the suite plays TwakeSpace on
-      TWAKE_SPACE_ORIGIN: http://localhost:3501 http://localhost:3502
       CSP_FRAME_ANCESTORS: http://localhost:3501 http://localhost:3502
