@@ -7,7 +7,7 @@ import { renderRoute } from '@/testing/renderWithProviders'
 // Below a wiki; :page stands for one of its pages.
 const wikiScreens: [path: string, heading: string][] = [
   ['', 'Handbook'],
-  ['/pages/:page', 'Page'],
+  ['/pages/:page', 'Release checklist'],
   ['/pages/:page/edit', 'Edit page'],
   ['/pages/:page/history', 'Page history'],
   ['/labels/howto', 'Pages labelled howto'],

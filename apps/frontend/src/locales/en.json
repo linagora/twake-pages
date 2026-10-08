@@ -48,7 +48,9 @@
     "loadFailed": "The pages could not be loaded."
   },
   "page": {
-    "title": "Page",
+    "path": "Path to this page",
+    "notFound": "This page doesn't exist, or you can't open it.",
+    "loadFailed": "The page could not be loaded.",
     "edit": "Edit page",
     "history": "Page history"
   },
