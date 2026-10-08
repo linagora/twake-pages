@@ -12,7 +12,7 @@ import { SETTINGS_CHANNEL } from '../modules/settings/routes.ts'
 import type { Role } from '../modules/wikis/access.ts'
 import { WIKI_CHANNEL } from '../modules/wikis/live.ts'
 import { wikiMembers, wikis } from '../modules/wikis/schema.ts'
-import { addHomePage } from '../modules/wikis/store.ts'
+import { addHomePage, PURGE_WIKI_JOB } from '../modules/wikis/store.ts'
 import { jobs } from '../scheduler/schema.ts'
 
 export interface TestUser {
@@ -149,7 +149,7 @@ export async function purgeJobOf(db: Db, wikiId: string) {
   const [job] = await db
     .select()
     .from(jobs)
-    .where(eq(jobs.key, `purge-wiki:${wikiId}`))
+    .where(eq(jobs.key, `${PURGE_WIKI_JOB}:${wikiId}`))
   if (!job) throw new Error(`no purge job for wiki ${wikiId}`)
   return job
 }

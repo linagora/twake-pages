@@ -15,7 +15,7 @@ import {
   type WikiSummary
 } from '../../testing/app.ts'
 import { wikiMembers } from '../wikis/schema.ts'
-import { purgeWiki } from '../wikis/store.ts'
+import { PURGE_WIKI_JOB, purgeWiki } from '../wikis/store.ts'
 import { knowsAnySpace, spaceRoutes } from './events.ts'
 
 let api: Awaited<ReturnType<typeof startApp>>
@@ -646,7 +646,7 @@ describe('twake.space.sync.completed', () => {
 
     expect(await spaceWikis(goneAdmin)).toEqual([])
     await expect(purgeJobOf(db, gone.id)).resolves.toEqual(
-      expect.objectContaining({ kind: 'purge-wiki' })
+      expect.objectContaining({ kind: PURGE_WIKI_JOB })
     )
     expect(await spaceWikis(listedAdmin)).toHaveLength(1)
     expect(await spaceWikis(newerAdmin)).toHaveLength(1)
