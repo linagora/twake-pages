@@ -50,7 +50,7 @@ async function labelsOf(tx: Tx, pageId: string) {
 }
 
 /** From the top of the tree down to the parent. */
-async function ancestorsOf(tx: Tx, parentId: string | null) {
+export async function ancestorsOf(tx: Tx, parentId: string | null) {
   if (parentId === null) return []
   const line = await tx.execute<{ id: string; title: string }>(sql`
     with recursive line as (

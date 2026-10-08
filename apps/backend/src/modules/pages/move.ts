@@ -6,7 +6,12 @@ import type { Identity } from '../auth/index.ts'
 import { checkRole } from '../wikis/access.ts'
 import { bumpWiki } from '../wikis/live.ts'
 import { pages } from './schema.ts'
-import { checkParent, siblingsUnder, type PageMove } from './store.ts'
+import {
+  ancestorsOf,
+  checkParent,
+  siblingsUnder,
+  type PageMove
+} from './store.ts'
 
 async function pageAt(tx: Tx, pageId: string) {
   const [page] = await tx
@@ -31,13 +36,18 @@ export function createMoveStore(db: Db) {
         await checkRole(tx, identity, found.wikiId, 'editor')
         await bumpWiki(tx, found.wikiId)
         // Read again behind the wiki's row lock, as the changes before this
-        // one left it.
+        // one left it: of two moves at the same time, the later sees the
+        // earlier, so they never make a page its own ancestor.
         const page = await pageAt(tx, pageId)
         if (!page) throw new Refused('not_found')
         if (page.deletedAt !== null) throw new Refused('in_trash')
         if (page.home) throw new Refused('home_page')
         if (move.parentId !== null) {
           await checkParent(tx, page.wikiId, move.parentId)
+          const ancestors = await ancestorsOf(tx, move.parentId)
+          if (ancestors.some(({ id }) => id === page.id)) {
+            throw new Refused('invalid_parent')
+          }
         }
         // The client names the neighbours it sees once the page is lifted out.
         const siblings = (
