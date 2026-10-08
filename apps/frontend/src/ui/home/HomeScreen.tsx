@@ -1,6 +1,7 @@
 import { Library } from '@linagora/twake-icons'
-import { Typography } from '@linagora/twake-mui'
+import { Link, Typography } from '@linagora/twake-mui'
 import type { ReactElement } from 'react'
+import { Link as RouterLink } from 'react-router'
 
 import { EmptyState, ListSkeleton } from '@/ds/EmptyState'
 import { Tile, TileGrid } from '@/ds/TileGrid'
@@ -35,7 +36,14 @@ export function HomeScreen(): ReactElement {
         <TileGrid label={t('wikis.title')}>
           {wikis.data.map(wiki => (
             <Tile key={wiki.id}>
-              <Typography>{wikiName(wiki)}</Typography>
+              <Link
+                component={RouterLink}
+                to={`/wikis/${wiki.id}`}
+                underline="none"
+                color="textPrimary"
+              >
+                {wikiName(wiki)}
+              </Link>
             </Tile>
           ))}
         </TileGrid>

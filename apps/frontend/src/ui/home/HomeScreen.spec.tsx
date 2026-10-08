@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
 import { ApiError } from '@/application/pages'
@@ -53,6 +53,16 @@ describe('HomeScreen', () => {
         .getAllByRole('listitem')
         .map(item => item.textContent)
     ).toEqual(['Personnel', 'Manuel'])
+  })
+
+  it('opens a wiki from the list', async () => {
+    const pagesApi = fakePagesApi()
+    const handbook = pagesApi.withWiki({ name: 'Handbook' })
+    const { router } = renderRoute('/', { pagesApi })
+
+    fireEvent.click(await screen.findByRole('link', { name: 'Handbook' }))
+
+    expect(router.state.location.pathname).toBe(`/wikis/${handbook.id}`)
   })
 
   it('says so when the wikis cannot be loaded', async () => {
