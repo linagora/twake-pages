@@ -1,4 +1,4 @@
-import { act, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, screen, waitFor } from '@testing-library/react'
 import {
   afterEach,
   beforeEach,
@@ -64,10 +64,10 @@ describe('the history of the embedded view', () => {
 
   // Like TwakeSpace, waits for the first path the app reports: the view shows
   // before the effect that listens to TwakeSpace has run.
-  async function renderEmbed(path: string) {
+  async function renderEmbed(path: string, pagesApi = fakePagesApi()) {
     window.history.replaceState(null, '', path)
     connectTwakeSpace(space)
-    const { router } = renderBrowserRoute()
+    const { router } = renderBrowserRoute({ pagesApi })
     await waitFor(() => {
       expect(pathMessages()).not.toEqual([])
     })
@@ -122,6 +122,30 @@ describe('the history of the embedded view', () => {
       path: '/pages/p2',
       replace: false
     })
+  })
+
+  it('reports the page, the search and the trash the person opens, below the route of the wiki', async () => {
+    const pagesApi = fakePagesApi()
+    const wiki = pagesApi.withWiki({ kind: 'space' })
+    const page = pagesApi.withPage(wiki.id, { title: 'Roadmap' })
+    await renderEmbed(`/embed/wikis/${wiki.id}`, pagesApi)
+    const reportedAt = async (path: string) => {
+      await waitFor(() => {
+        expect(pathMessages().at(-1)).toEqual({
+          type: 'twake-embed:path',
+          resourceId: wiki.id,
+          path,
+          replace: false
+        })
+      })
+    }
+
+    fireEvent.click(await screen.findByRole('treeitem', { name: 'Roadmap' }))
+    await reportedAt(`/pages/${page.id}`)
+    fireEvent.click(screen.getByRole('link', { name: 'Search' }))
+    await reportedAt('/search')
+    fireEvent.click(screen.getByRole('link', { name: 'Trash' }))
+    await reportedAt('/trash')
   })
 
   it('shows another wiki on load, without reporting it', async () => {
