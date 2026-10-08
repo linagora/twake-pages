@@ -79,8 +79,8 @@ async function provisionedEvents(spaceId: string) {
 }
 
 /**
- * Who wrote the home page of the person's space wiki. No route serves a page
- * yet: this reads it as the page will show it.
+ * Who wrote the home page of the person's space wiki: the page's creator,
+ * which no route shows, and the author of its first version.
  */
 async function homePageAuthorOf(user: TestUser) {
   const wiki = await spaceWikiOf(user)
