@@ -14,7 +14,6 @@ import { TrashScreen } from '@/ui/trash/TrashScreen'
 import { WikiHomeScreen } from '@/ui/wiki/WikiHomeScreen'
 import { WikiLayout } from '@/ui/wiki/WikiLayout'
 
-// The screens of a wiki, the same in the app and in the frame of TwakeSpace.
 const wikiRoutes = (): RouteObject[] => [
   {
     element: <WikiLayout />,

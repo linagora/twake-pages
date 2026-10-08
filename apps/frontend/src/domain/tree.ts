@@ -9,7 +9,6 @@ export interface TreeNode extends TreePage {
 const byPosition = (a: TreePage, b: TreePage) =>
   a.position < b.position ? -1 : a.position > b.position ? 1 : 0
 
-/** The pages under their parents, from the top of the tree. */
 export function buildTree(pages: TreePage[]): TreeNode[] {
   const children = new Map<string | null, TreePage[]>()
   for (const page of pages.toSorted(byPosition)) {
@@ -23,7 +22,6 @@ export function buildTree(pages: TreePage[]): TreeNode[] {
   return nodesUnder(null)
 }
 
-/** The pages above a page, from the top of the tree down to its parent. */
 export function ancestorsOf(pages: TreePage[], pageId: string): TreePage[] {
   const byId = new Map(pages.map(page => [page.id, page]))
   const ancestors: TreePage[] = []

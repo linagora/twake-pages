@@ -15,7 +15,6 @@ export interface ExcerptPart {
 const FOUND_START = String.fromCharCode(0xe000)
 const FOUND_END = String.fromCharCode(0xe001)
 
-/** An excerpt cut into plain text and the words found. */
 export function excerptParts(excerpt: string): ExcerptPart[] {
   const [before = '', ...found] = excerpt.split(FOUND_START)
   const parts = [

@@ -36,9 +36,7 @@ export interface WikiSeed {
   name?: string
   description?: string
   kind?: WikiKind
-  /** The role of the person signed in; admin by default. */
   role?: Role
-  /** Other members, by email. */
   members?: Record<string, Role>
 }
 
@@ -56,11 +54,8 @@ export interface PageSeed {
  */
 export type FakePagesApi = Mocks & {
   person: Person
-  /** The same backend, seen by someone who signs in with this name. */
   signedInAs: (email: string, name?: string | null) => FakePagesApi
-  /** A wiki made by the person, who has `role` on it. */
   withWiki: (seed?: WikiSeed) => Wiki
-  /** A page the person wrote, last under its parent. */
   withPage: (wikiId: string, seed?: PageSeed) => Page
 }
 
@@ -73,10 +68,8 @@ export const NO_SETTINGS: UserSettings = {
   name: null
 }
 
-/** The fake backend's GRIST_ORIGINS: database pages frame documents from it. */
 export const GRIST_ORIGIN = 'https://grist.example.com'
 
-/** A paragraph, as BlockNote stores it. */
 export const paragraph = (text: string): Block => ({
   type: 'paragraph',
   content: [{ type: 'text', text, styles: {} }],
@@ -133,7 +126,6 @@ interface StoredWiki {
   createdBy: string
   deleted: boolean
   homePageId: string
-  /** By person id. */
   members: Map<string, Membership>
   invites: Invite[]
 }
@@ -147,22 +139,15 @@ interface StoredPage {
   position: string
   createdAt: string
   createdBy: Person
-  /** Oldest first: the last one is the page's current version. */
   versions: Version[]
-  /** By person id. */
   followers: Set<string>
-  /** When each person marked it, by person id. */
   favoredBy: Map<string, string>
-  /** When each person last opened it, by person id. */
   visitedBy: Map<string, string>
-  /** Label names, sorted. */
   labels: string[]
-  /** Null while the page is live. */
   deletion: Deletion | null
 }
 
 interface Deletion {
-  /** The root of the branch the page went to the trash with: itself for the root. */
   rootId: string
   at: string
   by: Person
@@ -174,7 +159,6 @@ interface StoredComment extends Comment {
 
 interface StoredNotification {
   id: string
-  /** The person told. */
   userId: string
   pageId: string
   reason: NotificationReason
@@ -190,7 +174,6 @@ interface World {
   wikis: Map<string, StoredWiki>
   pages: Map<string, StoredPage>
   comments: Map<string, StoredComment>
-  /** Oldest first. */
   notifications: StoredNotification[]
   watchers: Map<string, Set<(version: number) => void>>
   apis: Map<string, FakePagesApi>
@@ -222,7 +205,6 @@ const WORD = /[\p{L}\p{N}]+/gu
 
 const wordsOf = (value: string) => value.toLowerCase().match(WORD) ?? []
 
-// The text of inline content: styled text, and the text of links.
 function inlineText(value: unknown): string {
   if (Array.isArray(value)) return value.map(inlineText).join('')
   if (typeof value !== 'object' || value === null) return ''
@@ -230,7 +212,6 @@ function inlineText(value: unknown): string {
   return 'content' in value ? inlineText(value.content) : ''
 }
 
-// The plain text of blocks, a line each, as search reads it.
 function plainText(blocks: unknown[]): string {
   return blocks
     .flatMap(block => {
@@ -248,8 +229,7 @@ function plainText(blocks: unknown[]): string {
     .join('\n')
 }
 
-// The words of a query as full text search reads them: whole words, but the
-// last one, which may be a beginning.
+// ADR012: the last word typed matches as a prefix.
 function queryOf(query: string) {
   const words = wordsOf(query)
   const tests = words.map((each, index) =>
@@ -258,10 +238,8 @@ function queryOf(query: string) {
       : (word: string) => word === each
   )
   return {
-    /** Whether a page with these words has every word of the query. */
     matches: (pageWords: string[]) =>
       tests.length > 0 && tests.every(test => pageWords.some(test)),
-    /** Whether the word is one the query looks for. */
     finds: (word: string) => tests.some(test => test(word))
   }
 }
@@ -271,8 +249,6 @@ const FOUND_END = String.fromCharCode(0xe001)
 const WORDS_BEFORE = 5
 const WORDS_AFTER = 8
 
-// A few words of the text around the first one found, the words found
-// marked; the text's first words when none is.
 function excerptOf(text: string, finds: (word: string) => boolean) {
   const words = [...text.matchAll(WORD)]
   const first = Math.max(
@@ -321,7 +297,6 @@ function gristAddress(value: string | undefined) {
   return value
 }
 
-// As the backend does: the neighbours must still be next to each other.
 function positionBetween(
   siblings: StoredPage[],
   afterId?: string,
@@ -421,7 +396,6 @@ function signedIn(world: World, person: Person): FakePagesApi {
     return wiki && !wiki.deleted ? wiki : undefined
   }
 
-  // Not found unless the person is a member; forbidden below `needed`.
   const access = (wikiId: string, needed: Role = 'viewer') => {
     const wiki = wikiOf(wikiId)
     const role = wiki?.members.get(person.id)?.role
@@ -436,7 +410,6 @@ function signedIn(world: World, person: Person): FakePagesApi {
     return { page, ...access(page.wikiId, needed) }
   }
 
-  // As pageAccess, for changes that a page in the trash refuses.
   const liveAccess = (pageId: string, needed: Role = 'editor') => {
     const found = pageAccess(pageId, needed)
     if (found.page.deletion) throw refuse('in_trash')
@@ -449,7 +422,6 @@ function signedIn(world: World, person: Person): FakePagesApi {
     return { comment, ...pageAccess(comment.pageId) }
   }
 
-  // The members a comment mentions; other emails are mere text.
   const mentionedIn = (wiki: StoredWiki, body: string) => {
     const emails = mentionsIn(body)
     return [...wiki.members.values()]
@@ -464,7 +436,6 @@ function signedIn(world: World, person: Person): FakePagesApi {
     }
   }
 
-  // Never to the person who acted, nor to people who are not members.
   const notify = (
     page: StoredPage,
     wiki: StoredWiki,
@@ -485,8 +456,6 @@ function signedIn(world: World, person: Person): FakePagesApi {
     }
   }
 
-  // The person's notifications, newest first, while they can see the page
-  // and the comment they are about.
   const myNotifications = () =>
     world.notifications
       .flatMap(stored => {
@@ -545,7 +514,6 @@ function signedIn(world: World, person: Person): FakePagesApi {
       .filter(page => !page.home && page.parentId === parentId)
       .sort(byPosition)
 
-  // A live page of the wiki other than its home page, or null for the top.
   const parentFor = (wikiId: string, parentId: string | null) => {
     if (parentId === null) return undefined
     const parent = world.pages.get(parentId)
@@ -558,7 +526,6 @@ function signedIn(world: World, person: Person): FakePagesApi {
   const parentOf = (page: StoredPage) =>
     page.parentId === null ? undefined : world.pages.get(page.parentId)
 
-  // The page, its parent, and so on up to the top of the tree.
   const lineOf = (page: StoredPage) => {
     const line = [page]
     for (let parent = parentOf(page); parent; parent = parentOf(parent)) {
@@ -578,11 +545,9 @@ function signedIn(world: World, person: Person): FakePagesApi {
       other => other !== page && lineOf(other).includes(page)
     )
 
-  // The root of a deleted branch and the pages that went to the trash with it.
   const branchOf = (root: StoredPage) =>
     pagesOf(root.wikiId).filter(page => page.deletion?.rootId === root.id)
 
-  // The live pages of every wiki of the person, each with its wiki.
   const myLivePages = () =>
     [...world.pages.values()].flatMap(page => {
       const wiki = wikiOf(page.wikiId)
@@ -729,7 +694,6 @@ function signedIn(world: World, person: Person): FakePagesApi {
       wiki => wiki.kind === 'personal' && wiki.createdBy === person.id
     ) ?? makeWiki('Personal', '', 'personal')
 
-  // An invitation becomes a membership once its email signs in and looks.
   const claimInvites = () => {
     for (const wiki of world.wikis.values()) {
       const invite = wiki.invites.find(each => each.email === person.email)
@@ -1267,7 +1231,7 @@ function signedIn(world: World, person: Person): FakePagesApi {
           .slice(0, 20)
       )
     ),
-    // Ranked as the title weighs more than the text, then the latest first.
+    // data-model.md weighs the title above the text.
     search: vi.fn<PagesApi['search']>((query, wikiId) =>
       answer(() => {
         const { matches, finds } = queryOf(text(query, 200))

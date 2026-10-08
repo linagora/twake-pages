@@ -11,7 +11,6 @@ export interface Comment {
   editedAt: string | null
 }
 
-/** A piece of a comment's body: plain text, or the email of a mention. */
 export type CommentPart = { text: string } | { mention: string }
 
 // @ and an email, at the start of a word: the address in "bob@example.com"
@@ -27,7 +26,6 @@ export function commentParts(body: string): CommentPart[] {
     .filter(part => !('text' in part) || part.text !== '')
 }
 
-/** The emails a comment mentions, each once, in lower case. */
 export function mentionsIn(body: string): string[] {
   const emails = commentParts(body).flatMap(part =>
     'mention' in part ? [part.mention.toLowerCase()] : []

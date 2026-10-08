@@ -11,7 +11,6 @@ import { SidebarEntry } from '@/ds/AppFrame'
 import { WikiFrame } from '@/ds/WikiFrame'
 import { useI18n } from '@/ui/i18n/useI18n'
 
-// The screens of a wiki, beside its own navigation, where its tree will go.
 export function WikiLayout(): ReactElement {
   const { t } = useI18n()
   return (

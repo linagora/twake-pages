@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest'
 
 import { renderRoute } from '@/testing/renderWithProviders'
 
-// A path below the route of a wiki, and the heading of its screen.
 const wikiScreens: [path: string, heading: string][] = [
   ['', 'Home page'],
   ['/pages/p1', 'Page'],

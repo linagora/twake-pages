@@ -1,7 +1,6 @@
 import { Box } from '@linagora/twake-mui'
 import type { ReactElement, ReactNode } from 'react'
 
-// The wiki's own column, for its tree, beside the screen; above it on phones.
 export function WikiFrame({
   sidebar,
   children

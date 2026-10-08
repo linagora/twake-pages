@@ -11,7 +11,6 @@ import {
 
 type Outline = (string | Outline)[]
 
-// Titles in tree order, each page's children in a list after it.
 const outline = (nodes: TreeNode[]): Outline =>
   nodes.flatMap(node =>
     node.children.length > 0
@@ -30,7 +29,6 @@ async function badgesOf(api: FakePagesApi) {
 
 const nothing = { notifications: [], unread: 0 }
 
-// A word found by a search, as its excerpt marks it.
 const found = (word: string) =>
   `${String.fromCharCode(0xe000)}${word}${String.fromCharCode(0xe001)}`
 
