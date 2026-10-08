@@ -1,4 +1,4 @@
-import { and, asc, eq, isNull, ne, notExists, sql } from 'drizzle-orm'
+import { and, asc, eq, inArray, isNull, ne, notExists, sql } from 'drizzle-orm'
 import { alias } from 'drizzle-orm/pg-core'
 import { z } from 'zod'
 import type { PlatformEvent } from '../../events/envelope.ts'
@@ -8,6 +8,7 @@ import {
   type Handler
 } from '../../events/router.ts'
 import { asOrganization, asTenant, type Tx } from '../../infra/db.ts'
+import { userSettings } from '../settings/schema.ts'
 import { bumpWiki } from './live.ts'
 import { wikiMembers, wikis } from './schema.ts'
 
@@ -116,6 +117,15 @@ async function bumpWikisOf(tx: Tx, userId: string) {
 // deleted account, rather than for the 30 days a wiki its admin deletes is kept.
 async function forget(tx: Tx, organizationId: string | null, userId: string) {
   await asTenant(tx, { organizationId, userId, email: '' })
+  await tx.delete(userSettings).where(
+    inArray(
+      userSettings.email,
+      tx
+        .select({ email: sql<string>`lower(${wikiMembers.email})` })
+        .from(wikiMembers)
+        .where(eq(wikiMembers.userId, userId))
+    )
+  )
   await tx
     .delete(wikis)
     .where(and(eq(wikis.createdBy, userId), eq(wikis.kind, 'personal')))

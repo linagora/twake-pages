@@ -15,6 +15,7 @@ import {
   type TestUser,
   type WikiSummary
 } from '../../testing/app.ts'
+import { keepSettings } from '../settings/events.ts'
 import type { Role } from './access.ts'
 import { accountRoutes } from './accounts.ts'
 
@@ -155,6 +156,28 @@ describe.each([
     await deliver(routingKey, body(gone))
 
     expect(await purgeJobOf(db, deleted.id)).toEqual(job)
+  })
+
+  it('loses its Twake Workplace settings', async () => {
+    const gone = makeUser()
+    await wikisOf(gone)
+    await db.transaction(tx =>
+      keepSettings(tx, 1, {
+        email: gone.email.toLowerCase(),
+        display_name: 'Gone'
+      })
+    )
+
+    await deliver(routingKey, body(gone))
+
+    expect((await api.as(gone).get('/settings')).json()).toEqual({
+      version: -1,
+      language: null,
+      timezone: null,
+      theme: 'auto',
+      avatar: null,
+      name: null
+    })
   })
 })
 
