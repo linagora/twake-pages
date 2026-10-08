@@ -2,21 +2,22 @@ import { pino } from 'pino'
 import { buildApp } from './app.ts'
 import { loadConfig } from './config.ts'
 import { postgresDeduplicator } from './events/dedupe.ts'
-import type { PlatformEvent } from './events/envelope.ts'
 import { createRelay } from './events/outbox.ts'
-import { createMessageHandler, type Handler } from './events/router.ts'
+import { createMessageHandler } from './events/router.ts'
 import { listenToChanges } from './infra/changes.ts'
 import { assertRowLevelSecurity, createDb, migrateDb } from './infra/db.ts'
 import { startConsumer, startPublisher } from './infra/rabbitmq.ts'
 import { connectIdentityProvider } from './modules/auth/index.ts'
 import { settingsRoutes } from './modules/settings/events.ts'
 import { SETTINGS_CHANNEL } from './modules/settings/routes.ts'
+import { spaceRoutes } from './modules/spaces/events.ts'
 import { WIKI_CHANNEL } from './modules/wikis/live.ts'
 import { PURGE_WIKI_JOB, purgeWiki } from './modules/wikis/store.ts'
 import { createScheduler } from './scheduler/scheduler.ts'
 
 const config = loadConfig()
 const logger = pino({ level: config.LOG_LEVEL })
+const spaces = config.SPACE_INTEGRATION === 'true'
 
 const { sql, db } = createDb(config.DATABASE_URL)
 await assertRowLevelSecurity(sql)
@@ -43,9 +44,6 @@ const server = await buildApp({
 })
 await server.listen({ host: config.HTTP_HOST, port: config.HTTP_PORT })
 
-// The events of the wikis, and of the spaces, will be routed here.
-const pagesRoutes = new Map<string, Handler<PlatformEvent>>()
-
 const publisher = await startPublisher(
   config.RABBITMQ_URL,
   config.RABBITMQ_ACTIVITY_EXCHANGE,
@@ -63,9 +61,9 @@ const consumer = await startConsumer(
   },
   logger,
   // The queue stays bound to space events either way, since its first binding
-  // fixes its dead letter key; until they have a route, they are dropped.
+  // fixes its dead letter key; without the integration they find no route.
   createMessageHandler({
-    routes: new Map([...pagesRoutes, ...settingsRoutes]),
+    routes: new Map([...(spaces ? spaceRoutes() : []), ...settingsRoutes]),
     dedupe: postgresDeduplicator(db, 'twake-pages'),
     logger
   })
