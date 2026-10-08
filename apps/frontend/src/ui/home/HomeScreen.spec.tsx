@@ -42,6 +42,19 @@ describe('HomeScreen', () => {
     ).toEqual(['Personal', 'Handbook', 'Onboarding'])
   })
 
+  it('shows the personal wiki under a label in the language of the person', async () => {
+    const pagesApi = fakePagesApi()
+    pagesApi.withWiki({ name: 'Manuel' })
+    renderRoute('/', { lang: 'fr', pagesApi })
+
+    const list = await screen.findByRole('list', { name: 'Wikis' })
+    expect(
+      within(list)
+        .getAllByRole('listitem')
+        .map(item => item.textContent)
+    ).toEqual(['Personnel', 'Manuel'])
+  })
+
   it('says so when the wikis cannot be loaded', async () => {
     const pagesApi = fakePagesApi()
     pagesApi.listWikis.mockRejectedValue(new ApiError(403, null))

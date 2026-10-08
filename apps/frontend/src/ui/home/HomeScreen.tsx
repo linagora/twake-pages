@@ -4,13 +4,20 @@ import type { ReactElement } from 'react'
 
 import { EmptyState, ListSkeleton } from '@/ds/EmptyState'
 import { Tile, TileGrid } from '@/ds/TileGrid'
+import type { WikiSummary } from '@/domain/wiki'
 import { useI18n } from '@/ui/i18n/useI18n'
 import { useDocumentTitle } from '@/ui/useDocumentTitle'
 import { useWikis } from '@/ui/wiki/queries'
 
+function useWikiName(): (wiki: WikiSummary) => string {
+  const { t } = useI18n()
+  return wiki => (wiki.kind === 'personal' ? t('wikis.personal') : wiki.name)
+}
+
 export function HomeScreen(): ReactElement {
   const { t } = useI18n()
   const wikis = useWikis()
+  const wikiName = useWikiName()
   useDocumentTitle(null)
 
   return (
@@ -33,7 +40,7 @@ export function HomeScreen(): ReactElement {
         <TileGrid label={t('wikis.title')}>
           {wikis.data.map(wiki => (
             <Tile key={wiki.id}>
-              <Typography>{wiki.name}</Typography>
+              <Typography>{wikiName(wiki)}</Typography>
             </Tile>
           ))}
         </TileGrid>

@@ -30,6 +30,7 @@
   },
   "wikis": {
     "title": "Wikis",
+    "personal": "Personnel",
     "back": "Retour aux wikis",
     "loadFailed": "Les wikis n'ont pas pu être chargés.",
     "empty": "Aucun wiki pour l'instant",
