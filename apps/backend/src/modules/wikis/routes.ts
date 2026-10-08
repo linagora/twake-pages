@@ -14,7 +14,7 @@ const newWiki = z.object({
   description: wikiDescription.default('')
 })
 
-const wikiChanges = z
+const wikiEdit = z
   .object({ name: wikiName, description: wikiDescription })
   .partial()
   .refine(changes => Object.keys(changes).length > 0)
@@ -85,7 +85,7 @@ export function registerWikis(
       if (!identity) return reply.code(401).send()
       const params = wikiParams.safeParse(request.params)
       if (!params.success) return refuse(reply, 'not_found')
-      const body = wikiChanges.safeParse(request.body)
+      const body = wikiEdit.safeParse(request.body)
       if (!body.success) {
         return reply.code(400).send({ error: 'invalid_request' })
       }
