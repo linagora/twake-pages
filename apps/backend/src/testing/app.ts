@@ -196,6 +196,22 @@ export async function aPageIn(
   })
 }
 
+// Search is not served yet, so the plain text of a page and of its versions is
+// read from their tables, the first version first.
+export const textsOf = (db: Db, user: TestUser, pageId: string) =>
+  inTenant(db, user, async tx => {
+    const [page] = await tx
+      .select({ text: pages.text })
+      .from(pages)
+      .where(eq(pages.id, pageId))
+    const versions = await tx
+      .select({ text: pageVersions.text })
+      .from(pageVersions)
+      .where(eq(pageVersions.pageId, pageId))
+      .orderBy(pageVersions.number)
+    return { page: page?.text, versions: versions.map(({ text }) => text) }
+  })
+
 /** A wiki as `GET /wikis` lists it. */
 export interface WikiSummary {
   id: string
@@ -222,6 +238,42 @@ export interface PageRef {
 /** A page as `GET /recent` lists it, with when the person opened it. */
 export interface RecentPage extends PageRef {
   visitedAt: string
+}
+
+/** A person as the API names them. */
+export interface Person {
+  id: string
+  email: string
+  name: string | null
+}
+
+/** The person, as the API names them. */
+export const personOf = (user: TestUser): Person => ({
+  id: user.userId,
+  email: user.email,
+  name: user.name ?? null
+})
+
+/** A page as `GET /pages/:pageId` shows it. */
+export interface Page {
+  id: string
+  wikiId: string
+  parentId: string | null
+  home: boolean
+  kind: 'document' | 'database'
+  title: string
+  content: unknown[]
+  gristUrl: string | null
+  version: number
+  createdAt: string
+  createdBy: Person
+  updatedAt: string
+  updatedBy: Person
+  labels: string[]
+  ancestors: { id: string; title: string }[]
+  following: boolean
+  favorite: boolean
+  deletedAt: string | null
 }
 
 /** The job planned to purge the deleted wiki. */
@@ -256,6 +308,15 @@ export async function versionOf(
   return (await api.as(user).get(`/wikis/${wikiId}`)).json<{
     version: number
   }>().version
+}
+
+/** The page, as `GET /pages/:pageId` shows it to the person. */
+export async function pageOf(
+  api: Awaited<ReturnType<typeof startApp>>,
+  user: TestUser,
+  pageId: string
+) {
+  return (await api.as(user).get(`/pages/${pageId}`)).json<Page>()
 }
 
 /** The titles of the parent's children, in their order in the wiki's tree. */
@@ -502,3 +563,7 @@ export const aBlock = (type: string, fields: Record<string, unknown> = {}) => ({
   children: [],
   ...fields
 })
+
+/** A paragraph of plain text. */
+export const paragraph = (text: string) =>
+  aBlock('paragraph', { content: [styled(text)] })

@@ -4,7 +4,6 @@ import { outbox } from '../../events/schema.ts'
 import { createDb } from '../../infra/db.ts'
 import {
   aB2cUser,
-  aBlock,
   aPage,
   aSpaceWiki,
   aUser,
@@ -12,9 +11,9 @@ import {
   createPage,
   joinWiki,
   movePage,
+  paragraph,
   personalWikiOf,
   startApp,
-  styled,
   type TestUser
 } from '../../testing/app.ts'
 
@@ -45,9 +44,6 @@ async function eventsOf(pageId: string) {
     .orderBy(outbox.id)
   return rows.map(row => row.event as Record<string, unknown>)
 }
-
-const paragraph = (text: string) =>
-  aBlock('paragraph', { content: [styled(text)] })
 
 describe('com.twake.pages.page.created.v1', () => {
   it('goes out through the outbox when an editor creates a page', async () => {

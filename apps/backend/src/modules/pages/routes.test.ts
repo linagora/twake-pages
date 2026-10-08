@@ -15,23 +15,21 @@ import {
   INVALID_PARENTS,
   joinWiki,
   neighbourPagesIn,
+  pageOf,
+  personOf,
   removeFromWiki,
   STALE_NEIGHBOURS,
   startApp,
   styled,
+  textsOf,
   titlesUnder,
   versionOf,
+  type Page,
   type TestUser
 } from '../../testing/app.ts'
 import { pageFollowers } from '../notifications/schema.ts'
 import { MAX_BLOCKS_BYTES } from './blocks.ts'
-import {
-  labels,
-  pageLabels,
-  pages,
-  pageVersions,
-  pageVisits
-} from './schema.ts'
+import { labels, pageLabels, pages, pageVisits } from './schema.ts'
 
 let api: Awaited<ReturnType<typeof startApp>>
 const { sql, db } = createDb(inject('databaseUrl'))
@@ -44,35 +42,6 @@ afterAll(async () => {
   await api.close()
   await sql.end()
 })
-
-interface Person {
-  id: string
-  email: string
-  name: string | null
-}
-
-interface Page {
-  id: string
-  parentId: string | null
-  content: unknown[]
-  version: number
-  createdBy: Person
-  updatedBy: Person
-  labels: string[]
-  ancestors: { id: string; title: string }[]
-  following: boolean
-  favorite: boolean
-  deletedAt: string | null
-}
-
-const personOf = (user: TestUser): Person => ({
-  id: user.userId,
-  email: user.email,
-  name: user.name ?? null
-})
-
-const pageOf = async (user: TestUser, pageId: string) =>
-  (await api.as(user).get(`/pages/${pageId}`)).json<Page>()
 
 // Publishing is not served yet, so versions are written as it will write them.
 const publish = (editor: TestUser, pageId: string, number: number) =>
@@ -143,22 +112,6 @@ const visitsOf = async (user: TestUser) => {
   return visits.map(visit => visit.pageId)
 }
 
-// Nor is search, so the plain text of a page and of its versions is read from
-// their tables, the first version first.
-const textsOf = (user: TestUser, pageId: string) =>
-  inTenant(db, user, async tx => {
-    const [page] = await tx
-      .select({ text: pages.text })
-      .from(pages)
-      .where(eq(pages.id, pageId))
-    const versions = await tx
-      .select({ text: pageVersions.text })
-      .from(pageVersions)
-      .where(eq(pageVersions.pageId, pageId))
-      .orderBy(pageVersions.number)
-    return { page: page?.text, versions: versions.map(({ text }) => text) }
-  })
-
 /** Pages of the wiki the person visited one after the other, long ago. */
 const visitedLongAgo = async (
   user: TestUser,
@@ -222,7 +175,7 @@ describe('GET /pages/:pageId', () => {
     await joinWiki(db, alice, wiki.id, bob, 'editor')
     await publish(bob, wiki.homePageId, 2)
 
-    const page = await pageOf(alice, wiki.homePageId)
+    const page = await pageOf(api, alice, wiki.homePageId)
 
     expect({
       version: page.version,
@@ -253,7 +206,7 @@ describe('GET /pages/:pageId', () => {
       parentId: q1
     })
 
-    const page = await pageOf(alice, week)
+    const page = await pageOf(api, alice, week)
 
     expect(page.ancestors).toEqual([
       { id: plans, title: 'Plans' },
@@ -275,7 +228,10 @@ describe('GET /pages/:pageId', () => {
     await label(alice, wiki.id, plans, ['roadmap', 'draft'])
     await label(alice, wiki.id, archive, ['old'])
 
-    expect((await pageOf(alice, plans)).labels).toEqual(['draft', 'roadmap'])
+    expect((await pageOf(api, alice, plans)).labels).toEqual([
+      'draft',
+      'roadmap'
+    ])
   })
 
   it('tells each person whether they follow it and keep it as a favorite', async () => {
@@ -292,7 +248,7 @@ describe('GET /pages/:pageId', () => {
 
     const marks = await Promise.all(
       [alice, bob].map(async user => {
-        const page = await pageOf(user, plans)
+        const page = await pageOf(api, user, plans)
         return { following: page.following, favorite: page.favorite }
       })
     )
@@ -312,7 +268,7 @@ describe('GET /pages/:pageId', () => {
       deleted: true
     })
 
-    const page = await pageOf(alice, drafts)
+    const page = await pageOf(api, alice, drafts)
 
     expect(page.deletedAt).toEqual(expect.any(String))
   })
@@ -381,7 +337,7 @@ describe('GET /pages/:pageId', () => {
     const wiki = await aWikiOf(api, alice)
     const visited = await visitedLongAgo(alice, wiki.id, 100)
 
-    await pageOf(alice, wiki.homePageId)
+    await pageOf(api, alice, wiki.homePageId)
 
     const visits = await visitsOf(alice)
     expect({
@@ -409,7 +365,7 @@ describe('GET /pages/:pageId', () => {
     const own = await aWikiOf(api, alice)
     await visitedLongAgo(alice, own.id, 100)
 
-    await pageOf(alice, own.homePageId)
+    await pageOf(api, alice, own.homePageId)
 
     await joinWiki(db, carol, left.id, alice, 'viewer')
     const visits = await visitsOf(alice)
@@ -717,7 +673,7 @@ describe('POST /wikis/:wikiId/pages', () => {
       })
 
       expect(created.json<Page>().content).toEqual(blocks)
-      const page = await pageOf(alice, created.json<Page>().id)
+      const page = await pageOf(api, alice, created.json<Page>().id)
       expect(page.content).toEqual(blocks)
     })
 
@@ -744,7 +700,7 @@ describe('POST /wikis/:wikiId/pages', () => {
 
       const text =
         'Steps\nRead the guide\nThen ask\nLaptop\nBadge\nA desk\nnpm ci'
-      expect(await textsOf(alice, created.json<Page>().id)).toEqual({
+      expect(await textsOf(db, alice, created.json<Page>().id)).toEqual({
         page: text,
         versions: [text]
       })
