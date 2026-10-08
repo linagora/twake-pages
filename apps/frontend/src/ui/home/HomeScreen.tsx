@@ -1,26 +1,45 @@
-import { Library } from '@linagora/twake-icons'
-import { Link, Typography } from '@linagora/twake-mui'
-import type { ReactElement } from 'react'
-import { Link as RouterLink } from 'react-router'
+import { Icon, Library, Plus } from '@linagora/twake-icons'
+import { Button, Link, Typography } from '@linagora/twake-mui'
+import { useState, type ReactElement } from 'react'
+import { Link as RouterLink, useNavigate } from 'react-router'
 
 import { EmptyState, ListSkeleton } from '@/ds/EmptyState'
+import { PageHeader } from '@/ds/PageHeader'
 import { Tile, TileGrid } from '@/ds/TileGrid'
+import type { Wiki } from '@/domain/wiki'
 import { useI18n } from '@/ui/i18n/useI18n'
 import { useDocumentTitle } from '@/ui/useDocumentTitle'
-import { useWikis } from '@/ui/wiki/queries'
+import { useCreateWiki, useWikis } from '@/ui/wiki/queries'
 import { useWikiName } from '@/ui/wiki/useWikiName'
+import { WikiDialog } from '@/ui/wiki/WikiDialog'
 
 export function HomeScreen(): ReactElement {
   const { t } = useI18n()
+  const navigate = useNavigate()
   const wikis = useWikis()
   const wikiName = useWikiName()
+  const [creating, setCreating] = useState(false)
   useDocumentTitle(null)
 
   return (
     <main className="u-p-2">
-      <Typography variant="h3" component="h1" className="u-mb-2">
-        {t('app.name')}
-      </Typography>
+      <PageHeader
+        title={
+          <Typography variant="h3" component="h1">
+            {t('app.name')}
+          </Typography>
+        }
+        actions={
+          <Button
+            startIcon={<Icon icon={Plus} />}
+            onClick={() => {
+              setCreating(true)
+            }}
+          >
+            {t('wikis.new')}
+          </Button>
+        }
+      />
       {wikis.isError && (
         <Typography role="alert">{t('wikis.loadFailed')}</Typography>
       )}
@@ -48,6 +67,39 @@ export function HomeScreen(): ReactElement {
           ))}
         </TileGrid>
       )}
+      {creating && (
+        <NewWikiDialog
+          onClose={() => {
+            setCreating(false)
+          }}
+          onCreated={wiki => {
+            void navigate(`/wikis/${wiki.id}`)
+          }}
+        />
+      )}
     </main>
+  )
+}
+
+function NewWikiDialog({
+  onClose,
+  onCreated
+}: {
+  onClose: () => void
+  onCreated: (wiki: Wiki) => void
+}): ReactElement {
+  const { t } = useI18n()
+  const create = useCreateWiki()
+  return (
+    <WikiDialog
+      title={t('newWiki.title')}
+      submit={t('newWiki.create')}
+      saving={create.isPending}
+      failed={create.isError ? t('newWiki.failed') : null}
+      onSave={wiki => {
+        create.mutate(wiki, { onSuccess: onCreated })
+      }}
+      onClose={onClose}
+    />
   )
 }

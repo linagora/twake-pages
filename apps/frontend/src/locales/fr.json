@@ -34,13 +34,24 @@
     "back": "Retour aux wikis",
     "loadFailed": "Les wikis n'ont pas pu être chargés.",
     "empty": "Aucun wiki pour l'instant",
-    "emptyHint": "Les wikis partagés avec vous s'afficheront ici."
+    "emptyHint": "Les wikis partagés avec vous s'afficheront ici.",
+    "new": "Nouveau wiki"
   },
   "wiki": {
     "nav": "Wiki",
     "home": "Page d'accueil",
     "notFound": "Ce wiki n'existe pas, ou vous ne pouvez pas l'ouvrir.",
     "loadFailed": "Le wiki n'a pas pu être chargé."
+  },
+  "wikiDialog": {
+    "name": "Nom",
+    "description": "Description",
+    "cancel": "Annuler"
+  },
+  "newWiki": {
+    "title": "Nouveau wiki",
+    "create": "Créer",
+    "failed": "Le wiki n'a pas pu être créé."
   },
   "tree": {
     "title": "Pages",

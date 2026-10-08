@@ -1,11 +1,13 @@
 import {
+  useMutation,
   useQuery,
   useQueryClient,
+  type UseMutationResult,
   type UseQueryResult
 } from '@tanstack/react-query'
 import { useEffect } from 'react'
 
-import type { Tree } from '@/application/pages'
+import type { NewWiki, Tree } from '@/application/pages'
 import type { Page } from '@/domain/page'
 import type { Wiki, WikiSummary } from '@/domain/wiki'
 import { usePagesApi } from '@/ui/PagesApiProvider'
@@ -25,6 +27,18 @@ export function useWiki(wikiId: string): UseQueryResult<Wiki> {
   return useQuery({
     queryKey: wikiKey(wikiId),
     queryFn: () => api.getWiki(wikiId)
+  })
+}
+
+export function useCreateWiki(): UseMutationResult<Wiki, Error, NewWiki> {
+  const api = usePagesApi()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (wiki: NewWiki) => api.createWiki(wiki),
+    onSuccess: wiki => {
+      queryClient.setQueryData(wikiKey(wiki.id), wiki)
+      return queryClient.invalidateQueries({ queryKey: wikisKey, exact: true })
+    }
   })
 }
 

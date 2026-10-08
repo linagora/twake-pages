@@ -34,13 +34,24 @@
     "back": "Back to wikis",
     "loadFailed": "The wikis could not be loaded.",
     "empty": "No wikis yet",
-    "emptyHint": "The wikis shared with you will show here."
+    "emptyHint": "The wikis shared with you will show here.",
+    "new": "New wiki"
   },
   "wiki": {
     "nav": "Wiki",
     "home": "Home page",
     "notFound": "This wiki doesn't exist, or you can't open it.",
     "loadFailed": "The wiki could not be loaded."
+  },
+  "wikiDialog": {
+    "name": "Name",
+    "description": "Description",
+    "cancel": "Cancel"
+  },
+  "newWiki": {
+    "title": "New wiki",
+    "create": "Create",
+    "failed": "The wiki could not be created."
   },
   "tree": {
     "title": "Pages",
