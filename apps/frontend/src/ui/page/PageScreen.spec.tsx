@@ -2,6 +2,7 @@ import { screen, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
 import { ApiError } from '@/application/pages'
+import type { Block } from '@/domain/page'
 import { findEmptyState } from '@/testing/emptyState'
 import { fakePagesApi } from '@/testing/fakePagesApi'
 import { renderRoute } from '@/testing/renderWithProviders'
@@ -29,6 +30,17 @@ const linksIn = (element: HTMLElement) =>
     .getAllByRole('link')
     .map(link => [link.textContent, link.getAttribute('href')])
 
+/** Opens the Release checklist, holding these blocks. */
+function openChecklistOf(content: Block[]) {
+  const pagesApi = fakePagesApi()
+  const wiki = pagesApi.withWiki()
+  const checklist = pagesApi.withPage(wiki.id, {
+    title: 'Release checklist',
+    content
+  })
+  renderRoute(`/wikis/${wiki.id}/pages/${checklist.id}`, { pagesApi })
+}
+
 describe('a page', () => {
   it('shows its title', async () => {
     const { pagesApi, wiki, checklist } = handbook()
@@ -43,16 +55,10 @@ describe('a page', () => {
   })
 
   it('shows its blocks, read only', async () => {
-    const pagesApi = fakePagesApi()
-    const wiki = pagesApi.withWiki()
-    const checklist = pagesApi.withPage(wiki.id, {
-      title: 'Release checklist',
-      content: [
-        { type: 'heading', content: 'Before the release' },
-        { type: 'paragraph', content: 'Freeze the branch on Thursdays.' }
-      ]
-    })
-    renderRoute(`/wikis/${wiki.id}/pages/${checklist.id}`, { pagesApi })
+    openChecklistOf([
+      { type: 'heading', content: 'Before the release' },
+      { type: 'paragraph', content: 'Freeze the branch on Thursdays.' }
+    ])
 
     expect(
       await screen.findByText('Freeze the branch on Thursdays.')
@@ -62,6 +68,66 @@ describe('a page', () => {
       within(main).getByRole('heading', { name: 'Before the release' })
     ).toBeVisible()
     expect(within(main).queryByRole('textbox')).not.toBeInTheDocument()
+  })
+
+  it('shows the list items of its blocks in a list', async () => {
+    openChecklistOf([
+      { type: 'bulletListItem', content: 'Freeze the branch' },
+      { type: 'bulletListItem', content: 'Tag the release' }
+    ])
+    await screen.findByText('Freeze the branch')
+
+    expect(
+      screen.getAllByRole('list').map(list =>
+        within(list)
+          .queryAllByRole('listitem')
+          .map(item => item.textContent)
+      )
+    ).toContainEqual(['Freeze the branch', 'Tag the release'])
+  })
+
+  it('shows the check list items of its blocks ticked or not, read only', async () => {
+    openChecklistOf([
+      {
+        type: 'checkListItem',
+        props: { checked: true },
+        content: 'Freeze the branch'
+      }
+    ])
+
+    const box = await screen.findByRole('checkbox')
+    expect(box).toBeChecked()
+    expect(box).toBeDisabled()
+  })
+
+  it('keeps the links of its blocks from running scripts', async () => {
+    openChecklistOf([
+      {
+        type: 'file',
+        props: { name: 'Release notes', url: 'javascript:alert(1)' }
+      }
+    ])
+
+    expect(await screen.findByText('Release notes')).not.toHaveAttribute('href')
+  })
+
+  it('opens the links of its blocks in a new tab', async () => {
+    openChecklistOf([
+      {
+        type: 'paragraph',
+        content: [
+          {
+            type: 'link',
+            href: 'https://example.com/notes',
+            content: 'Release notes'
+          }
+        ]
+      }
+    ])
+
+    expect(
+      await screen.findByRole('link', { name: 'Release notes' })
+    ).toHaveAttribute('target', '_blank')
   })
 
   it('says when it holds nothing yet', async () => {

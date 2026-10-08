@@ -1,52 +1,52 @@
-import '@blocknote/core/style.css'
-
 import { BlockNoteEditor } from '@blocknote/core'
-import { Box, useColorScheme } from '@linagora/twake-mui'
+import { Box } from '@linagora/twake-mui'
+import DOMPurify from 'dompurify'
 import { useCallback, type ReactElement } from 'react'
 
 /**
- * Blocks of BlockNote, the editor of the pages, shown read only: the editor
- * is mounted as is, since its React view only adds the menus for writing.
+ * Blocks of BlockNote, the editor of the pages, shown read only as the HTML
+ * it exports: its editor draws a list item as a paragraph, which a screen
+ * reader does not read as a list. Others write the blocks, so the HTML is
+ * sanitized.
  */
 export function Blocks({
   blocks
 }: {
   blocks: Record<string, unknown>[]
 }): ReactElement {
-  const { mode, systemMode } = useColorScheme()
-  const dark = (mode === 'system' ? systemMode : mode) === 'dark'
-  const mount = useCallback(
+  const show = useCallback(
     (element: HTMLDivElement | null) => {
       if (!element) return
-      const editor = BlockNoteEditor.create({
-        initialContent: blocks,
-        // Read, not written: no text field for screen readers, and no stop
-        // in the tab order.
-        domAttributes: { editor: { role: 'none', tabIndex: '-1' } }
+      const editor = BlockNoteEditor.create({ initialContent: blocks })
+      const html = DOMPurify.sanitize(editor.blocksToHTMLLossy(), {
+        // A link opens in a new tab, as from the editor.
+        ADD_ATTR: ['target'],
+        RETURN_DOM_FRAGMENT: true
       })
-      editor.isEditable = false
-      editor.mount(element)
-      return () => {
-        editor.unmount()
-      }
+      // As the editor shows a check list item when it is not editable.
+      for (const box of html.querySelectorAll('input')) box.disabled = true
+      element.replaceChildren(html)
     },
     [blocks]
   )
 
   return (
     <Box
-      className="bn-root bn-container"
-      data-color-scheme={dark ? 'dark' : 'light'}
+      ref={show}
       sx={theme => ({
-        // In the type and colors of the app, without the margin the editor
-        // keeps for its side menu.
-        '--bn-colors-editor-text': theme.vars.palette.text.primary,
-        '--bn-colors-editor-background': 'transparent',
-        '& .bn-editor': { paddingInline: 0 },
-        '& .bn-default-styles': { fontFamily: theme.typography.fontFamily }
+        // The exported HTML comes without styles: its lists as Twake Tasks
+        // styles those of its rich text, and nothing wider than the page.
+        '& li > p': { margin: 0 },
+        '& li:has(> input)': { listStyle: 'none' },
+        '& li > input + p': { display: 'inline' },
+        '& pre': { overflowX: 'auto' },
+        '& img, & video': { maxWidth: '100%' },
+        '& table': { borderCollapse: 'collapse' },
+        '& th, & td': {
+          border: `1px solid ${theme.vars.palette.divider}`,
+          padding: theme.spacing(0.5, 1)
+        }
       })}
-    >
-      <div ref={mount} />
-    </Box>
+    />
   )
 }
