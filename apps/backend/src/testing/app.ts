@@ -230,3 +230,12 @@ export async function startApp() {
     }
   }
 }
+
+export type TestApp = Awaited<ReturnType<typeof startApp>>
+
+/** The wiki's version, as `GET /wikis/:wikiId` shows it to the person. */
+export async function versionOf(api: TestApp, user: TestUser, wikiId: string) {
+  return (await api.as(user).get(`/wikis/${wikiId}`)).json<{
+    version: number
+  }>().version
+}

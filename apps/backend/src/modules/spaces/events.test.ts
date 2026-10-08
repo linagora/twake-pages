@@ -10,6 +10,7 @@ import {
   aUser,
   purgeJobOf,
   startApp,
+  versionOf,
   wikiRowsOf,
   type TestUser,
   type WikiSummary
@@ -64,12 +65,6 @@ async function spaceWikiOf(user: TestUser) {
   const [wiki, ...more] = await spaceWikis(user)
   if (!wiki || more.length > 0) throw new Error('expected one space wiki')
   return wiki
-}
-
-async function versionOf(user: TestUser, wikiId: string) {
-  return (await api.as(user).get(`/wikis/${wikiId}`)).json<{
-    version: number
-  }>().version
 }
 
 /** The provisioned events waiting in the outbox for RabbitMQ, oldest first. */
@@ -341,7 +336,7 @@ describe('twake.space.deleted', () => {
     const admin = aUser()
     const space = await aSpaceOf(admin)
     const wiki = await spaceWikiOf(admin)
-    const before = await versionOf(admin, wiki.id)
+    const before = await versionOf(api, admin, wiki.id)
 
     await deliver('twake.space.deleted', space)
 
@@ -480,25 +475,25 @@ describe('live updates', () => {
     const newcomer = aUser({ organizationId: admin.organizationId })
     const space = await aSpaceOf(admin)
     const wiki = await spaceWikiOf(admin)
-    const versions = [await versionOf(admin, wiki.id)]
+    const versions = [await versionOf(api, admin, wiki.id)]
 
     await deliver('twake.space.member.added', {
       ...space,
       members: [member(newcomer, 'viewer')]
     })
-    versions.push(await versionOf(admin, wiki.id))
+    versions.push(await versionOf(api, admin, wiki.id))
     await deliver('twake.space.member.role.changed', {
       ...space,
       members: [member(newcomer, 'editor')]
     })
-    versions.push(await versionOf(admin, wiki.id))
+    versions.push(await versionOf(api, admin, wiki.id))
     await deliver('twake.space.updated', { ...space, name: 'Operations' })
-    versions.push(await versionOf(admin, wiki.id))
+    versions.push(await versionOf(api, admin, wiki.id))
     await deliver('twake.space.member.removed', {
       ...space,
       members: [{ uuid: newcomer.userId }]
     })
-    versions.push(await versionOf(admin, wiki.id))
+    versions.push(await versionOf(api, admin, wiki.id))
 
     expect(new Set(versions).size).toBe(5)
     expect(versions).toEqual([...versions].sort((a, b) => a - b))
@@ -515,7 +510,7 @@ describe('live updates', () => {
     }
     await deliver('twake.space.created', created)
     const wiki = await spaceWikiOf(admin)
-    const before = await versionOf(admin, wiki.id)
+    const before = await versionOf(api, admin, wiki.id)
 
     await deliver('twake.space.created', created)
     await deliver('twake.space.member.added', {
@@ -524,7 +519,7 @@ describe('live updates', () => {
     })
     await deliver('twake.space.updated', { ...created, name: 'Ops' })
 
-    expect(await versionOf(admin, wiki.id)).toBe(before)
+    expect(await versionOf(api, admin, wiki.id)).toBe(before)
   })
 })
 
