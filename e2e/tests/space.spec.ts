@@ -11,7 +11,7 @@ const BOB = {
 
 const wikis = (page: Page) => page.getByRole('list', { name: 'Wikis' })
 
-test("creates a space's wiki for its members, and opens it to a person added to the space", async ({
+test("creates a space's wiki for its members, and opens it read only to a viewer added to the space", async ({
   page,
   browser
 }) => {
@@ -32,4 +32,8 @@ test("creates a space's wiki for its members, and opens it to a person added to 
       timeout: 1000
     })
   }).toPass()
+
+  await wikis(bob).getByText(name, { exact: true }).click()
+  await expect(bob.getByRole('heading', { level: 1, name })).toBeVisible()
+  await expect(bob.getByRole('button', { name: 'New page' })).toHaveCount(0)
 })
