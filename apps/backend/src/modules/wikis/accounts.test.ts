@@ -88,6 +88,22 @@ const membersOf = (reader: TestUser, wikiId: string) =>
   )
 
 /**
+ * Makes the page one of the person's favorites and recent pages, and them its
+ * follower, which no route does yet.
+ */
+const favoriteOpenAndFollow = (user: TestUser, pageId: string) =>
+  inTenant(db, user, async tx => {
+    const row = {
+      pageId,
+      organizationId: user.organizationId,
+      userId: user.userId
+    }
+    await tx.insert(pageFavorites).values(row)
+    await tx.insert(pageVisits).values(row)
+    await tx.insert(pageFollowers).values(row)
+  })
+
+/**
  * What Pages keeps for the person about pages: their favorites, recent pages,
  * follows and notifications, which no route lists yet.
  */
@@ -303,16 +319,7 @@ describe.each(deletions)(
         title: 'Onboarding',
         position: 'a0'
       })
-      const kept = {
-        pageId,
-        organizationId: gone.organizationId,
-        userId: gone.userId
-      }
-      await inTenant(db, gone, async tx => {
-        await tx.insert(pageFavorites).values(kept)
-        await tx.insert(pageVisits).values(kept)
-        await tx.insert(pageFollowers).values(kept)
-      })
+      await favoriteOpenAndFollow(gone, pageId)
       await notify(db, editor, handedOn, gone)
 
       await deliver(routingKey, body(gone))
@@ -443,16 +450,9 @@ describe('a deleted organization', () => {
     const colleague = aUser({ organizationId })
     const outsider = aUser()
     const handbook = await aWiki(admin, 'Handbook', [[colleague, 'editor']])
-    // Rows only the colleague may see, which go with the wiki all the same.
-    await inTenant(db, colleague, async tx => {
-      const own = {
-        pageId: handbook.homePageId,
-        organizationId,
-        userId: colleague.userId
-      }
-      await tx.insert(pageFavorites).values(own)
-      await tx.insert(pageVisits).values(own)
-    })
+    // The colleague's favorite and recent page, which only they may see, go
+    // with the wiki all the same, as their follow does.
+    await favoriteOpenAndFollow(colleague, handbook.homePageId)
     await aSpaceWiki(db, [[colleague, 'admin']])
     const deleted = await aWiki(admin, 'Minutes', [])
     await api.as(admin).delete(`/wikis/${deleted.id}`)
