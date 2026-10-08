@@ -9,7 +9,7 @@ import { jobs } from '../../scheduler/schema.ts'
 import { aPageIn, aUser, startApp, type TestUser } from '../../testing/app.ts'
 import { wikiMembers, wikis } from '../wikis/schema.ts'
 import { purgeWiki } from '../wikis/store.ts'
-import { spaceRoutes } from './events.ts'
+import { knowsAnySpace, spaceRoutes } from './events.ts'
 
 let api: Awaited<ReturnType<typeof startApp>>
 const { sql, db } = createDb(inject('databaseUrl'))
@@ -731,5 +731,13 @@ describe('twake.space.sync.completed', () => {
     })
 
     expect(await spaceWikis(admin)).toEqual([])
+  })
+})
+
+describe('knowsAnySpace', () => {
+  it('sees the spaces of every organization', async () => {
+    await aSpaceOf(aUser())
+
+    expect(await knowsAnySpace(db)).toBe(true)
   })
 })

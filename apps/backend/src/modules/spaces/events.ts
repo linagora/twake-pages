@@ -14,7 +14,7 @@ import { z } from 'zod'
 import type { OutgoingEvent, PlatformEvent } from '../../events/envelope.ts'
 import { enqueue } from '../../events/outbox.ts'
 import { parseOrDrop, type Handler } from '../../events/router.ts'
-import { asOrganization, type Tx } from '../../infra/db.ts'
+import { asOrganization, type Db, type Tx } from '../../infra/db.ts'
 import { memberRole, wikiMembers, wikis } from '../wikis/schema.ts'
 import { addHomePage, planPurge } from '../wikis/store.ts'
 import { spaces } from './schema.ts'
@@ -56,6 +56,15 @@ const syncCompleted = z.looseObject({
 })
 
 type SpaceRef = Pick<z.infer<typeof spaceEvent>, 'organizationId' | 'id'>
+
+/** Whether any organization has a space, deleted or not. */
+export async function knowsAnySpace(db: Db): Promise<boolean> {
+  return db.transaction(async tx => {
+    await tx.execute(sql`select set_config('app.space_lookup', 'on', true)`)
+    const [row] = await tx.select({ id: spaces.id }).from(spaces).limit(1)
+    return row !== undefined
+  })
+}
 
 /** The wiki kept for the space, deleted or not. */
 async function wikiOf(tx: Tx, space: SpaceRef): Promise<string | undefined> {

@@ -6,11 +6,15 @@ import { createRelay } from './events/outbox.ts'
 import { createMessageHandler } from './events/router.ts'
 import { listenToChanges } from './infra/changes.ts'
 import { assertRowLevelSecurity, createDb, migrateDb } from './infra/db.ts'
-import { startConsumer, startPublisher } from './infra/rabbitmq.ts'
+import {
+  requestSpaceSync,
+  startConsumer,
+  startPublisher
+} from './infra/rabbitmq.ts'
 import { connectIdentityProvider } from './modules/auth/index.ts'
 import { settingsRoutes } from './modules/settings/events.ts'
 import { SETTINGS_CHANNEL } from './modules/settings/routes.ts'
-import { spaceRoutes } from './modules/spaces/events.ts'
+import { knowsAnySpace, spaceRoutes } from './modules/spaces/events.ts'
 import { WIKI_CHANNEL } from './modules/wikis/live.ts'
 import { PURGE_WIKI_JOB, purgeWiki } from './modules/wikis/store.ts'
 import { createScheduler } from './scheduler/scheduler.ts'
@@ -68,6 +72,22 @@ const consumer = await startConsumer(
     logger
   })
 )
+// A sync request fans out to every app and every space, so it is sent only
+// while no space is known, once the queue is bound to receive the answers.
+// The nightly sync repairs what a failed request misses, so it never stops
+// the start.
+if (spaces && !(await knowsAnySpace(db))) {
+  try {
+    await requestSpaceSync(
+      config.RABBITMQ_URL,
+      config.RABBITMQ_SPACE_EXCHANGE,
+      logger
+    )
+    logger.info('no space known yet, sync of every organization requested')
+  } catch (error) {
+    logger.error({ err: error }, 'space sync request failed')
+  }
+}
 const stopScheduler = createScheduler({
   db,
   logger,
