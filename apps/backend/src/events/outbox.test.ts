@@ -81,4 +81,29 @@ describe('outbox', () => {
 
     expect(sent).toContain(event.id)
   })
+
+  // So no event about a space wiki leaves before RabbitMQ takes the wiki's
+  // provisioned event, queued before them (ADR 005).
+  it('sends none of the events behind one the broker refused, then all in order', async () => {
+    const [refused, behind] = [anEvent(), anEvent()]
+    await db.transaction(tx => enqueue(tx, refused))
+    await db.transaction(tx => enqueue(tx, behind))
+    const tried: string[] = []
+    const refusing = vi.fn((event: OutgoingEvent) => {
+      tried.push(event.id)
+      return event.id === refused.id
+        ? Promise.reject(new Error('nacked'))
+        : Promise.resolve()
+    })
+
+    await drain(createRelay({ db, logger, publish: refusing }))
+    const { sent, publish } = recorder()
+    await drain(createRelay({ db, logger, publish }))
+
+    expect(tried).not.toContain(behind.id)
+    expect(sent.filter(id => [refused.id, behind.id].includes(id))).toEqual([
+      refused.id,
+      behind.id
+    ])
+  })
 })

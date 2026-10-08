@@ -8,6 +8,7 @@ import { createDb, inTenant } from '../../infra/db.ts'
 import {
   aPageIn,
   aUser,
+  createPage,
   purgeJobOf,
   startApp,
   versionOf,
@@ -512,6 +513,31 @@ describe('a space wiki through the API', () => {
     ])
     expect(await spaceWikis(admin)).toEqual([
       expect.objectContaining({ name: 'Ops' })
+    ])
+  })
+
+  // The relay sends the outbox in order and holds what follows an event
+  // RabbitMQ refuses, so no event about the wiki leaves before RabbitMQ takes
+  // its provisioned event (ADR 005).
+  it('queues the events of its pages behind its provisioned event', async () => {
+    const admin = aUser()
+    const space = await aSpaceOf(admin)
+    const wiki = await spaceWikiOf(admin)
+
+    const created = await createPage(api, admin, wiki.id, { title: 'Runbook' })
+    const queued = await db
+      .select({ type: raw<string>`${outbox.event} ->> 'type'` })
+      .from(outbox)
+      .where(
+        raw`${outbox.event} -> 'data' ->> 'space_id' = ${space.id}
+          or ${outbox.event} -> 'data' -> 'object' -> 'container' ->> 'id' = ${wiki.id}`
+      )
+      .orderBy(outbox.id)
+
+    expect(created.statusCode).toBe(201)
+    expect(queued.map(row => row.type)).toEqual([
+      'com.twake.pages.space.provisioned.v1',
+      'com.twake.pages.page.created.v1'
     ])
   })
 })

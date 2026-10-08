@@ -367,6 +367,32 @@ describe('startPublisher', () => {
       await publisher.close()
     }
   })
+
+  // A publish settles once RabbitMQ answers: the outbox relay then marks the
+  // event sent, or keeps it, and the events behind it, for its next run.
+  it('fails when RabbitMQ refuses the event', async () => {
+    const publisher = await startPublisher(
+      container.getAmqpUrl(),
+      ACTIVITY_EXCHANGE,
+      pino({ level: 'silent' })
+    )
+    await channel.assertExchange(ACTIVITY_EXCHANGE, 'topic', { durable: true })
+    // A queue that takes no message, and has RabbitMQ refuse what it cannot take.
+    const { queue } = await channel.assertQueue('', {
+      exclusive: true,
+      arguments: { 'x-max-length': 0, 'x-overflow': 'reject-publish' }
+    })
+    await channel.bindQueue(queue, ACTIVITY_EXCHANGE, 'com.twake.pages.full.#')
+
+    try {
+      await expect(
+        publisher.publish({ ...event, type: 'com.twake.pages.full.v1' })
+      ).rejects.toThrow()
+    } finally {
+      await publisher.close()
+      await channel.deleteQueue(queue)
+    }
+  })
 })
 
 describe('requestSpaceSync', () => {
