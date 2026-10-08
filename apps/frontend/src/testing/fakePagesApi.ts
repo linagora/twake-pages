@@ -647,7 +647,9 @@ function signedIn(world: World, person: Person): FakePagesApi {
       deletion: null
     }
     world.pages.set(page.id, page)
-    bump(wiki)
+    // A home page comes with its wiki, which starts at version 0 as the
+    // backend's does.
+    if (!home) bump(wiki)
     return page
   }
 

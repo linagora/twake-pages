@@ -76,6 +76,18 @@ describe('fakePagesApi', () => {
       })
     })
 
+    it('starts a new wiki at version 0, as the backend does', async () => {
+      const api = fakePagesApi()
+
+      const created = await api.createWiki({ name: 'Engineering' })
+
+      expect({
+        created: created.version,
+        seeded: api.withWiki().version,
+        personal: api.withWiki({ kind: 'personal' }).version
+      }).toEqual({ created: 0, seeded: 0, personal: 0 })
+    })
+
     it('hides a wiki from people who are no members', async () => {
       const api = fakePagesApi()
       const wiki = api.withWiki()
