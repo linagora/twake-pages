@@ -1,0 +1,282 @@
+# Twake Pages HTTP API (v1)
+
+The backend serves JSON under `/api`, like Twake Tasks (the paths below leave the prefix out), and `/health/live`, `/health/ready` at the root. Every API route but the back-channel logout needs `Authorization: Bearer <access token>`; a missing or rejected token answers `401` with no body.
+
+Ids are UUIDv7 strings. Times are ISO 8601 strings in UTC. Bodies are validated with zod: a malformed id in the path answers `404 { error: 'not_found' }`, a malformed body `400 { error: 'invalid_request' }`.
+
+A refusal answers `{ error: <Refusal> }` with its status:
+
+| Refusal | Status | When |
+|---|---|---|
+| `not_found` | 404 | the wiki, page, comment, label or version does not exist, or the person cannot see it |
+| `forbidden` | 403 | the person's role does not allow it |
+| `managed` | 409 | members or name of a space's wiki, or sharing a personal wiki |
+| `home_page` | 409 | moving or deleting the home page |
+| `invalid_parent` | 400 | the parent is not a live page of the same wiki, or is the page itself or one of its descendants |
+| `stale_neighbours` | 409 | `afterId` or `beforeId` is not a live sibling under the given parent |
+| `edit_conflict` | 409 | publishing from a version older than the current one (body below) |
+| `invalid_content` | 400 | blocks too large (over 2 MiB of JSON), a link that is not `http:`, `https:` or `mailto:`, or a Grist address outside `GRIST_ORIGINS` |
+| `invalid_grist_url` | 400 | a database page address outside `GRIST_ORIGINS` |
+| `not_in_trash` | 409 | restoring or purging a page that is not the root of a deleted branch |
+| `in_trash` | 409 | publishing, moving, labelling or commenting a deleted page |
+| `last_admin` | 409 | removing or demoting the last admin of a shared wiki |
+| `not_same_organization` | 400 | sharing outside the organization (B2B), or with a B2B email from B2C |
+| `invalid_label` | 400 | a label name that is not 1 to 50 letters, digits, `-` or `_` |
+
+## Types
+
+```ts
+type Role = 'viewer' | 'editor' | 'admin'
+type WikiKind = 'personal' | 'shared' | 'space'
+type PageKind = 'document' | 'database'
+type Block = Record<string, unknown> // a BlockNote block, stored as sent
+
+interface Person { id: string; email: string; name: string | null }
+
+interface WikiSummary {
+  id: string
+  name: string
+  description: string
+  kind: WikiKind
+  role: Role
+  homePageId: string
+  unread: number // the person's unread notifications about pages of this wiki
+}
+
+interface Wiki extends WikiSummary {
+  version: number // live updates version
+}
+
+interface TreePage {
+  id: string
+  parentId: string | null // null at the top of the tree
+  position: string // fractional key, compare with < on strings
+  title: string
+  kind: PageKind
+}
+
+interface Page {
+  id: string
+  wikiId: string
+  parentId: string | null
+  home: boolean
+  kind: PageKind
+  title: string
+  content: Block[] // [] for a database page
+  gristUrl: string | null // set for a database page
+  version: number // number of the current version, from 1
+  createdAt: string
+  createdBy: Person
+  updatedAt: string // time of the current version
+  updatedBy: Person // author of the current version
+  labels: string[] // label names, sorted
+  ancestors: { id: string; title: string }[] // from the top of the tree down to the parent
+  following: boolean
+  favorite: boolean
+  deletedAt: string | null
+}
+
+interface VersionSummary {
+  number: number
+  title: string
+  author: Person
+  createdAt: string
+  restoredFrom: number | null
+}
+
+interface Version extends VersionSummary {
+  content: Block[]
+  gristUrl: string | null
+}
+
+interface Member extends Person { role: Role; joinedAt: string }
+interface Invite { id: string; email: string; role: Role; createdAt: string }
+
+interface Comment {
+  id: string
+  parentId: string | null // replies are one level deep
+  author: Person
+  body: string // plain text, mentions written @email
+  createdAt: string
+  editedAt: string | null
+}
+
+type NotificationReason = 'published' | 'commented' | 'mentioned'
+
+interface Notification {
+  id: string
+  reason: NotificationReason
+  page: { id: string; title: string }
+  wiki: { id: string; name: string }
+  actor: Person
+  version: number | null // for published
+  commentId: string | null // for commented and mentioned
+  createdAt: string
+  readAt: string | null
+}
+
+interface PageRef { id: string; title: string; wiki: { id: string; name: string } }
+
+interface SearchResult {
+  page: PageRef
+  // Plain text around the words found, each found word between U+E000 and U+E001.
+  excerpt: string
+  updatedAt: string
+}
+
+interface TrashEntry {
+  id: string // root of the deleted branch
+  title: string
+  deletedAt: string
+  deletedBy: Person
+  descendants: number // pages deleted with it
+}
+```
+
+## Wikis
+
+| Method and path | Body | Answer | Who |
+|---|---|---|---|
+| `GET /wikis` | | `{ wikis: WikiSummary[] }`, personal first, then by name. Creates the personal wiki on first call. | anyone |
+| `POST /wikis` | `{ name, description? }` | `201 Wiki`, kind `shared`, the creator admin, with an empty home page titled after the wiki | anyone |
+| `GET /wikis/:wikiId` | | `Wiki` | member |
+| `PATCH /wikis/:wikiId` | `{ name?, description? }` | `Wiki`; `managed` for the name of a space's wiki | admin |
+| `DELETE /wikis/:wikiId` | | `204`; `managed` for a personal or space wiki | admin |
+| `GET /wikis/:wikiId/tree` | | `{ version, pages: TreePage[] }`, live pages only, home page excluded | member |
+| `GET /wikis/:wikiId/stream` | | `text/event-stream`, see Live updates | member |
+
+`name` is 1 to 100 characters, trimmed; `description` at most 500.
+
+## Sharing
+
+| Method and path | Body | Answer | Who |
+|---|---|---|---|
+| `GET /wikis/:wikiId/members` | | `{ members: Member[], invites: Invite[], managed: boolean }` | member (invites: admin only, else `[]`) |
+| `POST /wikis/:wikiId/invites` | `{ email, role }` | `202 { status: 'invited' }`, whether the email has an account or not | admin, shared wiki |
+| `DELETE /wikis/:wikiId/invites/:inviteId` | | `204` | admin |
+| `PATCH /wikis/:wikiId/members/:userId` | `{ role }` | `204` | admin, shared wiki |
+| `DELETE /wikis/:wikiId/members/:userId` | | `204`; a member may remove themself | admin, shared wiki |
+| `GET /people?q=` | | `{ people: { email, name }[] }`, at most 10, same organization; `[]` in B2C | anyone |
+
+## Pages
+
+| Method and path | Body | Answer | Who |
+|---|---|---|---|
+| `POST /wikis/:wikiId/pages` | `NewPage` | `201 Page`, version 1, the creator follows it | editor |
+| `GET /pages/:pageId` | | `Page`; records the visit for Recent | member |
+| `POST /pages/:pageId/versions` | `{ baseVersion, title, content }` or, for a database page, `{ baseVersion, title, gristUrl }` | `201 Page`, the author follows it; `409 { error: 'edit_conflict', current: VersionSummary }` | editor |
+| `GET /pages/:pageId/versions` | | `{ versions: VersionSummary[] }`, newest first | member |
+| `GET /pages/:pageId/versions/:number` | | `Version` | member |
+| `POST /pages/:pageId/versions/:number/restore` | | `201 Page`, a new version with `restoredFrom` | editor |
+| `POST /pages/:pageId/move` | `{ parentId, afterId?, beforeId? }` | `{ parentId, position }` | editor |
+| `DELETE /pages/:pageId` | | `204`, the page and its live descendants go to the trash | editor |
+| `PUT /pages/:pageId/labels` | `{ names: string[] }` | `{ labels: string[] }`, creating missing labels in the wiki | editor |
+| `PUT /pages/:pageId/follow` / `DELETE` | | `204` | member |
+| `PUT /pages/:pageId/favorite` / `DELETE` | | `204` | member |
+
+```ts
+interface NewPage {
+  title: string // 1 to 200 characters, trimmed
+  kind: PageKind
+  parentId: string | null
+  afterId?: string // place after this sibling; default: last
+  beforeId?: string
+  content?: Block[] // document: the template's blocks, default []
+  gristUrl?: string // database: required
+}
+```
+
+`title` is 1 to 200 characters, trimmed. `content` is an array of BlockNote blocks. The server checks its size and links (see `invalid_content`) and keeps a plain text copy, but never rewrites it.
+
+## Trash
+
+| Method and path | Answer | Who |
+|---|---|---|
+| `GET /wikis/:wikiId/trash` | `{ pages: TrashEntry[] }`, newest first | member |
+| `POST /pages/:pageId/restore` | `{ parentId, position }`: under its parent if live, else at the top, last | editor |
+| `DELETE /wikis/:wikiId/trash/:pageId` | `204`, the branch is deleted for good | admin |
+| `DELETE /wikis/:wikiId/trash` | `204`, every branch is deleted for good | admin |
+
+## Labels
+
+| Method and path | Answer | Who |
+|---|---|---|
+| `GET /wikis/:wikiId/labels` | `{ labels: { name: string; pages: number }[] }`, by name | member |
+| `GET /wikis/:wikiId/labels/:name/pages` | `{ pages: { id, title, updatedAt }[] }`, live pages, by title | member |
+
+A label name is trimmed and lowercased, 1 to 50 letters, digits, `-` or `_`. A label no page uses any more is deleted.
+
+## Comments
+
+| Method and path | Body | Answer | Who |
+|---|---|---|---|
+| `GET /pages/:pageId/comments` | | `{ comments: Comment[] }`, oldest first | member |
+| `POST /pages/:pageId/comments` | `{ body, parentId? }` | `201 Comment`; the author follows the page | member |
+| `PATCH /comments/:commentId` | `{ body }` | `Comment` | its author |
+| `DELETE /comments/:commentId` | | `204`, with its replies | its author, or an admin |
+
+`body` is 1 to 10 000 characters, trimmed. `parentId` names a comment of the same page that is not itself a reply. `@email` of a member of the wiki mentions them: they follow the page and get a `mentioned` notification; an email that is no member's is left as text.
+
+## Following and notifications
+
+Notifications are never sent to the person who acted, nor to people who are no longer members.
+
+- Publishing (version 2 and later, restores included): `published` to followers.
+- A comment: `commented` to followers, and `mentioned` instead to the people it mentions.
+
+| Method and path | Body | Answer |
+|---|---|---|
+| `GET /notifications` | | `{ notifications: Notification[], unread: number }`, newest first, at most 100 |
+| `POST /notifications/read` | `{ ids: string[] }` or `{ all: true }` or `{ wikiId }` | `204` |
+| `GET /badges` | | `{ badges: { wikiId: string; count: number }[] }`, unread per wiki, only counts above 0 |
+
+## Finding
+
+| Method and path | Answer |
+|---|---|
+| `GET /favorites` | `{ pages: PageRef[] }`, live pages, most recently marked first |
+| `GET /recent` | `{ pages: (PageRef & { visitedAt: string })[] }`, live pages, at most 20 |
+| `GET /search?q=&wikiId=` | `{ results: SearchResult[] }`, at most 50, best first; `q` 1 to 200 characters; without `wikiId`, every wiki of the person |
+
+## Settings and health
+
+| Method and path | Answer |
+|---|---|
+| `GET /settings` | `{ language, timezone, theme }` from the common settings, as in Twake Tasks |
+| `GET /health/live`, `GET /health/ready` | `{ status }` |
+
+## Live updates
+
+`GET /wikis/:wikiId/stream` sends `event: version` with `id: <version>` and `data: {"version": <n>}` each time the wiki's version moves: a page created, published, moved, deleted, restored or purged, labels changed, a comment written, edited or deleted, a member or invite changed, the wiki renamed. The client reloads what it shows of that wiki. A first message carries the current version, and a keep-alive comment goes out every 25 seconds.
+
+## Activity events
+
+Published on the `activity` exchange through the outbox, as `com.twake.pages.page.<action>.v1`, `source: 'twake://pages'`:
+
+```json
+{
+  "specversion": "1.0",
+  "id": "<uuidv7>",
+  "source": "twake://pages",
+  "type": "com.twake.pages.page.published.v1",
+  "time": "2026-10-08T07:30:00.000000Z",
+  "twakeorg": "acme",
+  "twakeactorid": "<uuid>",
+  "twakeactor": "alice@acme.example",
+  "data": {
+    "object": {
+      "type": "page",
+      "id": "<page id>",
+      "title": "Release checklist",
+      "container": { "kind": "wiki", "id": "<wiki id>" }
+    },
+    "version": 4,
+    "preview": "First 280 characters of the text..."
+  }
+}
+```
+
+- `created` (with `data.preview`), `moved` (`data.from` and `data.to` parent ids, null at the top), `deleted` and `restored` (`data.descendants`).
+- `published` for every version after the first, with `data.version` and `data.preview`.
+- `commented` with `data.commentId`, `data.preview` (the comment), and `data.recipients` for the people mentioned: `{ uuid, email, reason: 'mentioned' }`.
+- The space integration publishes `com.twake.pages.space.provisioned.v1` with `data: { space_id, resource: { kind: 'wiki', id } }`.
