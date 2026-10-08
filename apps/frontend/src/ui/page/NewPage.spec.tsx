@@ -123,11 +123,16 @@ describe('a new page', () => {
   })
 })
 
-/** The headings of the blocks of the open page, one level below its title. */
-const sections = () =>
-  within(screen.getByRole('main'))
-    .getAllByRole('heading', { level: 2 })
-    .map(heading => heading.textContent)
+/**
+ * The headings of the blocks of the open page, one level below its title,
+ * once BlockNote shows them.
+ */
+const findSections = async () =>
+  (
+    await within(screen.getByRole('main')).findAllByRole('heading', {
+      level: 2
+    })
+  ).map(heading => heading.textContent)
 
 describe('the template of a new page', () => {
   it('is one of six, blank unless another is chosen', async () => {
@@ -166,7 +171,7 @@ describe('the template of a new page', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Create' }))
 
     await screen.findByRole('heading', { level: 1, name: 'Onboarding' })
-    expect(sections()).toEqual(titles)
+    expect(await findSections()).toEqual(titles)
   })
 
   it('is written in the language of the person', async () => {
@@ -181,7 +186,7 @@ describe('the template of a new page', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Créer' }))
 
     await screen.findByRole('heading', { level: 1, name: 'Arrivée' })
-    expect(sections()).toEqual([
+    expect(await findSections()).toEqual([
       'Avant de commencer',
       'Étapes',
       'En cas de problème'

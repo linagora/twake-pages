@@ -89,7 +89,7 @@ describe('a wiki open in two places', () => {
     expect(
       await screen.findByRole('heading', { level: 1, name: 'Welcome' })
     ).toBeVisible()
-    expect(screen.getByText('Read this first.')).toBeVisible()
+    expect(await screen.findByText('Read this first.')).toBeVisible()
   })
 
   it('shows the name and description given elsewhere', async () => {

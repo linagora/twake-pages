@@ -12,11 +12,16 @@ import type { SessionService } from '@/application/session'
 import { AppProviders } from '@/app/AppProviders'
 import { makeQueryClient } from '@/app/queryClient'
 import { routes } from '@/app/routes'
+import { blockNoteChunk } from '@/ds/blockNoteChunk'
 import { fakePagesApi } from '@/testing/fakePagesApi'
 import { fakeSession } from '@/testing/fakeSession'
 import type { SupportedLanguage } from '@/ui/i18n/languages'
 import { PagesApiProvider } from '@/ui/PagesApiProvider'
 import { SessionGate } from '@/ui/session/SessionGate'
+
+// BlockNote loads in its own chunk the first time a page shows its blocks.
+// Loaded with these helpers, its import stays out of the time findBy waits.
+await Promise.all(Object.values(blockNoteChunk).map(load => load()))
 
 interface Options {
   lang?: SupportedLanguage

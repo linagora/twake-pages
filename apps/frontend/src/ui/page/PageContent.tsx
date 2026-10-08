@@ -13,5 +13,5 @@ export function PageContent({ page }: { page: Page }): ReactElement | null {
   if (page.content.length === 0) {
     return <Typography color="textSecondary">{t('page.empty')}</Typography>
   }
-  return <Blocks blocks={page.content} />
+  return <Blocks blocks={page.content} loadingLabel={t('app.loading')} />
 }
