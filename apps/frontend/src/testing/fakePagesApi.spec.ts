@@ -1381,6 +1381,41 @@ describe('fakePagesApi', () => {
       )
     })
 
+    it('reads the text of table cells and captions, as the backend keeps it', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki()
+      api.withPage(wiki.id, {
+        title: 'Onboarding',
+        content: [
+          {
+            type: 'table',
+            content: {
+              type: 'tableContent',
+              rows: [
+                {
+                  cells: [
+                    { type: 'tableCell', content: paragraph('Laptop').content },
+                    { type: 'tableCell', content: paragraph('Badge').content }
+                  ]
+                }
+              ]
+            },
+            children: []
+          },
+          {
+            type: 'image',
+            props: { url: 'https://example.com/desk.png', caption: 'A desk' },
+            children: []
+          }
+        ]
+      })
+      const excerpt = async (query: string) =>
+        (await api.search(query))[0]?.excerpt
+
+      expect(await excerpt('badge')).toBe(`Laptop ${found('Badge')} A desk`)
+      expect(await excerpt('desk')).toBe(`Laptop Badge A ${found('desk')}`)
+    })
+
     it('searches every wiki of the person, or one of them', async () => {
       const api = fakePagesApi()
       const handbook = api.withWiki({ name: 'Handbook' })

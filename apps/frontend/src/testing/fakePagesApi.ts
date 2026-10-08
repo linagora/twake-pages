@@ -210,28 +210,51 @@ const isFields = (value: unknown): value is Fields =>
 
 const isList = (value: unknown): value is unknown[] => Array.isArray(value)
 
-function inlineText(value: unknown): string {
-  if (Array.isArray(value)) return value.map(inlineText).join('')
-  if (typeof value !== 'object' || value === null) return ''
-  if ('text' in value && typeof value.text === 'string') return value.text
-  return 'content' in value ? inlineText(value.content) : ''
+// Styled text and the text of a link, or plain strings, which BlockNote takes
+// for short.
+function inlineText(content: unknown): string {
+  if (typeof content === 'string') return content
+  if (!isList(content)) return ''
+  return content
+    .map(item => {
+      if (typeof item === 'string') return item
+      if (!isFields(item)) return ''
+      return typeof item.text === 'string'
+        ? item.text
+        : inlineText(item.content)
+    })
+    .join('')
 }
 
-function plainText(blocks: unknown[]): string {
-  return blocks
-    .flatMap(block => {
-      if (typeof block !== 'object' || block === null) return []
-      const { content, children } = block as {
-        content?: unknown
-        children?: unknown
+function addLines(block: unknown, lines: string[]) {
+  if (!isFields(block)) return
+  const { content, props, children } = block
+  if (isFields(content) && isList(content.rows)) {
+    for (const row of content.rows) {
+      const cells = isFields(row) && isList(row.cells) ? row.cells : []
+      for (const cell of cells) {
+        lines.push(inlineText(isFields(cell) ? cell.content : cell))
       }
-      return [
-        inlineText(content),
-        Array.isArray(children) ? plainText(children) : ''
-      ]
-    })
-    .filter(line => line !== '')
-    .join('\n')
+    }
+  } else {
+    lines.push(inlineText(content))
+  }
+  if (isFields(props) && typeof props.caption === 'string') {
+    lines.push(props.caption)
+  }
+  if (isList(children)) {
+    for (const child of children) addLines(child, lines)
+  }
+}
+
+/**
+ * The text of the blocks as the backend keeps it: a line per block, per table
+ * cell and per caption.
+ */
+function plainText(blocks: unknown[]): string {
+  const lines: string[] = []
+  for (const block of blocks) addLines(block, lines)
+  return lines.filter(line => line.trim() !== '').join('\n')
 }
 
 // ADR012: the last word typed matches as a prefix.
