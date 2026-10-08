@@ -7,6 +7,7 @@ import {
   type PagesApi,
   type Sharing
 } from '@/application/pages'
+import type { Comment } from '@/domain/comment'
 import type {
   Page,
   TrashEntry,
@@ -139,6 +140,14 @@ const labelledPage = {
   id: 'p1',
   title: 'Onboarding',
   updatedAt: '2026-10-08T07:40:00.000Z'
+}
+const comment: Comment = {
+  id: 'c1',
+  parentId: 'c0',
+  author: alice,
+  body: 'Thanks @bob@example.com',
+  createdAt: '2026-10-08T07:45:00.000Z',
+  editedAt: null
 }
 
 interface Exchange {
@@ -386,6 +395,37 @@ const exchanges: Record<string, Exchange> = {
     path: '/wikis/w1/labels/caf%C3%A9/pages',
     answer: { pages: [labelledPage] },
     resolves: [labelledPage]
+  },
+  listComments: {
+    call: api => api.listComments('p1'),
+    method: 'GET',
+    path: '/pages/p1/comments',
+    answer: { comments: [comment] },
+    resolves: [comment]
+  },
+  addComment: {
+    call: api =>
+      api.addComment('p1', { body: 'Thanks @bob@example.com', parentId: 'c0' }),
+    method: 'POST',
+    path: '/pages/p1/comments',
+    body: { body: 'Thanks @bob@example.com', parentId: 'c0' },
+    status: 201,
+    answer: comment,
+    resolves: comment
+  },
+  editComment: {
+    call: api => api.editComment('c1', 'Thanks @bob@example.com'),
+    method: 'PATCH',
+    path: '/comments/c1',
+    body: { body: 'Thanks @bob@example.com' },
+    answer: comment,
+    resolves: comment
+  },
+  deleteComment: {
+    call: api => api.deleteComment('c1'),
+    method: 'DELETE',
+    path: '/comments/c1',
+    status: 204
   }
 }
 

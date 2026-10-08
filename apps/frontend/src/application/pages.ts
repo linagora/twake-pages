@@ -1,3 +1,4 @@
+import type { Comment } from '@/domain/comment'
 import type {
   Block,
   Page,
@@ -94,6 +95,13 @@ export interface LabelledPage {
   updatedAt: string
 }
 
+export interface NewComment {
+  /** 1 to 10 000 characters, trimmed; `@email` mentions a member. */
+  body: string
+  /** The comment it answers, on the same page and no reply itself. */
+  parentId?: string
+}
+
 /** Why the backend refused a request: the `error` of its answer. */
 export type Refusal =
   | 'not_found'
@@ -180,6 +188,15 @@ export interface PagesApi {
   listLabels: (wikiId: string) => Promise<Label[]>
   /** The live pages carrying the label, by title. */
   pagesWithLabel: (wikiId: string, name: string) => Promise<LabelledPage[]>
+
+  /** Oldest first, replies among them. */
+  listComments: (pageId: string) => Promise<Comment[]>
+  /** Member; its author and the members it mentions follow the page. */
+  addComment: (pageId: string, comment: NewComment) => Promise<Comment>
+  /** Its author only. */
+  editComment: (commentId: string, body: string) => Promise<Comment>
+  /** Its author or an admin; its replies go with it. */
+  deleteComment: (commentId: string) => Promise<void>
 }
 
 export class ApiError extends Error {

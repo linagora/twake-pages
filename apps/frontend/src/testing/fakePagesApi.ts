@@ -7,6 +7,7 @@ import {
   type Refusal,
   type UserSettings
 } from '@/application/pages'
+import { mentionsIn, type Comment } from '@/domain/comment'
 import type {
   Block,
   Page,
@@ -163,10 +164,15 @@ interface Deletion {
   by: Person
 }
 
+interface StoredComment extends Comment {
+  pageId: string
+}
+
 interface World {
   people: Map<string, Person>
   wikis: Map<string, StoredWiki>
   pages: Map<string, StoredPage>
+  comments: Map<string, StoredComment>
   watchers: Map<string, Set<(version: number) => void>>
   apis: Map<string, FakePagesApi>
 }
@@ -266,12 +272,29 @@ const summaryOfVersion = ({
   restoredFrom
 })
 
+const commentFor = ({
+  id,
+  parentId,
+  author,
+  body,
+  createdAt,
+  editedAt
+}: StoredComment): Comment => ({
+  id,
+  parentId,
+  author,
+  body,
+  createdAt,
+  editedAt
+})
+
 /** The fake backend, signed in as Alice Martin, the person of fakeSession. */
 export function fakePagesApi(): FakePagesApi {
   const world: World = {
     people: new Map(),
     wikis: new Map(),
     pages: new Map(),
+    comments: new Map(),
     watchers: new Map(),
     apis: new Map()
   }
@@ -319,6 +342,20 @@ function signedIn(world: World, person: Person): FakePagesApi {
     const found = pageAccess(pageId, needed)
     if (found.page.deletion) throw refuse('in_trash')
     return found
+  }
+
+  const commentAccess = (commentId: string) => {
+    const comment = world.comments.get(commentId)
+    if (!comment) throw refuse('not_found')
+    return { comment, ...pageAccess(comment.pageId) }
+  }
+
+  // The members a comment mentions; other emails are mere text.
+  const mentionedIn = (wiki: StoredWiki, body: string) => {
+    const emails = mentionsIn(body)
+    return [...wiki.members.values()]
+      .map(member => member.person)
+      .filter(member => emails.includes(member.email))
   }
 
   const bump = (wiki: StoredWiki) => {
@@ -916,6 +953,71 @@ function signedIn(world: World, person: Person): FakePagesApi {
             return { id: page.id, title, updatedAt: createdAt }
           })
           .sort((a, b) => byName(a.title, b.title))
+      })
+    ),
+
+    listComments: vi.fn<PagesApi['listComments']>(pageId =>
+      answer(() => {
+        const { page } = pageAccess(pageId)
+        return [...world.comments.values()]
+          .filter(comment => comment.pageId === page.id)
+          .sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1))
+          .map(commentFor)
+      })
+    ),
+    addComment: vi.fn<PagesApi['addComment']>((pageId, input) =>
+      answer(() => {
+        const body = text(input.body, 10_000)
+        const { page, wiki } = liveAccess(pageId, 'viewer')
+        const parentId = input.parentId ?? null
+        if (parentId !== null) {
+          const parent = world.comments.get(parentId)
+          if (parent?.pageId !== page.id || parent.parentId !== null) {
+            throw refuse('invalid_request')
+          }
+        }
+        const comment: StoredComment = {
+          id: nextId(),
+          pageId: page.id,
+          parentId,
+          author: { ...person },
+          body,
+          createdAt: now(),
+          editedAt: null
+        }
+        world.comments.set(comment.id, comment)
+        page.followers.add(person.id)
+        for (const member of mentionedIn(wiki, body)) {
+          page.followers.add(member.id)
+        }
+        bump(wiki)
+        return commentFor(comment)
+      })
+    ),
+    editComment: vi.fn<PagesApi['editComment']>((commentId, body) =>
+      answer(() => {
+        const edited = text(body, 10_000)
+        const { comment, page, wiki } = commentAccess(commentId)
+        if (comment.author.id !== person.id) throw refuse('forbidden')
+        if (page.deletion) throw refuse('in_trash')
+        comment.body = edited
+        comment.editedAt = now()
+        bump(wiki)
+        return commentFor(comment)
+      })
+    ),
+    deleteComment: vi.fn<PagesApi['deleteComment']>(commentId =>
+      answer(() => {
+        const { comment, wiki, role } = commentAccess(commentId)
+        if (comment.author.id !== person.id && role !== 'admin') {
+          throw refuse('forbidden')
+        }
+        for (const each of world.comments.values()) {
+          if (each === comment || each.parentId === comment.id) {
+            world.comments.delete(each.id)
+          }
+        }
+        bump(wiki)
       })
     )
   }

@@ -757,6 +757,9 @@ describe('fakePagesApi', () => {
         inTrash
       )
       await expect(
+        api.addComment(onboarding.id, { body: 'Hello' })
+      ).rejects.toEqual(inTrash)
+      await expect(
         api.createPage(wiki.id, {
           title: 'Laptop',
           kind: 'document',
@@ -829,6 +832,112 @@ describe('fakePagesApi', () => {
       await expect(api.pagesWithLabel(wiki.id, 'howto')).rejects.toEqual(
         new ApiError(404, 'not_found')
       )
+    })
+  })
+
+  describe('comments', () => {
+    it('lists the comments of a page oldest first, replies among them', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki({ members: { 'bob@example.com': 'viewer' } })
+      const page = api.withPage(wiki.id)
+      const bob = api.signedInAs('bob@example.com', 'Bob Stone')
+
+      const question = await bob.addComment(page.id, {
+        body: ' Where is the VPN guide? '
+      })
+      await api.addComment(page.id, {
+        body: 'Under Laptop.',
+        parentId: question.id
+      })
+      await bob.addComment(page.id, { body: 'Thanks!' })
+
+      const comments = await api.listComments(page.id)
+      expect(
+        comments.map(each => [each.body, each.parentId, each.author.email])
+      ).toEqual([
+        ['Where is the VPN guide?', null, 'bob@example.com'],
+        ['Under Laptop.', question.id, 'alice@example.com'],
+        ['Thanks!', null, 'bob@example.com']
+      ])
+    })
+
+    it('answers comments one level deep, on their page', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki()
+      const page = api.withPage(wiki.id)
+      const other = api.withPage(wiki.id)
+      const question = await api.addComment(page.id, { body: 'Question' })
+      const reply = await api.addComment(page.id, {
+        body: 'Answer',
+        parentId: question.id
+      })
+      const invalid = new ApiError(400, 'invalid_request')
+
+      await expect(
+        api.addComment(page.id, { body: 'Reply', parentId: reply.id })
+      ).rejects.toEqual(invalid)
+      await expect(
+        api.addComment(other.id, { body: 'Reply', parentId: question.id })
+      ).rejects.toEqual(invalid)
+      await expect(api.addComment(page.id, { body: '  ' })).rejects.toEqual(
+        invalid
+      )
+    })
+
+    it('makes its author and the members it mentions follow the page', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki({
+        members: { 'bob@example.com': 'viewer', 'carol@example.com': 'viewer' }
+      })
+      const page = api.withPage(wiki.id)
+      const bob = api.signedInAs('bob@example.com')
+      const carol = api.signedInAs('carol@example.com')
+
+      await bob.addComment(page.id, {
+        body: 'Ask @Carol@example.com or @dan@example.com'
+      })
+
+      await expect(bob.getPage(page.id)).resolves.toMatchObject({
+        following: true
+      })
+      await expect(carol.getPage(page.id)).resolves.toMatchObject({
+        following: true
+      })
+    })
+
+    it('lets only its author edit a comment', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki({ members: { 'bob@example.com': 'editor' } })
+      const page = api.withPage(wiki.id)
+      const comment = await api.addComment(page.id, { body: 'Draft' })
+
+      await expect(
+        api.signedInAs('bob@example.com').editComment(comment.id, 'Mine')
+      ).rejects.toEqual(new ApiError(403, 'forbidden'))
+      const edited = await api.editComment(comment.id, ' Final ')
+
+      expect(edited).toMatchObject({ id: comment.id, body: 'Final' })
+      expect(edited.editedAt).not.toBeNull()
+    })
+
+    it('deletes a comment with its replies, for its author or an admin', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki({
+        members: { 'bob@example.com': 'editor', 'carol@example.com': 'viewer' }
+      })
+      const page = api.withPage(wiki.id)
+      const bob = api.signedInAs('bob@example.com')
+      const question = await bob.addComment(page.id, { body: 'Question' })
+      await api.addComment(page.id, { body: 'Answer', parentId: question.id })
+      const remark = await bob.addComment(page.id, { body: 'Remark' })
+
+      await expect(
+        api.signedInAs('carol@example.com').deleteComment(remark.id)
+      ).rejects.toEqual(new ApiError(403, 'forbidden'))
+      await bob.deleteComment(remark.id)
+      await api.deleteComment(question.id)
+
+      await expect(api.listComments(page.id)).resolves.toEqual([])
     })
   })
 })

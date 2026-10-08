@@ -6,6 +6,7 @@ import {
   type PagesApi,
   type PersonMatch
 } from '@/application/pages'
+import type { Comment } from '@/domain/comment'
 import type { TrashEntry, VersionSummary } from '@/domain/page'
 import type { WikiSummary } from '@/domain/wiki'
 
@@ -173,6 +174,16 @@ export function httpPagesApi(baseUrl: string, send: Send): PagesApi {
       call<{ pages: LabelledPage[] }>(
         'GET',
         `/wikis/${wikiId}/labels/${encodeURIComponent(name)}/pages`
-      ).then(({ pages }) => pages)
+      ).then(({ pages }) => pages),
+
+    listComments: pageId =>
+      call<{ comments: Comment[] }>('GET', `/pages/${pageId}/comments`).then(
+        ({ comments }) => comments
+      ),
+    addComment: (pageId, comment) =>
+      call('POST', `/pages/${pageId}/comments`, comment),
+    editComment: (commentId, body) =>
+      call('PATCH', `/comments/${commentId}`, { body }),
+    deleteComment: commentId => call('DELETE', `/comments/${commentId}`)
   }
 }
