@@ -119,39 +119,39 @@ describe('inTenant', () => {
   })
 })
 
-function aWikiRow(owner: TestUser) {
+function aWikiRow(creator: TestUser) {
   return {
-    organizationId: owner.organizationId,
+    organizationId: creator.organizationId,
     name: 'Secret',
     kind: 'shared',
-    createdBy: owner.userId
+    createdBy: creator.userId
   } as const
 }
 
-async function aWikiOf(owner: TestUser) {
-  return inTenant(db, owner, async tx => {
+async function aWikiOf(admin: TestUser) {
+  return inTenant(db, admin, async tx => {
     const [wiki] = await tx
       .insert(wikis)
-      .values(aWikiRow(owner))
+      .values(aWikiRow(admin))
       .returning({ id: wikis.id })
     if (!wiki) throw new Error('no wiki')
     await tx.insert(wikiMembers).values({
       wikiId: wiki.id,
-      organizationId: owner.organizationId,
-      userId: owner.userId,
-      email: owner.email,
+      organizationId: admin.organizationId,
+      userId: admin.userId,
+      email: admin.email,
       role: 'admin'
     })
     const [page] = await tx
       .insert(pages)
       .values({
         wikiId: wiki.id,
-        organizationId: owner.organizationId,
+        organizationId: admin.organizationId,
         kind: 'document',
         title: 'Plans',
         position: 'a0',
-        createdBy: owner.userId,
-        updatedBy: owner.userId
+        createdBy: admin.userId,
+        updatedBy: admin.userId
       })
       .returning({ id: pages.id })
     if (!page) throw new Error('no page')
@@ -361,12 +361,12 @@ describe('tenant foreign keys', () => {
   it.each(Object.entries(stray))(
     'refuses a row in %s that points into another tenant',
     async (table, insert) => {
-      const owner = aUser()
-      const { wikiId, pageId } = await aWikiOf(owner)
-      const [label] = await inTenant(db, owner, tx =>
+      const admin = aUser()
+      const { wikiId, pageId } = await aWikiOf(admin)
+      const [label] = await inTenant(db, admin, tx =>
         tx
           .insert(labels)
-          .values({ wikiId, organizationId: owner.organizationId, name: 'ops' })
+          .values({ wikiId, organizationId: admin.organizationId, name: 'ops' })
           .returning({ id: labels.id })
       )
 

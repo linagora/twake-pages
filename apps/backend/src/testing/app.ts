@@ -36,18 +36,18 @@ export function aB2cUser(): TestUser {
   return aUser({ organizationId: null })
 }
 
-/** Adds the person to the owner's wiki, as sharing will. */
+/** Adds the person to the wiki, as its admin will by sharing it. */
 export async function joinWiki(
   db: Db,
-  owner: TestUser,
+  admin: TestUser,
   wikiId: string,
   user: TestUser,
   role: Role
 ) {
-  await inTenant(db, owner, tx =>
+  await inTenant(db, admin, tx =>
     tx.insert(wikiMembers).values({
       wikiId,
-      organizationId: owner.organizationId,
+      organizationId: admin.organizationId,
       userId: user.userId,
       email: user.email,
       role

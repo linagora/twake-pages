@@ -279,8 +279,9 @@ CREATE POLICY "tenant" ON "wiki_invites" AS PERMISSIVE FOR ALL TO public USING (
 CREATE POLICY "tenant" ON "wiki_members" AS PERMISSIVE FOR ALL TO public USING ("wiki_members"."org_id" is not distinct from nullif(current_setting('app.org_id', true), '') and ("wiki_members"."org_id" is not null or current_setting('app.membership_lookup', true) = 'on' or exists (select 1 from "wikis" where "wikis"."id" = "wiki_members"."wiki_id"))) WITH CHECK ("wiki_members"."org_id" is not distinct from nullif(current_setting('app.org_id', true), '') and ("wiki_members"."org_id" is not null or current_setting('app.membership_lookup', true) = 'on' or exists (select 1 from "wikis" where "wikis"."id" = "wiki_members"."wiki_id")));--> statement-breakpoint
 CREATE POLICY "tenant" ON "wikis" AS PERMISSIVE FOR ALL TO public USING ("wikis"."org_id" is not distinct from nullif(current_setting('app.org_id', true), '') and ("wikis"."org_id" is not null or "wikis"."created_by" = nullif(current_setting('app.user_id', true), '')::uuid or "wikis"."id" = any((select app_member_wiki_ids())::uuid[]))) WITH CHECK ("wikis"."org_id" is not distinct from nullif(current_setting('app.org_id', true), '') and ("wikis"."org_id" is not null or "wikis"."created_by" = nullif(current_setting('app.user_id', true), '')::uuid or "wikis"."id" = any((select app_member_wiki_ids())::uuid[])));--> statement-breakpoint
 -- Turns the signed-in person's invites in their tenant into memberships. A B2C
--- guest cannot see the wiki yet, so the insert runs under app.membership_lookup
--- (see app_member_wiki_ids); the invites policy still keeps it to their tenant.
+-- person cannot see a wiki before joining it, so the insert runs under
+-- app.membership_lookup (see app_member_wiki_ids); the invites policy still
+-- keeps it to their tenant.
 CREATE FUNCTION app_claim_invites() RETURNS void
   LANGUAGE plpgsql
 AS $$

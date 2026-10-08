@@ -6,7 +6,7 @@ import { wikiMembers, wikis } from './schema.ts'
 export type Role = 'viewer' | 'editor' | 'admin'
 
 // Every permission check goes through this query: the person's role on each
-// wiki they can open. The owner of a personal wiki is its admin member.
+// wiki they can open. A person is the admin member of their personal wiki.
 export function accessibleWikis(tx: Tx, userId: string) {
   return tx
     .select({ wikiId: wikis.id, role: wikiMembers.role })

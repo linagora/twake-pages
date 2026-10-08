@@ -14,8 +14,8 @@ afterAll(async () => {
   await api.close()
 })
 
-const aWikiOf = async (owner: TestUser) =>
-  (await api.as(owner).post('/wikis', { name: 'Handbook' })).json<{
+const aWikiOf = async (admin: TestUser) =>
+  (await api.as(admin).post('/wikis', { name: 'Handbook' })).json<{
     id: string
   }>()
 

@@ -46,8 +46,8 @@ interface Wiki extends WikiSummary {
 const wikisOf = async (user: TestUser) =>
   (await api.as(user).get('/wikis')).json<{ wikis: WikiSummary[] }>().wikis
 
-const aWikiOf = async (owner: TestUser, name = 'Handbook') =>
-  (await api.as(owner).post('/wikis', { name })).json<Wiki>()
+const aWikiOf = async (admin: TestUser, name = 'Handbook') =>
+  (await api.as(admin).post('/wikis', { name })).json<Wiki>()
 
 const roles = async (user: TestUser) =>
   (await wikisOf(user)).map(wiki => [wiki.name, wiki.role])
@@ -271,10 +271,10 @@ describe('GET /wikis/:wikiId', () => {
     ['someone of another organization', aUser(), false],
     ['a B2C user', aB2cUser(), false]
   ])('hides a wiki from %s', async (_case, stranger, colleague) => {
-    const owner = colleague
+    const admin = colleague
       ? aUser({ organizationId: stranger.organizationId })
       : aUser()
-    const wiki = await aWikiOf(owner)
+    const wiki = await aWikiOf(admin)
 
     const response = await api.as(stranger).get(`/wikis/${wiki.id}`)
 
