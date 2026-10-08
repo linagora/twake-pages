@@ -209,9 +209,9 @@ export interface PagesApi {
   /** Admin; deletes every branch of the trash for good. */
   emptyTrash: (wikiId: string) => Promise<void>
 
-  /** The wiki's labels, by name. */
+  /** The labels that live pages carry, by name. */
   listLabels: (wikiId: string) => Promise<Label[]>
-  /** The live pages carrying the label, by title. */
+  /** The live pages carrying the label, by title; none for an unknown name. */
   pagesWithLabel: (wikiId: string, name: string) => Promise<LabelledPage[]>
 
   /** Oldest first, replies among them. */

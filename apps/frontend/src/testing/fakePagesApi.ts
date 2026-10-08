@@ -1074,7 +1074,6 @@ function signedIn(world: World, person: Person): FakePagesApi {
       })
     ),
 
-    // A label lives while a page carries it, even from the trash.
     listLabels: vi.fn<PagesApi['listLabels']>(wikiId =>
       answer(() => {
         access(wikiId)
@@ -1092,12 +1091,8 @@ function signedIn(world: World, person: Person): FakePagesApi {
     pagesWithLabel: vi.fn<PagesApi['pagesWithLabel']>((wikiId, name) =>
       answer(() => {
         access(wikiId)
-        const carrying = pagesOf(wikiId).filter(page =>
-          page.labels.includes(name)
-        )
-        if (carrying.length === 0) throw refuse('not_found')
-        return carrying
-          .filter(page => !page.deletion)
+        return livePagesOf(wikiId)
+          .filter(page => page.labels.includes(name))
           .map(page => {
             const { title, createdAt } = currentOf(page)
             return { id: page.id, title, updatedAt: createdAt }

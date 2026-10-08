@@ -812,18 +812,21 @@ describe('fakePagesApi', () => {
       expect(pages.map(page => page.title)).toEqual(['Badge', 'Setup'])
     })
 
-    it('forgets a label no page uses any more', async () => {
+    it('answers no pages for a name no live page carries, unknown ones too', async () => {
       const api = fakePagesApi()
       const wiki = api.withWiki()
       const page = api.withPage(wiki.id)
+      const deleted = api.withPage(wiki.id)
       await api.setLabels(page.id, ['howto'])
+      await api.setLabels(deleted.id, ['laptop'])
+      await api.deletePage(deleted.id)
 
       await api.setLabels(page.id, [])
 
       await expect(api.listLabels(wiki.id)).resolves.toEqual([])
-      await expect(api.pagesWithLabel(wiki.id, 'howto')).rejects.toEqual(
-        new ApiError(404, 'not_found')
-      )
+      for (const name of ['howto', 'laptop', 'unknown']) {
+        await expect(api.pagesWithLabel(wiki.id, name)).resolves.toEqual([])
+      }
     })
   })
 
