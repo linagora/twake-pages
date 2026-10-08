@@ -21,6 +21,7 @@ import type {
   VersionSummary
 } from '@/domain/page'
 import type { Person } from '@/domain/person'
+import { FOUND_END, FOUND_START } from '@/domain/search'
 import { byPosition } from '@/domain/tree'
 import type {
   Invite,
@@ -242,8 +243,6 @@ function queryOf(query: string) {
   }
 }
 
-const FOUND_START = String.fromCharCode(0xe000)
-const FOUND_END = String.fromCharCode(0xe001)
 const WORDS_BEFORE = 5
 const WORDS_AFTER = 8
 

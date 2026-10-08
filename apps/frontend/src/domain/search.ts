@@ -12,8 +12,8 @@ export interface ExcerptPart {
   highlighted: boolean
 }
 
-const FOUND_START = String.fromCharCode(0xe000)
-const FOUND_END = String.fromCharCode(0xe001)
+export const FOUND_START = String.fromCharCode(0xe000)
+export const FOUND_END = String.fromCharCode(0xe001)
 
 export function excerptParts(excerpt: string): ExcerptPart[] {
   const [before = '', ...found] = excerpt.split(FOUND_START)

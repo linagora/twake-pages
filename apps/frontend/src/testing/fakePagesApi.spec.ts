@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { ApiError, EditConflict } from '@/application/pages'
+import { FOUND_END, FOUND_START } from '@/domain/search'
 import { buildTree, byPosition, type TreeNode } from '@/domain/tree'
 import {
   fakePagesApi,
@@ -29,8 +30,7 @@ async function badgesOf(api: FakePagesApi) {
 
 const nothing = { notifications: [], unread: 0 }
 
-const found = (word: string) =>
-  `${String.fromCharCode(0xe000)}${word}${String.fromCharCode(0xe001)}`
+const found = (word: string) => `${FOUND_START}${word}${FOUND_END}`
 
 describe('fakePagesApi', () => {
   describe('wikis', () => {

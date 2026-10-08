@@ -1,15 +1,13 @@
 import { describe, expect, it } from 'vitest'
 
-import { excerptParts } from '@/domain/search'
+import { excerptParts, FOUND_END, FOUND_START } from '@/domain/search'
 
-// The contract marks each word found between U+E000 and U+E001.
-const found = (word: string) =>
-  `${String.fromCharCode(0xe000)}${word}${String.fromCharCode(0xe001)}`
+const found = (word: string) => `${FOUND_START}${word}${FOUND_END}`
 
 describe('excerptParts', () => {
   it('cuts an excerpt into plain text and the words found', () => {
     expect(
-      excerptParts(`Bring your ${found('laptop')} on ${found('day')} one`)
+      excerptParts('Bring your \uE000laptop\uE001 on \uE000day\uE001 one')
     ).toEqual([
       { text: 'Bring your ', highlighted: false },
       { text: 'laptop', highlighted: true },
