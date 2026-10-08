@@ -149,10 +149,13 @@ const visitedLongAgo = async (
   wikiId: string,
   count: number
 ) => {
-  const visited: string[] = []
-  for (const position of generateNKeysBetween(null, null, count)) {
-    visited.push(await aPageIn(db, user, wikiId, { title: position, position }))
-  }
+  // At once: one after the other, a hundred pages outlast the test's time on
+  // a busy machine.
+  const visited = await Promise.all(
+    generateNKeysBetween(null, null, count).map(position =>
+      aPageIn(db, user, wikiId, { title: position, position })
+    )
+  )
   await inTenant(db, user, tx =>
     tx.insert(pageVisits).values(
       visited.map((pageId, minutes) => ({
