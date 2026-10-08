@@ -5,7 +5,18 @@ services:
       - '127.0.0.1:5674:5672'
       - '127.0.0.1:15674:15672'
     healthcheck:
-      test: ['CMD', 'rabbitmq-diagnostics', '-q', 'check_port_connectivity']
+      # As the server's user: run as root, a check that comes between the
+      # entrypoint's chown and the server's start writes an Erlang cookie the
+      # server cannot read, and it stops on eacces.
+      test:
+        [
+          'CMD',
+          'gosu',
+          'rabbitmq',
+          'rabbitmq-diagnostics',
+          '-q',
+          'check_port_connectivity'
+        ]
       interval: 5s
       timeout: 10s
       retries: 20
