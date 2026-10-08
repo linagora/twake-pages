@@ -93,7 +93,8 @@
     "edit": "Modifier la page",
     "history": "Historique de la page",
     "menu": "Options de la page",
-    "newChild": "Nouvelle page enfant"
+    "newChild": "Nouvelle page enfant",
+    "move": "Déplacer"
   },
   "newPage": {
     "title": "Nouvelle page",
@@ -105,6 +106,15 @@
     "failed": "La page n'a pas pu être créée."
   },
   "movePage": {
+    "title": "Déplacer %{title}",
+    "parent": "Parent",
+    "top": "Haut de l'arborescence",
+    "place": "Position",
+    "first": "En premier",
+    "after": "Après %{title}",
+    "last": "En dernier",
+    "cancel": "Annuler",
+    "move": "Déplacer",
     "failed": "La page n'a pas pu être déplacée.",
     "under": "Page %{title} déplacée sous %{parent}, position %{position} sur %{count}.",
     "toTop": "Page %{title} déplacée en haut de l'arborescence, position %{position} sur %{count}."
