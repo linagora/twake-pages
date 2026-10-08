@@ -244,12 +244,15 @@ Notifications are never sent to the person who acted, nor to people who are no l
 
 | Method and path | Answer |
 |---|---|
-| `GET /settings` | `{ language, timezone, theme }` from the common settings, as in Twake Tasks |
+| `GET /settings` | `{ version, language, timezone, theme, avatar, name }`, the person's settings from the common settings events, as in Twake Tasks: `theme` is `light`, `dark` or `auto` (the default), `name` the display name, else the first and last names; `language`, `timezone`, `avatar` and `name` are `null` when unset, and `version` is `-1` until a first event |
+| `GET /settings/events` | `text/event-stream`, see Live updates |
 | `GET /health/live`, `GET /health/ready` | `{ status }` |
 
 ## Live updates
 
 `GET /wikis/:wikiId/stream` sends `event: version` with `id: <version>` and `data: {"version": <n>}` each time the wiki's version moves: a page created, published, moved, deleted, restored or purged, labels changed, a comment written, edited or deleted, a member or invite changed, the wiki renamed. The client reloads what it shows of that wiki. A first message carries the current version, and a keep-alive comment goes out every 25 seconds.
+
+`GET /settings/events` sends the same messages for the person's settings, with their `version`, each time a newer settings event is kept. The client reloads `GET /settings` when the version is newer than the one it shows. The first message carries the current version, `-1` before any event, and the keep-alive is the same.
 
 ## Activity events
 
