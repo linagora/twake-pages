@@ -206,7 +206,7 @@ interface NewPage {
 | `GET /wikis/:wikiId/labels` | `{ labels: { name: string; pages: number }[] }`, by name | member |
 | `GET /wikis/:wikiId/labels/:name/pages` | `{ pages: { id, title, updatedAt }[] }`, live pages, by title | member |
 
-A label name is trimmed and lowercased, 1 to 50 letters, digits, `-` or `_`. A label no page uses any more is deleted.
+A label name is trimmed and lowercased, 1 to 50 letters, digits, `-` or `_`. The list shows the labels that live pages carry, and `pages` counts those live pages; a name no live page carries answers `{ pages: [] }`. A label no page uses any more, in the tree or in the trash, is deleted.
 
 ## Comments
 
