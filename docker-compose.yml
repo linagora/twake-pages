@@ -1,0 +1,62 @@
+services:
+  rabbitmq:
+    image: rabbitmq:4.1-management
+    ports:
+      - '127.0.0.1:5674:5672'
+      - '127.0.0.1:15674:15672'
+    healthcheck:
+      test: ['CMD', 'rabbitmq-diagnostics', '-q', 'check_port_connectivity']
+      interval: 5s
+      timeout: 10s
+      retries: 20
+
+  postgres:
+    image: postgres:18
+    ports:
+      - '127.0.0.1:5434:5432'
+    environment:
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - postgres:/var/lib/postgresql
+      # The backend refuses a superuser role, which would bypass row level security.
+      - ./postgres-init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ['CMD', 'pg_isready', '-U', 'postgres', '-d', 'twake_pages']
+      interval: 5s
+      retries: 10
+
+  backend:
+    profiles: [app]
+    build:
+      context: .
+      dockerfile: apps/backend/Dockerfile
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    ports:
+      - '127.0.0.1:8090:8080'
+    environment:
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672
+      DATABASE_URL: postgres://twake_pages:twake_pages@postgres:5432/twake_pages
+      APP_URL: ${APP_URL:-http://localhost:3400}
+      OIDC_ISSUER: ${OIDC_ISSUER:-https://sign-up.twake.app/}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-local-development-secret}
+      SPACE_INTEGRATION: ${SPACE_INTEGRATION:-false}
+      GRIST_ORIGINS: ${GRIST_ORIGINS:-}
+
+  frontend:
+    profiles: [app]
+    build:
+      context: .
+      dockerfile: apps/frontend/Dockerfile
+    read_only: true
+    tmpfs: [/tmp]
+    environment:
+      API_UPSTREAM: http://backend:8080
+    ports:
+      - '127.0.0.1:3400:8080'
+
+volumes:
+  postgres:
