@@ -141,7 +141,12 @@ export async function aSpaceWiki(
 export async function addVersion(
   tx: Tx,
   author: TestUser,
-  version: { pageId: string; number: number; title: string }
+  version: {
+    pageId: string
+    number: number
+    title: string
+    gristUrl?: string | null
+  }
 ) {
   await tx.insert(pageVersions).values({
     ...version,
@@ -154,14 +159,22 @@ export async function addVersion(
 
 /**
  * A page written straight into the wiki, as the pages routes will write it,
- * with its first version, in the trash on its own when `deleted`.
+ * with its first version, in the trash on its own when `deleted`. Given a
+ * Grist address, it is a database page.
  */
 export async function aPageIn(
   db: Db,
   author: TestUser,
   wikiId: string,
-  page: { title: string; position: string; parentId?: string; deleted?: true }
+  page: {
+    title: string
+    position: string
+    parentId?: string
+    deleted?: true
+    gristUrl?: string
+  }
 ): Promise<string> {
+  const gristUrl = page.gristUrl ?? null
   return inTenant(db, author, async tx => {
     const [written] = await tx
       .insert(pages)
@@ -169,8 +182,9 @@ export async function aPageIn(
         wikiId,
         organizationId: author.organizationId,
         parentId: page.parentId ?? null,
-        kind: 'document',
+        kind: gristUrl === null ? 'document' : 'database',
         title: page.title,
+        gristUrl,
         position: page.position,
         createdBy: author.userId,
         updatedBy: author.userId
@@ -180,7 +194,8 @@ export async function aPageIn(
     await addVersion(tx, author, {
       pageId: written.id,
       number: 1,
-      title: page.title
+      title: page.title,
+      gristUrl
     })
     if (page.deleted) {
       await tx
@@ -551,6 +566,23 @@ export const STALE_NEIGHBOURS: [
   ],
   ['an unknown page', () => ({ afterId: randomUUID() })]
 ]
+
+/** What `publish` sends: a draft and the version it started from. */
+export interface DraftToPublish {
+  baseVersion: number
+  title: string
+  content: unknown[]
+}
+
+/** `POST /pages/:pageId/versions` by the person, for a page of blocks. */
+export function publish(
+  app: Awaited<ReturnType<typeof startApp>>,
+  user: TestUser,
+  pageId: string,
+  draft: DraftToPublish
+) {
+  return app.as(user).post(`/pages/${pageId}/versions`, draft)
+}
 
 /** BlockNote's styled text, here with no style. */
 export const styled = (text: string) => ({ type: 'text', text, styles: {} })

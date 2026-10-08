@@ -182,6 +182,27 @@ export function siblingsUnder(tx: Tx, wikiId: string, parentId: string | null) {
 /** Who writes a version: a person, or a space writing its wiki's home page. */
 export type Author = Pick<Identity, 'userId' | 'email' | 'name'>
 
+/** Writes the page's version, by its author, empty unless given blocks. */
+async function writeVersion(
+  tx: Tx,
+  author: Author,
+  version: {
+    pageId: string
+    organizationId: string | null
+    number: number
+    title: string
+    content?: Blocks | undefined
+    text?: string | undefined
+  }
+) {
+  await tx.insert(pageVersions).values({
+    ...version,
+    authorId: author.userId,
+    authorEmail: author.email,
+    authorName: author.name
+  })
+}
+
 /**
  * Writes a page of blocks in its wiki's tenant, with its version 1 by its
  * author, empty unless given checked blocks. The follower is the author, as
@@ -217,16 +238,13 @@ export async function addPage(
       title: pages.title
     })
   if (!added) throw new Error('page insert returned nothing')
-  await tx.insert(pageVersions).values({
+  await writeVersion(tx, author, {
     pageId: added.id,
     organizationId: added.organizationId,
     number: 1,
     title: added.title,
     content: page.content,
-    text: page.text,
-    authorId: author.userId,
-    authorEmail: author.email,
-    authorName: author.name
+    text: page.text
   })
   if (follower !== null) {
     await tx.insert(pageFollowers).values({
@@ -246,6 +264,14 @@ export interface PageMove {
 }
 
 export interface NewPage extends PageMove {
+  title: string
+  /** Unchecked, until the store checks them. */
+  content: Blocks
+}
+
+export interface NewVersion {
+  /** The version the draft started from. */
+  baseVersion: number
   title: string
   /** Unchecked, until the store checks them. */
   content: Blocks
@@ -290,6 +316,64 @@ export function createPageStore(db: Db, gristOrigins: readonly string[]) {
           preview: previewOf(blocks.text)
         })
         return changedPage(tx, identity, page.id)
+      })
+    },
+
+    /** The page's next version, by the person who publishes it. */
+    publish(identity: Identity, pageId: string, input: NewVersion) {
+      return writeOrRefuse(db, identity, async tx => {
+        // Before the wiki's row lock, as for a new page.
+        const blocks = checkBlocks(input.content, gristOrigins)
+        const [found] = await tx
+          .select({ wikiId: pages.wikiId })
+          .from(pages)
+          .where(eq(pages.id, pageId))
+        if (!found) throw new Refused('not_found')
+        await checkRole(tx, identity, found.wikiId, 'editor')
+        await bumpWiki(tx, found.wikiId)
+        // Read after the lock, which every change to the wiki's pages takes,
+        // as Twake Tasks reads a task's description version after its board's.
+        const [page] = await tx
+          .select({
+            organizationId: pages.organizationId,
+            kind: pages.kind,
+            version: pages.version,
+            deletedAt: pages.deletedAt
+          })
+          .from(pages)
+          .where(eq(pages.id, pageId))
+        if (!page) throw new Refused('not_found')
+        if (page.deletedAt) throw new Refused('in_trash')
+        // Blocks fit a page of blocks only: a database page's version takes
+        // its Grist address instead (api.md).
+        if (page.kind !== 'document') throw new Refused('invalid_request')
+        const number = page.version + 1
+        await writeVersion(tx, identity, {
+          pageId,
+          organizationId: page.organizationId,
+          number,
+          title: input.title,
+          ...blocks
+        })
+        await tx
+          .update(pages)
+          .set({
+            title: input.title,
+            ...blocks,
+            version: number,
+            updatedBy: identity.userId,
+            updatedAt: sql`now()`
+          })
+          .where(eq(pages.id, pageId))
+        await tx
+          .insert(pageFollowers)
+          .values({
+            pageId,
+            organizationId: page.organizationId,
+            userId: identity.userId
+          })
+          .onConflictDoNothing()
+        return changedPage(tx, identity, pageId)
       })
     }
   }

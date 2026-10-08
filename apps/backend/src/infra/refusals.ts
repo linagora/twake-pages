@@ -16,7 +16,10 @@ const REFUSAL_STATUS = {
   in_trash: 409,
   last_admin: 409,
   not_same_organization: 400,
-  invalid_label: 400
+  invalid_label: 400,
+  // A malformed body, which the routes answer themselves, unless only the
+  // page tells it: blocks sent to a database page.
+  invalid_request: 400
 } as const
 
 export type Refusal = keyof typeof REFUSAL_STATUS

@@ -21,6 +21,13 @@ const newPage = z.object({
   content: pageBlocks.default([])
 })
 
+// Database pages come with their own ticket.
+const newVersion = z.object({
+  baseVersion: z.int().min(1),
+  title: pageTitle,
+  content: pageBlocks
+})
+
 const wikiParams = z.object({ wikiId: z.uuid() })
 
 export const pageParams = z.object({ pageId: z.uuid() })
@@ -104,6 +111,28 @@ export function registerPages(
       )
       if (!result.ok) return refuse(reply, result.error)
       return result.value
+    }
+  )
+
+  app.post(
+    '/pages/:pageId/versions',
+    { ...blocksBody, preHandler: deps.requireIdentity },
+    async (request, reply) => {
+      const identity = request.identity
+      if (!identity) return reply.code(401).send()
+      const params = pageParams.safeParse(request.params)
+      if (!params.success) return refuse(reply, 'not_found')
+      const body = newVersion.safeParse(request.body)
+      if (!body.success) {
+        return reply.code(400).send({ error: 'invalid_request' })
+      }
+      const result = await store.publish(
+        identity,
+        params.data.pageId,
+        body.data
+      )
+      if (!result.ok) return refuse(reply, result.error)
+      return reply.code(201).send(result.value)
     }
   )
 }
