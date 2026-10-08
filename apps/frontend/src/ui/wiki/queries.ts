@@ -57,14 +57,19 @@ export function useCreateWiki(): UseMutationResult<Wiki, Error, NewWiki> {
   })
 }
 
+/** Changes the name of a shared wiki only: the dialog of another shows none. */
 export function useEditWiki(
-  wikiId: string
-): UseMutationResult<Wiki, Error, WikiChanges> {
+  wiki: Wiki
+): UseMutationResult<Wiki, Error, Required<WikiChanges>> {
   const api = usePagesApi()
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (changes: WikiChanges) => api.renameWiki(wikiId, changes),
-    onSuccess: wiki => showWiki(queryClient, wiki)
+    mutationFn: ({ name, description }: Required<WikiChanges>) =>
+      api.renameWiki(
+        wiki.id,
+        wiki.kind === 'shared' ? { name, description } : { description }
+      ),
+    onSuccess: edited => showWiki(queryClient, edited)
   })
 }
 

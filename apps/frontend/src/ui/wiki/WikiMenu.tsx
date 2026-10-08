@@ -86,7 +86,7 @@ function EditWikiDialog({
   onClose: () => void
 }): ReactElement {
   const { t } = useI18n()
-  const edit = useEditWiki(wiki.id)
+  const edit = useEditWiki(wiki)
   // A personal wiki shows a label, and a space wiki is named after its space.
   const named = wiki.kind === 'shared'
 
@@ -96,13 +96,8 @@ function EditWikiDialog({
       submit={t('editWiki.save')}
       initial={wiki}
       named={named}
-      saving={edit.isPending}
-      failed={edit.isError ? t('editWiki.failed') : null}
-      onSave={({ name, description }) => {
-        edit.mutate(named ? { name, description } : { description }, {
-          onSuccess: onClose
-        })
-      }}
+      change={edit}
+      onSaved={onClose}
       onClose={onClose}
     />
   )

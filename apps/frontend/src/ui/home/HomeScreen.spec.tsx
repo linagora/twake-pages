@@ -142,7 +142,7 @@ describe('a new wiki', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Create' }))
 
     expect(await within(dialog).findByRole('alert')).toHaveTextContent(
-      'The wiki could not be created.'
+      'The wiki could not be saved.'
     )
   })
 

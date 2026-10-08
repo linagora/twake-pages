@@ -49,17 +49,16 @@
   "wikiDialog": {
     "name": "Name",
     "description": "Description",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "failed": "The wiki could not be saved."
   },
   "newWiki": {
     "title": "New wiki",
-    "create": "Create",
-    "failed": "The wiki could not be created."
+    "create": "Create"
   },
   "editWiki": {
     "title": "Edit wiki",
-    "save": "Save",
-    "failed": "The wiki could not be saved."
+    "save": "Save"
   },
   "deleteWiki": {
     "title": "Delete %{name}?",

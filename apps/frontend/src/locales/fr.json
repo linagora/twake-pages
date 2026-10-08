@@ -49,17 +49,16 @@
   "wikiDialog": {
     "name": "Nom",
     "description": "Description",
-    "cancel": "Annuler"
+    "cancel": "Annuler",
+    "failed": "Le wiki n'a pas pu être enregistré."
   },
   "newWiki": {
     "title": "Nouveau wiki",
-    "create": "Créer",
-    "failed": "Le wiki n'a pas pu être créé."
+    "create": "Créer"
   },
   "editWiki": {
     "title": "Modifier le wiki",
-    "save": "Enregistrer",
-    "failed": "Le wiki n'a pas pu être enregistré."
+    "save": "Enregistrer"
   },
   "deleteWiki": {
     "title": "Supprimer %{name} ?",

@@ -94,11 +94,8 @@ function NewWikiDialog({
     <WikiDialog
       title={t('newWiki.title')}
       submit={t('newWiki.create')}
-      saving={create.isPending}
-      failed={create.isError ? t('newWiki.failed') : null}
-      onSave={wiki => {
-        create.mutate(wiki, { onSuccess: onCreated })
-      }}
+      change={create}
+      onSaved={onCreated}
       onClose={onClose}
     />
   )

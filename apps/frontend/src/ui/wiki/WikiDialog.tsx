@@ -9,11 +9,26 @@ import {
 } from '@linagora/twake-mui'
 import { useId, useState, type ReactElement } from 'react'
 
+import type { Wiki } from '@/domain/wiki'
 import { useI18n } from '@/ui/i18n/useI18n'
 
 export interface WikiFields {
   name: string
   description: string
+}
+
+/**
+ * What the dialog uses of the mutation that saves it, as Twake Tasks'
+ * SectionDialog takes its `change`: typed by its use, since creating a wiki
+ * and editing one take different changes.
+ */
+interface WikiSave {
+  isPending: boolean
+  isError: boolean
+  mutate: (
+    fields: WikiFields,
+    options: { onSuccess: (wiki: Wiki) => void }
+  ) => void
 }
 
 const BLANK: WikiFields = { name: '', description: '' }
@@ -27,18 +42,16 @@ export function WikiDialog({
   submit,
   initial = BLANK,
   named = true,
-  saving,
-  failed,
-  onSave,
+  change,
+  onSaved,
   onClose
 }: {
   title: string
   submit: string
   initial?: WikiFields
   named?: boolean
-  saving: boolean
-  failed: string | null
-  onSave: (fields: WikiFields) => void
+  change: WikiSave
+  onSaved: (wiki: Wiki) => void
   onClose: () => void
 }): ReactElement {
   const { t } = useI18n()
@@ -51,7 +64,10 @@ export function WikiDialog({
       <form
         onSubmit={event => {
           event.preventDefault()
-          onSave({ name: name.trim(), description: description.trim() })
+          change.mutate(
+            { name: name.trim(), description: description.trim() },
+            { onSuccess: onSaved }
+          )
         }}
       >
         <DialogTitle id={titleId}>{title}</DialogTitle>
@@ -81,9 +97,9 @@ export function WikiDialog({
             margin="dense"
             slotProps={{ htmlInput: { maxLength: 500 } }}
           />
-          {failed && (
+          {change.isError && (
             <Typography role="alert" color="error">
-              {failed}
+              {t('wikiDialog.failed')}
             </Typography>
           )}
         </DialogContent>
@@ -91,7 +107,10 @@ export function WikiDialog({
           <Button variant="text" onClick={onClose}>
             {t('wikiDialog.cancel')}
           </Button>
-          <Button type="submit" disabled={saving || (named && !name.trim())}>
+          <Button
+            type="submit"
+            disabled={change.isPending || (named && !name.trim())}
+          >
             {submit}
           </Button>
         </DialogActions>
