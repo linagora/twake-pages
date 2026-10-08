@@ -4,7 +4,7 @@ import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest'
 import type { PlatformEvent } from '../../events/envelope.ts'
 import { MalformedEventError } from '../../events/router.ts'
 import { outbox } from '../../events/schema.ts'
-import { createDb, inTenant } from '../../infra/db.ts'
+import { createDb, inTenant, type Tx } from '../../infra/db.ts'
 import {
   aPageIn,
   aUser,
@@ -35,7 +35,8 @@ afterAll(async () => {
   await sql.end()
 })
 
-function deliver(routingKey: string, body: object) {
+/** Handles the event in the transaction, which the consumer opens for each. */
+function deliverIn(tx: Tx, routingKey: string, body: object) {
   const handler = routes.get(routingKey)
   if (!handler) throw new Error(`no handler for ${routingKey}`)
   const event: PlatformEvent = {
@@ -43,7 +44,11 @@ function deliver(routingKey: string, body: object) {
     messageId: randomUUID(),
     body: { timestamp: new Date().toISOString(), ...body }
   }
-  return db.transaction(tx => handler(event, tx))
+  return handler(event, tx)
+}
+
+function deliver(routingKey: string, body: object) {
+  return db.transaction(tx => deliverIn(tx, routingKey, body))
 }
 
 const at = (minute: number) =>
@@ -540,6 +545,39 @@ describe('a space wiki through the API', () => {
       'com.twake.pages.page.created.v1'
     ])
   })
+})
+
+describe('the provisioned event', () => {
+  // It commits with the wiki or not at all, so it is in the outbox before any
+  // transaction can queue an event about the wiki's pages (ADR 005). A row
+  // keeps the id of the transaction that wrote it in xmin.
+  it.each(['twake.space.created', 'twake.space.synced'])(
+    'is queued in the transaction that creates the wiki, on %s',
+    async routingKey => {
+      const admin = aUser()
+      const spaceId = randomUUID()
+
+      // Read before the commit: the relay of another test may mark the event
+      // sent, which writes its row again.
+      const written = await db.transaction(async tx => {
+        await deliverIn(tx, routingKey, {
+          organizationId: admin.organizationId,
+          id: spaceId,
+          name: 'Ops',
+          members: [member(admin, 'admin')]
+        })
+        return tx.execute<{ wiki: string; event: string }>(raw`
+          select wikis.xmin::text as wiki, outbox.xmin::text as event
+          from spaces
+          join wikis on wikis.id = spaces.wiki_id
+          join outbox on outbox.event -> 'data' ->> 'space_id' = spaces.id::text
+          where spaces.id = ${spaceId}`)
+      })
+
+      expect(written).toHaveLength(1)
+      expect(written[0]?.event).toBe(written[0]?.wiki)
+    }
+  )
 })
 
 describe('live updates', () => {
