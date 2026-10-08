@@ -18,6 +18,12 @@ test.describe.configure({ mode: 'default' })
 // The name TwakeSpace gives the frame, after which it names the overlay
 const FRAME = 'twake-embed-pages'
 
+// What TwakeSpace gives every frame of an app, the overlay too (ADR 010): a
+// window the frame opens, as the popup to sign in, inherits the sandbox
+const SANDBOX =
+  'allow-scripts allow-same-origin allow-popups allow-forms allow-downloads'
+const CLIPBOARD = 'clipboard-read; clipboard-write'
+
 interface PostedMessage {
   type: string
   path?: string
@@ -25,11 +31,12 @@ interface PostedMessage {
 
 // A stand-in for TwakeSpace that frames the embed as it does: a named frame,
 // and over the whole page an overlay frame on the app's origin, clipped to
-// the region the app reports. It greets the frame on each of its loads and
-// whenever the frame says it is ready, as TwakeSpace does: the frame posts
-// nothing else before. It keeps the messages the frame posts, and sends the
-// frame elsewhere as TwakeSpace's Back does. A real server: Chrome keeps
-// pages it did not load off the network from framing localhost.
+// the region the app reports, both sandboxed, the overlay without the full
+// screen. It greets the frame on each of its loads and whenever the frame
+// says it is ready, as TwakeSpace does: the frame posts nothing else before.
+// It keeps the messages the frame posts, and sends the frame elsewhere as
+// TwakeSpace's Back does. A real server: Chrome keeps pages it did not load
+// off the network from framing localhost.
 function twakeSpace(wikiId: string, port: number) {
   const server = createServer((_request, response) => {
     response.setHeader('content-type', 'text/html')
@@ -39,8 +46,10 @@ function twakeSpace(wikiId: string, port: number) {
         #pages { position: fixed; top: 80px; left: 200px; width: 900px; height: 600px; border: 0 }
         #overlay { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; color-scheme: normal; clip-path: inset(0 0 100% 0) }
       </style>
-      <iframe id="pages" name="${FRAME}" title="Pages" src="${APP}/embed/wikis/${wikiId}"></iframe>
-      <iframe id="overlay" name="${FRAME}:overlay" title="Pages windows" src="${APP}/embed/overlay.html"></iframe>
+      <iframe id="pages" name="${FRAME}" title="Pages" src="${APP}/embed/wikis/${wikiId}"
+        sandbox="${SANDBOX}" allow="${CLIPBOARD}; fullscreen"></iframe>
+      <iframe id="overlay" name="${FRAME}:overlay" title="Pages windows" src="${APP}/embed/overlay.html"
+        sandbox="${SANDBOX}" allow="${CLIPBOARD}"></iframe>
       <script>
         const pages = document.getElementById('pages')
         const overlay = document.getElementById('overlay')
