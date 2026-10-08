@@ -123,6 +123,16 @@ async function writingsIn(wiki: WikiSummary, reader: TestUser) {
   }
 }
 
+/** What `GET /settings` answers a person whose settings Pages does not keep. */
+const NO_SETTINGS = {
+  version: -1,
+  language: null,
+  timezone: null,
+  theme: 'auto',
+  avatar: null,
+  name: null
+}
+
 const deletions = [
   {
     tenant: 'B2B',
@@ -302,14 +312,7 @@ describe.each(deletions)(
 
       await deliver(routingKey, body(gone))
 
-      expect((await api.as(gone).get('/settings')).json()).toEqual({
-        version: -1,
-        language: null,
-        timezone: null,
-        theme: 'auto',
-        avatar: null,
-        name: null
-      })
+      expect((await api.as(gone).get('/settings')).json()).toEqual(NO_SETTINGS)
     })
   }
 )
@@ -327,6 +330,20 @@ describe.each(deletions.filter(({ matchedBy }) => matchedBy === 'email'))(
       )
 
       expect(await wikiRowsOf(db, gone, personal.id)).toEqual([])
+    })
+
+    it('loses its Twake Workplace settings, even if it never opened Pages', async () => {
+      const gone = { ...makeUser(), email: `Gone-${randomUUID()}@Example.com` }
+      await db.transaction(tx =>
+        keepSettings(tx, 1, {
+          email: gone.email.toLowerCase(),
+          display_name: 'Gone'
+        })
+      )
+
+      await deliver(routingKey, body(gone))
+
+      expect((await api.as(gone).get('/settings')).json()).toEqual(NO_SETTINGS)
     })
   }
 )

@@ -148,6 +148,15 @@ async function forget(tx: Tx, organizationId: string | null, userId: string) {
   await tx.delete(wikiMembers).where(eq(wikiMembers.userId, userId))
 }
 
+// Unlike Twake Tasks, which finds the settings by the person's memberships
+// only: settings are kept for everyone Twake Workplace sends them for, so the
+// email the event names also finds those of a person who never opened Pages.
+async function forgetSettingsOf(tx: Tx, email: string) {
+  await tx
+    .delete(userSettings)
+    .where(eq(userSettings.email, sql`lower(${email})`))
+}
+
 const onB2bDeleted: Handler<PlatformEvent> = async (event, tx) => {
   const account = parseOrDrop(b2bDeleted, event.body, event.routingKey)
   if (!account.organizationId) {
@@ -163,6 +172,7 @@ const onB2bDeleted: Handler<PlatformEvent> = async (event, tx) => {
       ? await userIdByEmail(tx, account.internalEmail)
       : undefined)
   if (userId) await forget(tx, account.organizationId, userId)
+  if (account.internalEmail) await forgetSettingsOf(tx, account.internalEmail)
 }
 
 const onB2cDeleted: Handler<PlatformEvent> = async (event, tx) => {
@@ -176,6 +186,7 @@ const onB2cDeleted: Handler<PlatformEvent> = async (event, tx) => {
       ? await b2cUserIdByEmail(tx, account.internalEmail)
       : undefined)
   if (userId) await forget(tx, null, userId)
+  if (account.internalEmail) await forgetSettingsOf(tx, account.internalEmail)
 }
 
 // Arrives after every member's domain.user.deleted, and may be replayed.
