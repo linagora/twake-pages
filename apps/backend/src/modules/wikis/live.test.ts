@@ -1,9 +1,11 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { aUser, startApp, type TestUser } from '../../testing/app.ts'
+import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest'
+import { createDb } from '../../infra/db.ts'
+import { aUser, joinWiki, startApp, type TestUser } from '../../testing/app.ts'
 import { openStream } from '../../testing/stream.ts'
 
 let api: Awaited<ReturnType<typeof startApp>>
 let baseUrl: string
+const { sql, db } = createDb(inject('databaseUrl'))
 
 beforeAll(async () => {
   api = await startApp()
@@ -12,6 +14,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await api.close()
+  await sql.end()
 })
 
 const aWikiOf = async (admin: TestUser) =>
@@ -43,6 +46,26 @@ describe('live wiki updates', () => {
       data: '{"version":1}'
     })
   })
+
+  it.each(['viewer', 'editor'] as const)(
+    'streams the version to the wiki’s %ss',
+    async role => {
+      const alice = aUser()
+      const bob = aUser({ organizationId: alice.organizationId })
+      const wiki = await aWikiOf(alice)
+      await joinWiki(db, alice, wiki.id, bob, role)
+      const stream = openWikiStream(bob, wiki.id)
+
+      const first = (await stream.messages.next()).value
+      stream.close()
+
+      expect(first).toEqual({
+        event: 'version',
+        id: '0',
+        data: '{"version":0}'
+      })
+    }
+  )
 
   it('refuses a stream on a wiki the person cannot see', async () => {
     const wiki = await aWikiOf(aUser())

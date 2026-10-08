@@ -266,6 +266,21 @@ describe('GET /wikis/:wikiId', () => {
     expect(response.json()).toEqual(wiki)
   })
 
+  it.each(['viewer', 'editor'] as const)(
+    'shows the wiki to its %ss, with their role',
+    async role => {
+      const alice = aUser()
+      const bob = aUser({ organizationId: alice.organizationId })
+      const wiki = await aWikiOf(alice)
+      await joinWiki(db, alice, wiki.id, bob, role)
+
+      const response = await api.as(bob).get(`/wikis/${wiki.id}`)
+
+      expect(response.statusCode).toBe(200)
+      expect(response.json()).toEqual({ ...wiki, role })
+    }
+  )
+
   it.each([
     ['someone of its organization who is no member', aUser(), true],
     ['someone of another organization', aUser(), false],
@@ -319,7 +334,7 @@ describe('PATCH /wikis/:wikiId', () => {
     })
   })
 
-  it.each(['editor', 'viewer'] as const)('refuses an %s', async role => {
+  it.each(['editor', 'viewer'] as const)('refuses %ss', async role => {
     const alice = aUser()
     const bob = aUser({ organizationId: alice.organizationId })
     const wiki = await aWikiOf(alice)
@@ -437,11 +452,11 @@ describe('DELETE /wikis/:wikiId', () => {
     expect((await api.as(alice).get(`/wikis/${wikiId}`)).statusCode).toBe(200)
   })
 
-  it('refuses an editor', async () => {
+  it.each(['editor', 'viewer'] as const)('refuses %ss', async role => {
     const alice = aUser()
     const bob = aUser({ organizationId: alice.organizationId })
     const wiki = await aWikiOf(alice)
-    await joinWiki(db, alice, wiki.id, bob, 'editor')
+    await joinWiki(db, alice, wiki.id, bob, role)
 
     const response = await api.as(bob).delete(`/wikis/${wiki.id}`)
 
@@ -506,6 +521,36 @@ describe('GET /wikis/:wikiId/tree', () => {
       { id: q1, parentId: plans, position: 'a0', title: 'Q1', kind: 'document' }
     ])
   })
+
+  it.each(['viewer', 'editor'] as const)(
+    'shows the tree to the wiki’s %ss',
+    async role => {
+      const alice = aUser()
+      const bob = aUser({ organizationId: alice.organizationId })
+      const wiki = await aWikiOf(alice)
+      const plans = await aPageIn(db, alice, wiki.id, {
+        title: 'Plans',
+        position: 'a0'
+      })
+      await joinWiki(db, alice, wiki.id, bob, role)
+
+      const response = await api.as(bob).get(`/wikis/${wiki.id}/tree`)
+
+      expect(response.statusCode).toBe(200)
+      expect(response.json()).toEqual({
+        version: 0,
+        pages: [
+          {
+            id: plans,
+            parentId: null,
+            position: 'a0',
+            title: 'Plans',
+            kind: 'document'
+          }
+        ]
+      })
+    }
+  )
 
   it('hides the tree from someone who is no member', async () => {
     const alice = aUser()
