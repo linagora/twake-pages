@@ -46,7 +46,7 @@ function deliver(routingKey: string, body: object) {
 }
 
 const sharedWikisOf = async (user: TestUser) =>
-  (await wikisOf(api, user)).filter(wiki => wiki.kind !== 'personal')
+  (await wikisOf(api, user)).filter(wiki => wiki.kind === 'shared')
 
 /** Someone of the person's tenant: their organization, or B2C. */
 const aPeerOf = (user: TestUser): TestUser =>
@@ -193,7 +193,7 @@ describe.each([
   it('leaves a wiki its admin deleted to its purge', async () => {
     const gone = makeUser()
     const admin = aPeerOf(gone)
-    const deleted = await aWiki(admin, 'Archive', [[gone, 'viewer']])
+    const deleted = await aWiki(admin, 'Minutes', [[gone, 'viewer']])
     await api.as(admin).delete(`/wikis/${deleted.id}`)
     const job = await purgeJobOf(db, deleted.id)
 
@@ -338,7 +338,7 @@ describe('a deleted organization', () => {
     const colleague = aUser({ organizationId })
     const outsider = aUser()
     const handbook = await aWiki(admin, 'Handbook', [[colleague, 'editor']])
-    // Rows only their owner may see, which go with the wiki all the same.
+    // Rows only the colleague may see, which go with the wiki all the same.
     await inTenant(db, colleague, async tx => {
       const own = {
         pageId: handbook.homePageId,
@@ -349,9 +349,9 @@ describe('a deleted organization', () => {
       await tx.insert(pageVisits).values(own)
     })
     await aSpaceWiki(db, [[colleague, 'admin']])
-    const deleted = await aWiki(admin, 'Archive', [])
+    const deleted = await aWiki(admin, 'Minutes', [])
     await api.as(admin).delete(`/wikis/${deleted.id}`)
-    const kept = await aWiki(outsider, 'Archive', [])
+    const kept = await aWiki(outsider, 'Minutes', [])
     await api.as(outsider).delete(`/wikis/${kept.id}`)
     expect(await jobsOf(organizationId)).not.toEqual([])
 

@@ -175,7 +175,7 @@ const onB2cDeleted: Handler<PlatformEvent> = async (event, tx) => {
 // Arrives after every member's domain.user.deleted, and may be replayed.
 // Everything the organization holds hangs off its wikis and goes with them by
 // cascade, which row level security does not hold back, so unlike Twake Tasks
-// it needs no flag to erase rows that only their owner may see.
+// it needs no flag to erase the rows each person alone may see.
 const onOrganizationDeleted: Handler<PlatformEvent> = async (event, tx) => {
   const { organizationId } = parseOrDrop(
     organizationDeleted,
