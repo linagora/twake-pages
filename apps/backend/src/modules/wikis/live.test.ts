@@ -1,6 +1,12 @@
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest'
 import { createDb } from '../../infra/db.ts'
-import { aUser, joinWiki, startApp, type TestUser } from '../../testing/app.ts'
+import {
+  aUser,
+  aWikiOf,
+  joinWiki,
+  startApp,
+  type TestUser
+} from '../../testing/app.ts'
 import { openStream } from '../../testing/stream.ts'
 
 let api: Awaited<ReturnType<typeof startApp>>
@@ -17,18 +23,13 @@ afterAll(async () => {
   await sql.end()
 })
 
-const aWikiOf = async (admin: TestUser) =>
-  (await api.as(admin).post('/wikis', { name: 'Handbook' })).json<{
-    id: string
-  }>()
-
 const openWikiStream = (user: TestUser, wikiId: string) =>
   openStream(`${baseUrl}/api/wikis/${wikiId}/stream`, api.tokenOf(user))
 
 describe('live wiki updates', () => {
   it('sends the wiki version, then each new version as the wiki changes', async () => {
     const alice = aUser()
-    const wiki = await aWikiOf(alice)
+    const wiki = await aWikiOf(api, alice)
     const stream = openWikiStream(alice, wiki.id)
 
     const first = (await stream.messages.next()).value
@@ -52,7 +53,7 @@ describe('live wiki updates', () => {
     async role => {
       const alice = aUser()
       const bob = aUser({ organizationId: alice.organizationId })
-      const wiki = await aWikiOf(alice)
+      const wiki = await aWikiOf(api, alice)
       await joinWiki(db, alice, wiki.id, bob, role)
       const stream = openWikiStream(bob, wiki.id)
 
@@ -68,7 +69,7 @@ describe('live wiki updates', () => {
   )
 
   it('refuses a stream on a wiki the person cannot see', async () => {
-    const wiki = await aWikiOf(aUser())
+    const wiki = await aWikiOf(api, aUser())
     const stream = openWikiStream(aUser(), wiki.id)
 
     expect((await stream.response).status).toBe(404)

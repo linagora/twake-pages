@@ -12,7 +12,13 @@ import {
   pageVisits
 } from '../modules/pages/schema.ts'
 import { wikiMembers, wikis } from '../modules/wikis/schema.ts'
-import { aB2cUser, aUser, type TestUser } from '../testing/app.ts'
+import {
+  aB2cUser,
+  aUser,
+  aWikiOf,
+  startApp,
+  type TestUser
+} from '../testing/app.ts'
 import {
   assertRowLevelSecurity,
   createDb,
@@ -25,9 +31,15 @@ import {
   type Db
 } from './db.ts'
 
+let api: Awaited<ReturnType<typeof startApp>>
 const { sql, db } = createDb(inject('databaseUrl'))
 
+beforeAll(async () => {
+  api = await startApp()
+})
+
 afterAll(async () => {
+  await api.close()
   await sql.end()
 })
 
@@ -128,37 +140,6 @@ function aWikiRow(creator: TestUser) {
   } as const
 }
 
-async function aWikiOf(admin: TestUser) {
-  return inTenant(db, admin, async tx => {
-    const [wiki] = await tx
-      .insert(wikis)
-      .values(aWikiRow(admin))
-      .returning({ id: wikis.id })
-    if (!wiki) throw new Error('no wiki')
-    await tx.insert(wikiMembers).values({
-      wikiId: wiki.id,
-      organizationId: admin.organizationId,
-      userId: admin.userId,
-      email: admin.email,
-      role: 'admin'
-    })
-    const [page] = await tx
-      .insert(pages)
-      .values({
-        wikiId: wiki.id,
-        organizationId: admin.organizationId,
-        kind: 'document',
-        title: 'Plans',
-        position: 'a0',
-        createdBy: admin.userId,
-        updatedBy: admin.userId
-      })
-      .returning({ id: pages.id })
-    if (!page) throw new Error('no page')
-    return { wikiId: wiki.id, pageId: page.id }
-  })
-}
-
 const wikisSeenBy = (user: TestUser) =>
   inTenant(db, user, tx =>
     tx.select({ organizationId: wikis.organizationId }).from(wikis)
@@ -182,8 +163,8 @@ describe('the tenant policies', () => {
   it('only shows the wikis and pages of the current organization', async () => {
     const acme = aUser()
     const globex = aUser()
-    await aWikiOf(acme)
-    await aWikiOf(aB2cUser())
+    await aWikiOf(api, acme)
+    await aWikiOf(api, aB2cUser())
 
     expect(await wikisSeenBy(globex)).toEqual([])
     expect(await pagesSeenBy(globex)).toEqual([])
@@ -208,7 +189,7 @@ describe('the tenant policies', () => {
 
   it('never shows a B2C row to a request of an organization', async () => {
     const alice = aB2cUser()
-    await aWikiOf(alice)
+    await aWikiOf(api, alice)
     const atWork = { ...alice, organizationId: aUser().organizationId }
 
     expect(await wikisSeenBy(atWork)).toEqual([])
@@ -218,7 +199,7 @@ describe('the tenant policies', () => {
   it('keeps B2C users to the wikis they are members of', async () => {
     const alice = aB2cUser()
     const bob = aB2cUser()
-    const { wikiId } = await aWikiOf(alice)
+    const { id: wikiId } = await aWikiOf(api, alice)
 
     expect(await wikisSeenBy(alice)).toEqual([{ organizationId: null }])
     expect(await pagesSeenBy(alice)).toEqual([{ organizationId: null }])
@@ -234,7 +215,7 @@ describe('the tenant policies', () => {
   it('shows a shared B2C wiki to its members', async () => {
     const alice = aB2cUser()
     const bob = aB2cUser()
-    const { wikiId } = await aWikiOf(alice)
+    const { id: wikiId } = await aWikiOf(api, alice)
     await inTenant(db, alice, tx =>
       tx.insert(wikiMembers).values(join(wikiId, bob, null))
     )
@@ -264,7 +245,7 @@ describe('the tenant policies', () => {
   it('keeps each person’s notifications, favorites and visits to themselves', async () => {
     const alice = aUser()
     const bob = aUser({ organizationId: alice.organizationId })
-    const { wikiId, pageId } = await aWikiOf(alice)
+    const { id: wikiId, homePageId: pageId } = await aWikiOf(api, alice)
     const own = (user: TestUser) => ({
       pageId,
       organizationId: alice.organizationId,
@@ -326,7 +307,7 @@ describe('the invites policy', () => {
   it('lets B2C users claim an invite to a wiki they cannot see yet', async () => {
     const alice = aB2cUser()
     const bob = aB2cUser()
-    const { wikiId } = await aWikiOf(alice)
+    const { id: wikiId } = await aWikiOf(api, alice)
     await inviteTo(wikiId, alice, bob.email)
 
     await inTenant(db, bob, tx =>
@@ -339,7 +320,7 @@ describe('the invites policy', () => {
   it('keeps B2C users from inviting themselves to a wiki they cannot see', async () => {
     const alice = aB2cUser()
     const mallory = aB2cUser()
-    const { wikiId } = await aWikiOf(alice)
+    const { id: wikiId } = await aWikiOf(api, alice)
 
     await expect(
       inviteTo(wikiId, mallory, mallory.email)
@@ -349,7 +330,7 @@ describe('the invites policy', () => {
   it('keeps B2C users from raising the role of an invite to them', async () => {
     const alice = aB2cUser()
     const bob = aB2cUser()
-    const { wikiId } = await aWikiOf(alice)
+    const { id: wikiId } = await aWikiOf(api, alice)
     await inviteTo(wikiId, alice, bob.email)
 
     await expect(
@@ -411,7 +392,7 @@ describe('tenant foreign keys', () => {
     'refuses a row in %s that points into another tenant',
     async (table, insert) => {
       const admin = aUser()
-      const { wikiId, pageId } = await aWikiOf(admin)
+      const { id: wikiId, homePageId: pageId } = await aWikiOf(api, admin)
       const [label] = await inTenant(db, admin, tx =>
         tx
           .insert(labels)

@@ -153,6 +153,11 @@ export interface WikiSummary {
   unread: number
 }
 
+/** A wiki as `GET /wikis/:wikiId` shows it. */
+export interface Wiki extends WikiSummary {
+  version: number
+}
+
 /** The job planned to purge the deleted wiki. */
 export async function purgeJobOf(db: Db, wikiId: string) {
   const [job] = await db
@@ -267,5 +272,5 @@ export async function aWikiOf(
   name = 'Handbook'
 ) {
   const response = await app.as(admin).post('/wikis', { name })
-  return response.json<{ id: string; homePageId: string; version: number }>()
+  return response.json<Wiki>()
 }

@@ -5,13 +5,13 @@ import {
   aPageIn,
   aSpaceWiki,
   aUser,
+  aWikiOf,
   joinWiki,
   purgeJobOf,
   startApp,
   wikiRowsOf,
   wikisOf,
-  type TestUser,
-  type WikiSummary
+  type TestUser
 } from '../../testing/app.ts'
 import { notify } from '../notifications/testing.ts'
 import { wikiInvites } from './schema.ts'
@@ -30,13 +30,6 @@ afterAll(async () => {
   await api.close()
   await sql.end()
 })
-
-interface Wiki extends WikiSummary {
-  version: number
-}
-
-const aWikiOf = async (admin: TestUser, name = 'Handbook') =>
-  (await api.as(admin).post('/wikis', { name })).json<Wiki>()
 
 const roles = async (user: TestUser) =>
   (await wikisOf(api, user)).map(wiki => [wiki.name, wiki.role])
@@ -69,7 +62,7 @@ describe('GET /wikis', () => {
     const alice = aUser()
     const bob = aUser({ organizationId: alice.organizationId })
     const carol = aUser({ organizationId: alice.organizationId })
-    const wiki = await aWikiOf(alice)
+    const wiki = await aWikiOf(api, alice)
     await joinWiki(db, alice, wiki.id, bob, 'editor')
     await joinWiki(db, alice, wiki.id, carol, 'editor')
     await notify(db, alice, wiki, bob)
@@ -121,8 +114,8 @@ describe('GET /wikis', () => {
 
   it('lists the personal wiki first, then the others by name', async () => {
     const alice = aUser()
-    await aWikiOf(alice, 'Zoning')
-    await aWikiOf(alice, 'Archives')
+    await aWikiOf(api, alice, 'Zoning')
+    await aWikiOf(api, alice, 'Archives')
 
     expect((await wikisOf(api, alice)).map(wiki => wiki.name)).toEqual([
       'Personal',
@@ -137,7 +130,7 @@ describe('GET /wikis', () => {
       organizationId: alice.organizationId,
       email: `Bob-${crypto.randomUUID()}@Example.com`
     })
-    const wiki = await aWikiOf(alice)
+    const wiki = await aWikiOf(api, alice)
     await invite(alice, wiki.id, bob.email)
 
     expect(await roles(bob)).toEqual([
@@ -149,8 +142,8 @@ describe('GET /wikis', () => {
   it('claims an invite only in its own tenant', async () => {
     const alice = aUser()
     const carol = aB2cUser()
-    const wiki = await aWikiOf(alice)
-    const shared = await aWikiOf(carol, 'Recipes')
+    const wiki = await aWikiOf(api, alice)
+    const shared = await aWikiOf(api, carol, 'Recipes')
     const email = `dave-${crypto.randomUUID()}@example.com`
     await invite(alice, wiki.id, email)
     await invite(carol, shared.id, email)
@@ -211,7 +204,7 @@ describe('POST /wikis', () => {
 describe('GET /wikis/:wikiId', () => {
   it('shows a wiki to its members', async () => {
     const alice = aUser()
-    const wiki = await aWikiOf(alice)
+    const wiki = await aWikiOf(api, alice)
 
     const response = await api.as(alice).get(`/wikis/${wiki.id}`)
 
@@ -224,7 +217,7 @@ describe('GET /wikis/:wikiId', () => {
     async role => {
       const alice = aUser()
       const bob = aUser({ organizationId: alice.organizationId })
-      const wiki = await aWikiOf(alice)
+      const wiki = await aWikiOf(api, alice)
       await joinWiki(db, alice, wiki.id, bob, role)
 
       const response = await api.as(bob).get(`/wikis/${wiki.id}`)
@@ -242,7 +235,7 @@ describe('GET /wikis/:wikiId', () => {
     const admin = colleague
       ? aUser({ organizationId: stranger.organizationId })
       : aUser()
-    const wiki = await aWikiOf(admin)
+    const wiki = await aWikiOf(api, admin)
 
     const response = await api.as(stranger).get(`/wikis/${wiki.id}`)
 
@@ -272,7 +265,7 @@ describe('GET /wikis/:wikiId', () => {
 describe('PATCH /wikis/:wikiId', () => {
   it('lets an admin rename and describe the wiki', async () => {
     const alice = aUser()
-    const wiki = await aWikiOf(alice)
+    const wiki = await aWikiOf(api, alice)
 
     const response = await api
       .as(alice)
@@ -290,7 +283,7 @@ describe('PATCH /wikis/:wikiId', () => {
   it.each(['editor', 'viewer'] as const)('refuses %ss', async role => {
     const alice = aUser()
     const bob = aUser({ organizationId: alice.organizationId })
-    const wiki = await aWikiOf(alice)
+    const wiki = await aWikiOf(api, alice)
     await joinWiki(db, alice, wiki.id, bob, role)
 
     const response = await api
@@ -303,7 +296,7 @@ describe('PATCH /wikis/:wikiId', () => {
 
   it('hides the wiki from someone who is no member', async () => {
     const alice = aUser()
-    const wiki = await aWikiOf(alice)
+    const wiki = await aWikiOf(api, alice)
 
     const response = await api
       .as(aUser({ organizationId: alice.organizationId }))
@@ -340,7 +333,7 @@ describe('PATCH /wikis/:wikiId', () => {
     ['a description over 500 characters', { description: 'x'.repeat(501) }]
   ])('refuses %s', async (_case, body) => {
     const alice = aUser()
-    const wiki = await aWikiOf(alice)
+    const wiki = await aWikiOf(api, alice)
 
     const response = await api.as(alice).patch(`/wikis/${wiki.id}`, body)
 
@@ -352,7 +345,7 @@ describe('PATCH /wikis/:wikiId', () => {
 describe('DELETE /wikis/:wikiId', () => {
   it('puts a shared wiki out of reach, until its purge 30 days later', async () => {
     const alice = aUser()
-    const wiki = await aWikiOf(alice)
+    const wiki = await aWikiOf(api, alice)
 
     const response = await api.as(alice).delete(`/wikis/${wiki.id}`)
 
@@ -368,7 +361,7 @@ describe('DELETE /wikis/:wikiId', () => {
 
   it('purges the wiki for good, with its pages', async () => {
     const alice = aB2cUser()
-    const wiki = await aWikiOf(alice)
+    const wiki = await aWikiOf(api, alice)
     const plans = await aPageIn(db, alice, wiki.id, {
       title: 'Plans',
       position: 'a0'
@@ -408,7 +401,7 @@ describe('DELETE /wikis/:wikiId', () => {
   it.each(['editor', 'viewer'] as const)('refuses %ss', async role => {
     const alice = aUser()
     const bob = aUser({ organizationId: alice.organizationId })
-    const wiki = await aWikiOf(alice)
+    const wiki = await aWikiOf(api, alice)
     await joinWiki(db, alice, wiki.id, bob, role)
 
     const response = await api.as(bob).delete(`/wikis/${wiki.id}`)
@@ -429,7 +422,7 @@ describe('GET /wikis/:wikiId/tree', () => {
 
   it('lists the live pages of the wiki, but its home page', async () => {
     const alice = aUser()
-    const wiki = await aWikiOf(alice)
+    const wiki = await aWikiOf(api, alice)
     const plans = await aPageIn(db, alice, wiki.id, {
       title: 'Plans',
       position: 'a0'
@@ -480,7 +473,7 @@ describe('GET /wikis/:wikiId/tree', () => {
     async role => {
       const alice = aUser()
       const bob = aUser({ organizationId: alice.organizationId })
-      const wiki = await aWikiOf(alice)
+      const wiki = await aWikiOf(api, alice)
       const plans = await aPageIn(db, alice, wiki.id, {
         title: 'Plans',
         position: 'a0'
@@ -507,7 +500,7 @@ describe('GET /wikis/:wikiId/tree', () => {
 
   it('hides the tree from someone who is no member', async () => {
     const alice = aUser()
-    const wiki = await aWikiOf(alice)
+    const wiki = await aWikiOf(api, alice)
 
     const response = await api
       .as(aUser({ organizationId: alice.organizationId }))
@@ -519,7 +512,7 @@ describe('GET /wikis/:wikiId/tree', () => {
 
   it('hides the tree of a deleted wiki, even from its admin', async () => {
     const alice = aUser()
-    const wiki = await aWikiOf(alice)
+    const wiki = await aWikiOf(api, alice)
     await api.as(alice).delete(`/wikis/${wiki.id}`)
 
     const response = await api.as(alice).get(`/wikis/${wiki.id}/tree`)
