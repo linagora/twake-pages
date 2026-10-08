@@ -310,7 +310,7 @@ function checkText(value: string, max: number) {
 }
 
 function checkDescription(value = '') {
-  if (value.length > 500) throw refuse('invalid_request')
+  if (value.length > 500 || !storable(value)) throw refuse('invalid_request')
   return value
 }
 
@@ -330,6 +330,12 @@ function checkTitle(value: string) {
   const title = checkText(value, 200)
   if (!storable(title)) throw refuse('invalid_request')
   return title
+}
+
+function checkName(value: string) {
+  const name = checkText(value, 100)
+  if (!storable(name)) throw refuse('invalid_request')
+  return name
 }
 
 // A block's address is its `url` prop, empty until the block is given one.
@@ -874,7 +880,7 @@ function signedIn(world: World, person: Person): FakePagesApi {
     createWiki: vi.fn<PagesApi['createWiki']>(wiki =>
       answer(() => {
         const made = makeWiki(
-          checkText(wiki.name, 100),
+          checkName(wiki.name),
           checkDescription(wiki.description),
           'shared'
         )
@@ -890,7 +896,7 @@ function signedIn(world: World, person: Person): FakePagesApi {
         if (changes.name !== undefined && wiki.kind === 'space') {
           throw refuse('managed')
         }
-        if (changes.name !== undefined) wiki.name = checkText(changes.name, 100)
+        if (changes.name !== undefined) wiki.name = checkName(changes.name)
         if (changes.description !== undefined) {
           wiki.description = checkDescription(changes.description)
         }

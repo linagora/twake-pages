@@ -110,6 +110,25 @@ describe('fakePagesApi', () => {
       })
     })
 
+    it('refuses a name or a description with a NUL character or a lone surrogate', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki()
+      const invalid = new ApiError(400, 'invalid_request')
+
+      await expect(api.createWiki({ name: 'Ops\u0000' })).rejects.toEqual(
+        invalid
+      )
+      await expect(
+        api.createWiki({ name: 'Ops', description: 'Runbooks \ud83d' })
+      ).rejects.toEqual(invalid)
+      await expect(
+        api.renameWiki(wiki.id, { name: 'Guide\u0000' })
+      ).rejects.toEqual(invalid)
+      await expect(
+        api.renameWiki(wiki.id, { description: 'Runbooks \ud83d' })
+      ).rejects.toEqual(invalid)
+    })
+
     it('hides a wiki from people who are no members', async () => {
       const api = fakePagesApi()
       const wiki = api.withWiki()
