@@ -314,6 +314,23 @@ describe.each(deletions)(
   }
 )
 
+describe.each(deletions.filter(({ matchedBy }) => matchedBy === 'email'))(
+  'a deleted account matched by email ($tenant)',
+  ({ routingKey, makeUser, body }) => {
+    it('is found whatever the case of its email', async () => {
+      const gone = { ...makeUser(), email: `Gone-${randomUUID()}@Example.com` }
+      const personal = await personalWikiOf(gone)
+
+      await deliver(
+        routingKey,
+        body({ ...gone, email: gone.email.toLowerCase() })
+      )
+
+      expect(await wikiRowsOf(db, gone, personal.id)).toEqual([])
+    })
+  }
+)
+
 describe('a deleted account in a space wiki', () => {
   it('leaves the wiki to its space, even as its only admin', async () => {
     const gone = aUser()

@@ -41,11 +41,14 @@ async function b2cUserIdByEmail(tx: Tx, email: string) {
   return userId
 }
 
+// Unlike Twake Tasks, which compares emails as they are: a membership keeps
+// the email as the person's sign-in gave it, in a case ldap-rest may not
+// share. Invitations and settings are matched lowercased too.
 async function userIdByEmail(tx: Tx, email: string) {
   const [member] = await tx
     .select({ userId: wikiMembers.userId })
     .from(wikiMembers)
-    .where(eq(wikiMembers.email, email))
+    .where(sql`lower(${wikiMembers.email}) = lower(${email})`)
     .limit(1)
   return member?.userId
 }
