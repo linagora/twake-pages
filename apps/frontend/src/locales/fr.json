@@ -183,6 +183,11 @@
   "shortcuts": {
     "title": "Raccourcis clavier",
     "then": "g puis %{key}",
+    "moveKeys": "Alt+Maj+%{arrow}",
+    "moveUp": "Monter la page dans l'arborescence",
+    "moveDown": "Descendre la page dans l'arborescence",
+    "moveUnder": "Placer la page sous la page précédente de même niveau",
+    "moveOut": "Sortir la page au niveau de son parent",
     "close": "Fermer"
   }
 }

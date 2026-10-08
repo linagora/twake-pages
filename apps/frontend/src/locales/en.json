@@ -183,6 +183,11 @@
   "shortcuts": {
     "title": "Keyboard shortcuts",
     "then": "g then %{key}",
+    "moveKeys": "Alt+Shift+%{arrow}",
+    "moveUp": "Move the page up in the tree",
+    "moveDown": "Move the page down in the tree",
+    "moveUnder": "Move the page under the previous page at its level",
+    "moveOut": "Move the page out to its parent’s level",
     "close": "Close"
   }
 }

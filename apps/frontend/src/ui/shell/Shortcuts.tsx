@@ -62,6 +62,14 @@ export function useShortcuts(actions: { help: () => void }): void {
   }, [])
 }
 
+// The keys of the tree of a wiki, on the page that has the focus there.
+const MOVES = [
+  ['↑', 'shortcuts.moveUp'],
+  ['↓', 'shortcuts.moveDown'],
+  ['→', 'shortcuts.moveUnder'],
+  ['←', 'shortcuts.moveOut']
+] as const
+
 export function ShortcutsHelp({
   onClose
 }: {
@@ -72,6 +80,10 @@ export function ShortcutsHelp({
   const rows = [
     ...Object.entries(GO).map(([key, { label }]) => [
       t('shortcuts.then', { key }),
+      t(label)
+    ]),
+    ...MOVES.map(([arrow, label]) => [
+      t('shortcuts.moveKeys', { arrow }),
       t(label)
     ]),
     ['?', t('shortcuts.title')]
