@@ -37,7 +37,6 @@ type Mocks = { [Key in keyof PagesApi]: Mock<PagesApi[Key]> }
 
 export interface WikiSeed {
   name?: string
-  description?: string
   kind?: WikiKind
   role?: Role
   members?: Record<string, Role>
@@ -1273,15 +1272,12 @@ function signedIn(world: World, person: Person): FakePagesApi {
       signedIn(world, personFor(world, email, name)),
     withWiki: ({
       name = 'Handbook',
-      description: seededDescription = '',
       kind = 'shared',
       role = 'admin',
       members = {}
     } = {}) => {
       const wiki =
-        kind === 'personal'
-          ? personalWiki()
-          : makeWiki(name, seededDescription, kind)
+        kind === 'personal' ? personalWiki() : makeWiki(name, '', kind)
       wiki.members.set(person.id, { person, role, joinedAt: now() })
       for (const [email, memberRole] of Object.entries(members)) {
         const member = personFor(world, email)
