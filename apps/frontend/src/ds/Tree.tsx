@@ -1,6 +1,12 @@
 import { Bottom, Icon, Right } from '@linagora/twake-icons'
 import { Box } from '@linagora/twake-mui'
-import { useId, type ReactElement, type ReactNode } from 'react'
+import {
+  useId,
+  useState,
+  type KeyboardEvent,
+  type ReactElement,
+  type ReactNode
+} from 'react'
 
 export interface TreeEntry<Entry> {
   id: string
@@ -20,13 +26,22 @@ export interface TreeItemProps {
   'aria-posinset': number
   'aria-expanded'?: boolean
   'aria-current'?: 'page'
+  tabIndex: number
+  onFocus: () => void
+  onKeyDown: (event: KeyboardEvent<HTMLElement>) => void
+}
+
+interface Shown<Entry> {
+  entry: Entry
+  parent: string | null
 }
 
 const LIST = { m: 0, p: 0, listStyle: 'none' } as const
 
 /**
  * The navigation tree of the ARIA Authoring Practices: `item` draws each entry
- * as a link, and the entries under it show once it is expanded.
+ * as a link, and the entries under it show once it is expanded. The tree is
+ * one stop of the tab order, and the arrows move through the entries shown.
  */
 export function Tree<Entry extends TreeEntry<Entry>>({
   labelledBy,
@@ -45,6 +60,58 @@ export function Tree<Entry extends TreeEntry<Entry>>({
 }): ReactElement {
   const base = useId()
   const itemId = (id: string) => `${base}item-${id}`
+  const [focused, setFocused] = useState<string | null>(null)
+
+  const shown = shownOf(entries, expanded)
+  // Back in the tree, the focus goes to the entry it left, else the open page.
+  const stop =
+    [focused, current].find(id => shown.some(({ entry }) => entry.id === id)) ??
+    shown[0]?.entry.id
+
+  const moveTo = (id: string | null | undefined) => {
+    if (id) document.getElementById(itemId(id))?.focus()
+  }
+
+  const onKeyDown = (
+    entry: Entry,
+    open: boolean,
+    event: KeyboardEvent<HTMLElement>
+  ) => {
+    const at = shown.findIndex(each => each.entry.id === entry.id)
+    switch (event.key) {
+      case 'ArrowDown':
+        moveTo(shown[at + 1]?.entry.id)
+        break
+      case 'ArrowUp':
+        moveTo(shown[at - 1]?.entry.id)
+        break
+      case 'Home':
+        moveTo(shown[0]?.entry.id)
+        break
+      case 'End':
+        moveTo(shown.at(-1)?.entry.id)
+        break
+      case 'ArrowRight':
+        if (open) moveTo(entry.children[0]?.id)
+        else if (entry.children.length > 0) onExpand(entry.id, true)
+        break
+      case 'ArrowLeft':
+        if (open) onExpand(entry.id, false)
+        else moveTo(shown[at]?.parent)
+        break
+      case 'Enter':
+        // Whatever `item` draws opens. With a modifier, the browser opens a
+        // link elsewhere.
+        if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) {
+          return
+        }
+        event.currentTarget.click()
+        break
+      default:
+        return
+    }
+    event.preventDefault()
+  }
 
   const branch = (siblings: Entry[], level: number): ReactElement[] =>
     siblings.map((entry, index) => {
@@ -67,7 +134,14 @@ export function Tree<Entry extends TreeEntry<Entry>>({
               'aria-setsize': siblings.length,
               'aria-posinset': index + 1,
               ...(parent && { 'aria-expanded': open }),
-              ...(entry.id === current && { 'aria-current': 'page' as const })
+              ...(entry.id === current && { 'aria-current': 'page' as const }),
+              tabIndex: entry.id === stop ? 0 : -1,
+              onFocus: () => {
+                setFocused(entry.id)
+              },
+              onKeyDown: event => {
+                onKeyDown(entry, open, event)
+              }
             })}
           </Row>
           {open && (
@@ -89,6 +163,20 @@ export function Tree<Entry extends TreeEntry<Entry>>({
       {branch(entries, 1)}
     </Box>
   )
+}
+
+/** The entries the arrows move through, in their order on screen. */
+function shownOf<Entry extends TreeEntry<Entry>>(
+  entries: Entry[],
+  expanded: ReadonlySet<string>,
+  parent: string | null = null
+): Shown<Entry>[] {
+  return entries.flatMap(entry => [
+    { entry, parent },
+    ...(expanded.has(entry.id)
+      ? shownOf(entry.children, expanded, entry.id)
+      : [])
+  ])
 }
 
 function Row({

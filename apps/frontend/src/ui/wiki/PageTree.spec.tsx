@@ -124,3 +124,104 @@ describe('the tree of a wiki', () => {
     )
   })
 })
+
+describe('the tree of a wiki, from the keyboard', () => {
+  async function renderTree() {
+    const { pagesApi, wiki, engineering } = handbook()
+    const { router } = renderRoute(`/wikis/${wiki.id}`, { pagesApi })
+    const tree = await screen.findByRole('tree', { name: 'Pages' })
+    return { tree, router, wiki, engineering }
+  }
+
+  const focus = (name: string) => {
+    act(() => {
+      item(name).focus()
+    })
+  }
+
+  const press = (key: string, modifiers: { ctrlKey?: boolean } = {}) => {
+    if (!(document.activeElement instanceof HTMLElement)) {
+      throw new Error('Nothing has the focus')
+    }
+    fireEvent.keyDown(document.activeElement, { key, ...modifiers })
+  }
+
+  const tabIndexesIn = (tree: HTMLElement) =>
+    within(tree)
+      .getAllByRole('treeitem')
+      .map(each => each.tabIndex)
+
+  it('is one stop of the tab order', async () => {
+    const { tree } = await renderTree()
+    expect(tabIndexesIn(tree)).toEqual([0, -1])
+
+    focus('Engineering')
+
+    expect(tabIndexesIn(tree)).toEqual([-1, 0])
+  })
+
+  it('moves between the pages shown with the arrows, Home and End', async () => {
+    await renderTree()
+    focus('Onboarding')
+
+    press('ArrowDown')
+    expect(item('Engineering')).toHaveFocus()
+    press('ArrowDown')
+    expect(item('Engineering')).toHaveFocus()
+    press('ArrowUp')
+    expect(item('Onboarding')).toHaveFocus()
+    press('End')
+    expect(item('Engineering')).toHaveFocus()
+    press('Home')
+    expect(item('Onboarding')).toHaveFocus()
+  })
+
+  it('expands with the right arrow, then goes down to the first child page', async () => {
+    await renderTree()
+    focus('Engineering')
+
+    press('ArrowRight')
+    expect(item('Engineering')).toHaveAttribute('aria-expanded', 'true')
+    expect(item('Engineering')).toHaveFocus()
+
+    press('ArrowRight')
+    expect(item('Releases')).toHaveFocus()
+  })
+
+  it('goes up to the parent with the left arrow, then collapses it', async () => {
+    await renderTree()
+    focus('Engineering')
+    press('ArrowRight')
+    press('ArrowRight')
+
+    press('ArrowLeft')
+    expect(item('Engineering')).toHaveFocus()
+    expect(item('Engineering')).toHaveAttribute('aria-expanded', 'true')
+
+    press('ArrowLeft')
+    expect(item('Engineering')).toHaveAttribute('aria-expanded', 'false')
+    expect(
+      screen.queryByRole('treeitem', { name: 'Releases' })
+    ).not.toBeInTheDocument()
+  })
+
+  it('opens the page with Enter', async () => {
+    const { router, wiki, engineering } = await renderTree()
+    focus('Engineering')
+
+    press('Enter')
+
+    expect(router.state.location.pathname).toBe(
+      `/wikis/${wiki.id}/pages/${engineering.id}`
+    )
+  })
+
+  it('leaves Enter with a modifier to the browser, to open the page elsewhere', async () => {
+    const { router, wiki } = await renderTree()
+    focus('Engineering')
+
+    press('Enter', { ctrlKey: true })
+
+    expect(router.state.location.pathname).toBe(`/wikis/${wiki.id}`)
+  })
+})
