@@ -7,7 +7,7 @@ import { EmptyState } from '@/ds/EmptyState'
 import { useI18n } from '@/ui/i18n/useI18n'
 import { useDocumentTitle } from '@/ui/useDocumentTitle'
 
-function BackToWikis(): ReactElement {
+export function BackToWikis(): ReactElement {
   const { t } = useI18n()
   return (
     <Button

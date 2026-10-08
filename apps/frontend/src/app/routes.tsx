@@ -14,9 +14,9 @@ import { TrashScreen } from '@/ui/trash/TrashScreen'
 import { WikiHomeScreen } from '@/ui/wiki/WikiHomeScreen'
 import { WikiLayout } from '@/ui/wiki/WikiLayout'
 
-const wikiRoutes = (): RouteObject[] => [
+const wikiRoutes = (back = true): RouteObject[] => [
   {
-    element: <WikiLayout />,
+    element: <WikiLayout back={back} />,
     children: [
       { index: true, element: <WikiHomeScreen /> },
       { path: 'pages/:pageId', element: <PageScreen /> },
@@ -48,6 +48,6 @@ export const routes: RouteObject[] = [
   {
     path: '/embed/wikis/:wikiId',
     element: <EmbedLayout />,
-    children: [{ errorElement: <CrashScreen />, children: wikiRoutes() }]
+    children: [{ errorElement: <CrashScreen />, children: wikiRoutes(false) }]
   }
 ]

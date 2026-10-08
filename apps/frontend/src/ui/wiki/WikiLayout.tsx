@@ -1,18 +1,49 @@
+import { Compass } from '@linagora/twake-icons'
 import {
   List,
   ListItem,
   ListItemButton,
-  ListItemText
+  ListItemText,
+  Typography
 } from '@linagora/twake-mui'
 import type { ReactElement } from 'react'
-import { Outlet } from 'react-router'
+import { Outlet, useParams } from 'react-router'
 
+import { ApiError } from '@/application/pages'
+import { EmptyState, ListSkeleton } from '@/ds/EmptyState'
 import { WikiFrame } from '@/ds/WikiFrame'
 import { useI18n } from '@/ui/i18n/useI18n'
+import { BackToWikis } from '@/ui/shell/Problems'
 import { EntryLink } from '@/ui/shell/SidebarLink'
+import { useWiki } from '@/ui/wiki/queries'
 
-export function WikiLayout(): ReactElement {
+/** `back` leads to the person's wikis, which the frame of TwakeSpace has not. */
+export function WikiLayout({ back = true }: { back?: boolean }): ReactElement {
   const { t } = useI18n()
+  const { wikiId = '' } = useParams()
+  const wiki = useWiki(wikiId)
+  // Checked before the data, which a failed reload keeps.
+  const missing = wiki.error instanceof ApiError && wiki.error.status === 404
+
+  if (missing || !wiki.data) {
+    return (
+      <main className="u-p-2">
+        {missing && (
+          <EmptyState
+            icon={Compass}
+            title={t('wiki.notFound')}
+            text={t('problems.notFoundHint')}
+            action={back ? <BackToWikis /> : undefined}
+          />
+        )}
+        {wiki.isError && !missing && (
+          <Typography role="alert">{t('wiki.loadFailed')}</Typography>
+        )}
+        {wiki.isPending && <ListSkeleton label={t('app.loading')} />}
+      </main>
+    )
+  }
+
   return (
     <WikiFrame
       sidebar={

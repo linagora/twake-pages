@@ -9,6 +9,7 @@ import {
   type MockInstance
 } from 'vitest'
 
+import { fakePagesApi } from '@/testing/fakePagesApi'
 import { renderBrowserRoute, renderRoute } from '@/testing/renderWithProviders'
 import { connectTwakeSpace, disconnectTwakeSpace } from '@/ui/embed/twakeSpace'
 
@@ -25,7 +26,9 @@ afterEach(() => {
 
 describe('the embedded view', () => {
   it("shows the wiki, without the app's bar and navigation", async () => {
-    renderRoute('/embed/wikis/w1')
+    const pagesApi = fakePagesApi()
+    const wiki = pagesApi.withWiki({ kind: 'space' })
+    renderRoute(`/embed/wikis/${wiki.id}`, { pagesApi })
 
     expect(
       await screen.findByRole('navigation', { name: 'Wiki' })

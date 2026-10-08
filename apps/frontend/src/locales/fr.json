@@ -38,7 +38,9 @@
   },
   "wiki": {
     "nav": "Wiki",
-    "home": "Page d'accueil"
+    "home": "Page d'accueil",
+    "notFound": "Ce wiki n'existe pas, ou vous ne pouvez pas l'ouvrir.",
+    "loadFailed": "Le wiki n'a pas pu être chargé."
   },
   "page": {
     "title": "Page",
