@@ -42,6 +42,7 @@ describe('requireIdentity', () => {
 
     expect(response.statusCode).toBe(401)
     expect(response.headers['www-authenticate']).toBe('Bearer')
+    expect(response.body).toBe('')
   })
 
   it('refuses an invalid token', async () => {
@@ -57,6 +58,7 @@ describe('requireIdentity', () => {
     expect(response.headers['www-authenticate']).toBe(
       'Bearer error="invalid_token"'
     )
+    expect(response.body).toBe('')
   })
 
   it('answers 503 when the token cannot be checked', async () => {

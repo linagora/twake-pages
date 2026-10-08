@@ -16,11 +16,12 @@ const REVOCATION_TTL_MS = 24 * 60 * 60 * 1000
 
 const logoutBody = z.object({ logout_token: z.string().min(1) })
 
+// docs/api.md: a missing or rejected token answers 401 with no body.
 function unauthorized(reply: FastifyReply, error: string | null) {
   return reply
     .code(401)
     .header('www-authenticate', error ? `Bearer error="${error}"` : 'Bearer')
-    .send({ error: 'unauthorized' })
+    .send()
 }
 
 export type RequireIdentity = (
