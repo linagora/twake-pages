@@ -149,7 +149,7 @@ _Avoid_: History (that word is for versions)
 > **Dev:** "When Bob is removed from the space, what happens to the pages he wrote in its **Space wiki**?"
 > **Domain expert:** "They stay, under his email. He stops being a **Member**, so he loses access and stops getting **Notifications**, even for the **Pages** he **follows**."
 > **Dev:** "And if Alice deletes a page that has child pages?"
-> **Domain expert:** "The whole branch goes to the **Trash** as one **Deleted page**. Restoring it brings the branch back where it was, or at the top of the **Tree** if its parent is gone."
+> **Domain expert:** "The whole branch goes to the **Trash** as one **Deleted page**. Restoring it brings the branch back under its parent, after its siblings, or to the top level of the **Tree**, last, if its parent is gone."
 
 ## Flagged ambiguities
 
