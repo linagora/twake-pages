@@ -8,6 +8,7 @@ import {
   type Handler
 } from '../../events/router.ts'
 import { asOrganization, asTenant, type Tx } from '../../infra/db.ts'
+import { jobs } from '../../scheduler/schema.ts'
 import { pageFavorites, pageVisits } from '../pages/schema.ts'
 import { userSettings } from '../settings/schema.ts'
 import { bumpWiki } from './live.ts'
@@ -18,6 +19,10 @@ const b2bDeleted = z.looseObject({
   organizationId: z.string().min(1).optional(),
   uuid: z.uuid().optional(),
   internalEmail: z.email().optional()
+})
+
+const organizationDeleted = z.looseObject({
+  organizationId: z.string().min(1).optional()
 })
 
 const b2cDeleted = z.looseObject({
@@ -167,10 +172,29 @@ const onB2cDeleted: Handler<PlatformEvent> = async (event, tx) => {
   if (userId) await forget(tx, null, userId)
 }
 
+// Arrives after every member's domain.user.deleted, and may be replayed.
+// Everything the organization holds hangs off its wikis and goes with them by
+// cascade, which row level security does not hold back, so unlike Twake Tasks
+// it needs no flag to erase rows that only their owner may see.
+const onOrganizationDeleted: Handler<PlatformEvent> = async (event, tx) => {
+  const { organizationId } = parseOrDrop(
+    organizationDeleted,
+    event.body,
+    event.routingKey
+  )
+  if (!organizationId) throw new RejectedEventError('no organizationId')
+  await asOrganization(tx, organizationId)
+  await tx.delete(wikis)
+  await tx
+    .delete(jobs)
+    .where(sql`${jobs.payload}->>'organizationId' = ${organizationId}`)
+}
+
 export const accountRoutes: ReadonlyMap<
   string,
   Handler<PlatformEvent>
 > = new Map([
   ['domain.user.deleted', onB2bDeleted],
-  ['user.deleted', onB2cDeleted]
+  ['user.deleted', onB2cDeleted],
+  ['domain.organization.deleted', onOrganizationDeleted]
 ])

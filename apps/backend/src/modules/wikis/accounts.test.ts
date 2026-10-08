@@ -1,9 +1,10 @@
 import { randomUUID } from 'node:crypto'
-import { eq } from 'drizzle-orm'
+import { eq, sql as raw } from 'drizzle-orm'
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest'
 import type { PlatformEvent } from '../../events/envelope.ts'
 import { RejectedEventError } from '../../events/router.ts'
-import { createDb, inTenant } from '../../infra/db.ts'
+import { asOrganization, createDb, inTenant } from '../../infra/db.ts'
+import { jobs } from '../../scheduler/schema.ts'
 import {
   aB2cUser,
   aPageIn,
@@ -22,6 +23,7 @@ import { pageFavorites, pageVersions, pageVisits } from '../pages/schema.ts'
 import { keepSettings } from '../settings/events.ts'
 import type { Role } from './access.ts'
 import { accountRoutes } from './accounts.ts'
+import { wikis } from './schema.ts'
 
 let api: Awaited<ReturnType<typeof startApp>>
 const { sql, db } = createDb(inject('databaseUrl'))
@@ -313,5 +315,78 @@ describe('deleted accounts that cannot be applied', () => {
     await expect(deliver('user.deleted', { userId: 'alice' })).rejects.toThrow(
       RejectedEventError
     )
+  })
+})
+
+describe('a deleted organization', () => {
+  async function wikisHeldBy(organizationId: string | null) {
+    return db.transaction(async tx => {
+      await asOrganization(tx, organizationId)
+      return tx.select({ id: wikis.id }).from(wikis)
+    })
+  }
+
+  const jobsOf = (organizationId: string | null) =>
+    db
+      .select({ id: jobs.id })
+      .from(jobs)
+      .where(raw`${jobs.payload}->>'organizationId' = ${organizationId}`)
+
+  it('erases everything the organization holds, and nothing of another', async () => {
+    const admin = aUser()
+    const organizationId = admin.organizationId
+    const colleague = aUser({ organizationId })
+    const outsider = aUser()
+    const handbook = await aWiki(admin, 'Handbook', [[colleague, 'editor']])
+    // Rows only their owner may see, which go with the wiki all the same.
+    await inTenant(db, colleague, async tx => {
+      const own = {
+        pageId: handbook.homePageId,
+        organizationId,
+        userId: colleague.userId
+      }
+      await tx.insert(pageFavorites).values(own)
+      await tx.insert(pageVisits).values(own)
+    })
+    await aSpaceWiki(db, [[colleague, 'admin']])
+    const deleted = await aWiki(admin, 'Archive', [])
+    await api.as(admin).delete(`/wikis/${deleted.id}`)
+    const kept = await aWiki(outsider, 'Archive', [])
+    await api.as(outsider).delete(`/wikis/${kept.id}`)
+    expect(await jobsOf(organizationId)).not.toEqual([])
+
+    await deliver('domain.organization.deleted', {
+      emitter: 'twake-ldap-rest',
+      type: 'organization.deleted',
+      organizationId,
+      domain: 'example.com',
+      reason: 'closed'
+    })
+
+    expect(await wikisHeldBy(organizationId)).toEqual([])
+    expect(await jobsOf(organizationId)).toEqual([])
+    expect(await favoritesAndRecentOf(colleague)).toEqual({
+      favorites: [],
+      recent: []
+    })
+    expect(await wikisHeldBy(outsider.organizationId)).not.toEqual([])
+    expect(await jobsOf(outsider.organizationId)).not.toEqual([])
+  })
+
+  it('changes nothing when replayed', async () => {
+    const admin = aUser()
+    await aWiki(admin, 'Handbook', [])
+    const body = { organizationId: admin.organizationId }
+
+    await deliver('domain.organization.deleted', body)
+    await deliver('domain.organization.deleted', body)
+
+    expect(await wikisHeldBy(admin.organizationId)).toEqual([])
+  })
+
+  it('rejects a deletion without an organization', async () => {
+    await expect(
+      deliver('domain.organization.deleted', { domain: 'example.com' })
+    ).rejects.toThrow(RejectedEventError)
   })
 })
