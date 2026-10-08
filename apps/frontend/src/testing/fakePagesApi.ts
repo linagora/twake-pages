@@ -175,7 +175,7 @@ interface World {
   pages: Map<string, StoredPage>
   comments: Map<string, StoredComment>
   notifications: StoredNotification[]
-  watchers: Map<string, Set<(version: number) => void>>
+  listeners: Map<string, Set<(version: number) => void>>
   apis: Map<string, FakePagesApi>
 }
 
@@ -369,7 +369,7 @@ export function fakePagesApi(): FakePagesApi {
     pages: new Map(),
     comments: new Map(),
     notifications: [],
-    watchers: new Map(),
+    listeners: new Map(),
     apis: new Map()
   }
   return signedIn(world, personFor(world, 'alice@example.com', 'Alice Martin'))
@@ -431,7 +431,7 @@ function signedIn(world: World, person: Person): FakePagesApi {
 
   const bump = (wiki: StoredWiki) => {
     wiki.version += 1
-    for (const listener of world.watchers.get(wiki.id) ?? []) {
+    for (const listener of world.listeners.get(wiki.id) ?? []) {
       listener(wiki.version)
     }
   }
@@ -808,8 +808,8 @@ function signedIn(world: World, person: Person): FakePagesApi {
     watchWiki: vi.fn<PagesApi['watchWiki']>((wikiId, onVersion) => {
       const wiki = wikiOf(wikiId)
       if (!wiki?.members.has(person.id)) return () => undefined
-      const listeners = world.watchers.get(wikiId) ?? new Set()
-      world.watchers.set(wikiId, listeners.add(onVersion))
+      const listeners = world.listeners.get(wikiId) ?? new Set()
+      world.listeners.set(wikiId, listeners.add(onVersion))
       onVersion(wiki.version)
       return () => {
         listeners.delete(onVersion)

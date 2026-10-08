@@ -9,17 +9,17 @@ import {
   type FakePagesApi
 } from '@/testing/fakePagesApi'
 
-type Outline = (string | Outline)[]
+type TreeTitles = (string | TreeTitles)[]
 
-const outline = (nodes: TreeNode[]): Outline =>
+const treeTitles = (nodes: TreeNode[]): TreeTitles =>
   nodes.flatMap(node =>
     node.children.length > 0
-      ? [node.title, outline(node.children)]
+      ? [node.title, treeTitles(node.children)]
       : [node.title]
   )
 
-async function outlineOf(api: FakePagesApi, wikiId: string) {
-  return outline(buildTree((await api.getTree(wikiId)).pages))
+async function treeOf(api: FakePagesApi, wikiId: string) {
+  return treeTitles(buildTree((await api.getTree(wikiId)).pages))
 }
 
 async function badgesOf(api: FakePagesApi) {
@@ -96,17 +96,17 @@ describe('fakePagesApi', () => {
 
     it('leaves the name of a space wiki and the personal wiki alone', async () => {
       const api = fakePagesApi()
-      const space = api.withWiki({ kind: 'space' })
+      const spaceWiki = api.withWiki({ kind: 'space' })
       const personal = api.withWiki({ kind: 'personal' })
 
-      await expect(api.renameWiki(space.id, { name: 'Guide' })).rejects.toEqual(
-        new ApiError(409, 'managed')
-      )
+      await expect(
+        api.renameWiki(spaceWiki.id, { name: 'Guide' })
+      ).rejects.toEqual(new ApiError(409, 'managed'))
       await expect(api.deleteWiki(personal.id)).rejects.toEqual(
         new ApiError(409, 'managed')
       )
       await expect(
-        api.renameWiki(space.id, { description: 'Our space' })
+        api.renameWiki(spaceWiki.id, { description: 'Our space' })
       ).resolves.toMatchObject({ description: 'Our space' })
     })
 
@@ -221,11 +221,11 @@ describe('fakePagesApi', () => {
 
     it('leaves the members of a personal or space wiki alone', async () => {
       const api = fakePagesApi()
-      const space = api.withWiki({ kind: 'space' })
+      const spaceWiki = api.withWiki({ kind: 'space' })
       const personal = api.withWiki({ kind: 'personal' })
 
       await expect(
-        api.invite(space.id, 'bob@example.com', 'viewer')
+        api.invite(spaceWiki.id, 'bob@example.com', 'viewer')
       ).rejects.toEqual(new ApiError(409, 'managed'))
       await expect(api.getMembers(personal.id)).resolves.toMatchObject({
         managed: true
@@ -493,7 +493,7 @@ describe('fakePagesApi', () => {
         afterId: laptop.id
       })
 
-      await expect(outlineOf(api, wiki.id)).resolves.toEqual([
+      await expect(treeOf(api, wiki.id)).resolves.toEqual([
         'Onboarding',
         ['Laptop', 'FAQ', 'Badge']
       ])
@@ -517,30 +517,15 @@ describe('fakePagesApi', () => {
         afterId: c.id,
         beforeId: d.id
       })
-      await expect(outlineOf(api, wiki.id)).resolves.toEqual([
-        'A',
-        'C',
-        'B',
-        'D'
-      ])
+      await expect(treeOf(api, wiki.id)).resolves.toEqual(['A', 'C', 'B', 'D'])
       await api.movePage(b.id, {
         parentId: null,
         afterId: a.id,
         beforeId: c.id
       })
-      await expect(outlineOf(api, wiki.id)).resolves.toEqual([
-        'A',
-        'B',
-        'C',
-        'D'
-      ])
+      await expect(treeOf(api, wiki.id)).resolves.toEqual(['A', 'B', 'C', 'D'])
       await api.movePage(a.id, { parentId: null })
-      await expect(outlineOf(api, wiki.id)).resolves.toEqual([
-        'B',
-        'C',
-        'D',
-        'A'
-      ])
+      await expect(treeOf(api, wiki.id)).resolves.toEqual(['B', 'C', 'D', 'A'])
     })
 
     it('never moves the home page, nor a page under itself', async () => {
@@ -616,7 +601,7 @@ describe('fakePagesApi', () => {
 
       await api.deletePage(onboarding.id)
 
-      await expect(outlineOf(api, wiki.id)).resolves.toEqual(['FAQ'])
+      await expect(treeOf(api, wiki.id)).resolves.toEqual(['FAQ'])
       await expect(api.listTrash(wiki.id)).resolves.toMatchObject([
         {
           id: onboarding.id,
@@ -665,7 +650,7 @@ describe('fakePagesApi', () => {
       await expect(api.restorePage(laptop.id)).resolves.toMatchObject({
         parentId: onboarding.id
       })
-      await expect(outlineOf(api, wiki.id)).resolves.toEqual([
+      await expect(treeOf(api, wiki.id)).resolves.toEqual([
         'Onboarding',
         ['Badge', 'Laptop', ['Setup']],
         'FAQ'
@@ -676,7 +661,7 @@ describe('fakePagesApi', () => {
       await expect(api.restorePage(laptop.id)).resolves.toMatchObject({
         parentId: null
       })
-      await expect(outlineOf(api, wiki.id)).resolves.toEqual([
+      await expect(treeOf(api, wiki.id)).resolves.toEqual([
         'FAQ',
         'Laptop',
         ['Setup']
@@ -938,12 +923,12 @@ describe('fakePagesApi', () => {
       const bob = api.signedInAs('bob@example.com')
       const question = await bob.addComment(page.id, { body: 'Question' })
       await api.addComment(page.id, { body: 'Answer', parentId: question.id })
-      const remark = await bob.addComment(page.id, { body: 'Remark' })
+      const comment = await bob.addComment(page.id, { body: 'Thanks' })
 
       await expect(
-        api.signedInAs('carol@example.com').deleteComment(remark.id)
+        api.signedInAs('carol@example.com').deleteComment(comment.id)
       ).rejects.toEqual(new ApiError(403, 'forbidden'))
-      await bob.deleteComment(remark.id)
+      await bob.deleteComment(comment.id)
       await api.deleteComment(question.id)
 
       await expect(api.listComments(page.id)).resolves.toEqual([])
