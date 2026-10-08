@@ -103,7 +103,7 @@ As in Twake Tasks, about pages: `id, page_id (cascade), wiki_id, org_id, user_id
 
 ### Platform tables
 
-Copied from Twake Tasks with the names it uses: `spaces` (space id, organization, `wiki_id`, `last_event_at`, deletion), `processed_events`, `outbox`, `jobs`, `user_settings`, and the auth tables (revoked sessions).
+Copied from Twake Tasks with the names it uses: `spaces` (space id, organization, `wiki_id`, `last_event_at`; the wiki's `deleted_at` marks a deleted space), `processed_events`, `outbox`, `jobs`, `user_settings`, and the auth tables (revoked sessions).
 
 ## The access function
 
