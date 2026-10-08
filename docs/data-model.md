@@ -47,7 +47,7 @@ Same columns, keys and policies as `project_members` and `project_invites` of Tw
 | content | jsonb not null default '[]' | current version's blocks |
 | grist_url | text | current version's, database pages only |
 | text | text not null default '' | plain text of the blocks, for search and previews |
-| search | tsvector | generated: `setweight(to_tsvector('simple', title), 'A') \|\| setweight(to_tsvector('simple', text), 'B')`, GIN index |
+| search | tsvector | generated: `setweight(to_tsvector('simple', title), 'A') \|\| setweight(to_tsvector('simple', left(text, 100000)), 'B')`, GIN index; a tsvector keeps at most 1 MiB of distinct words, so search reads the first 100 000 characters of the text |
 | version | integer not null default 1 | number of the current version |
 | position | sortKey null | among siblings; null for the home page, which is outside the tree |
 | created_by, created_at | | |

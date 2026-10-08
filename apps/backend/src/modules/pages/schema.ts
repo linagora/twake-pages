@@ -49,10 +49,14 @@ export const pages = pgTable.withRLS(
     content: jsonb().notNull().default([]),
     gristUrl: text('grist_url'),
     text: text().notNull().default(''),
+    // A tsvector keeps at most 1 MiB of distinct words. The densest text
+    // found, hyphenated words of 4-byte letters, which search keeps whole and
+    // in parts, takes under 8 bytes a character, so search reads the first
+    // 100 000 characters of the text.
     search: tsvector()
       .notNull()
       .generatedAlwaysAs(
-        sql`setweight(to_tsvector('simple', "title"), 'A') || setweight(to_tsvector('simple', "text"), 'B')`
+        sql`setweight(to_tsvector('simple', "title"), 'A') || setweight(to_tsvector('simple', left("text", 100000)), 'B')`
       ),
     version: integer().notNull().default(1),
     // The home page is outside the tree, so it alone has no position.

@@ -839,22 +839,54 @@ describe('POST /wikis/:wikiId/pages', () => {
       })
     })
 
-    /** A paragraph of blocks that weigh `bytes` in JSON. */
-    const weighing = (bytes: number) => {
-      const block = aBlock('paragraph', { content: [styled('')] })
-      const filler = 'x'.repeat(bytes - JSON.stringify([block]).length)
-      return [{ ...block, content: [styled(filler)] }]
+    /** ASCII words, none of them twice, in `bytes`. */
+    const distinctWords = (bytes: number) => {
+      let text = ''
+      for (let i = 0; text.length < bytes; i += 1) {
+        text += `w${i.toString(36)} `
+      }
+      return text.slice(0, bytes)
     }
 
-    // The page and its version each keep the blocks and their text: 8 MiB to
-    // write, which a busy machine takes seconds over.
-    it('takes 2 MiB of them in JSON', { timeout: 30_000 }, async () => {
+    /**
+     * Hyphenated pairs of words of 31 ideographs, none of them twice, in
+     * `bytes`. The ideographs, of Extension B, take 4 bytes each in UTF-8,
+     * and the nth word is the 31 of them from the nth on.
+     */
+    const hyphenatedWords = (bytes: number) => {
+      const word = (n: number) =>
+        String.fromCodePoint(
+          ...Array.from({ length: 31 }, (_, i) => 0x20000 + ((n + i) % 42_711))
+        )
+      const pairBytes = 2 * 31 * 4 + 2
+      const pairs = Math.floor(bytes / pairBytes)
+      const text = Array.from(
+        { length: pairs },
+        (_, n) => `${word(2 * n)}-${word(2 * n + 1)} `
+      )
+      return text.join('') + ' '.repeat(bytes - pairs * pairBytes)
+    }
+
+    /** A paragraph of `words` that weighs `bytes` in JSON. */
+    const weighing = (bytes: number, words = distinctWords) => {
+      const block = aBlock('paragraph', { content: [styled('')] })
+      const text = words(bytes - JSON.stringify([block]).length)
+      return [{ ...block, content: [styled(text)] }]
+    }
+
+    // Search keeps each word of a page once, in at most 1 MiB: distinct
+    // words are the most words it has to keep, and hyphenated words of 4-byte
+    // letters, which it keeps whole and in parts, the most bytes a character.
+    it.each([
+      ['distinct words', distinctWords],
+      ['hyphenated words of 4-byte letters', hyphenatedWords]
+    ])('takes 2 MiB of them in JSON, in %s', async (_case, words) => {
       const alice = aUser()
       const wiki = await aWikiOf(api, alice)
 
       const response = await createPage(api, alice, wiki.id, {
         title: 'Onboarding',
-        content: weighing(MAX_BLOCKS_BYTES)
+        content: weighing(MAX_BLOCKS_BYTES, words)
       })
 
       expect(response.statusCode).toBe(201)
