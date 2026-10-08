@@ -404,3 +404,83 @@ describe('DELETE /wikis/:wikiId', () => {
     expect(response.json()).toEqual({ error: 'forbidden' })
   })
 })
+
+describe('GET /wikis/:wikiId/tree', () => {
+  interface TreePage {
+    id: string
+    parentId: string | null
+    position: string
+    title: string
+    kind: 'document' | 'database'
+  }
+
+  it('lists the live pages of the wiki, but its home page', async () => {
+    const alice = aUser()
+    const wiki = await aWikiOf(alice)
+    const plans = await aPageIn(db, alice, wiki.id, {
+      title: 'Plans',
+      position: 'a0'
+    })
+    const q1 = await aPageIn(db, alice, wiki.id, {
+      title: 'Q1',
+      position: 'a0',
+      parentId: plans
+    })
+    const archive = await aPageIn(db, alice, wiki.id, {
+      title: 'Archive',
+      position: 'a1'
+    })
+    await aPageIn(db, alice, wiki.id, {
+      title: 'Drafts',
+      position: 'a2',
+      deleted: true
+    })
+
+    const response = await api.as(alice).get(`/wikis/${wiki.id}/tree`)
+
+    expect(response.statusCode).toBe(200)
+    const tree = response.json<{ version: number; pages: TreePage[] }>()
+    expect(tree.version).toBe(0)
+    expect(
+      tree.pages.toSorted((a, b) => a.title.localeCompare(b.title))
+    ).toEqual([
+      {
+        id: archive,
+        parentId: null,
+        position: 'a1',
+        title: 'Archive',
+        kind: 'document'
+      },
+      {
+        id: plans,
+        parentId: null,
+        position: 'a0',
+        title: 'Plans',
+        kind: 'document'
+      },
+      { id: q1, parentId: plans, position: 'a0', title: 'Q1', kind: 'document' }
+    ])
+  })
+
+  it('hides the tree from someone who is no member', async () => {
+    const alice = aUser()
+    const wiki = await aWikiOf(alice)
+
+    const response = await api
+      .as(aUser({ organizationId: alice.organizationId }))
+      .get(`/wikis/${wiki.id}/tree`)
+
+    expect(response.statusCode).toBe(404)
+    expect(response.json()).toEqual({ error: 'not_found' })
+  })
+
+  it('hides the tree of a deleted wiki, even from its admin', async () => {
+    const alice = aUser()
+    const wiki = await aWikiOf(alice)
+    await api.as(alice).delete(`/wikis/${wiki.id}`)
+
+    const response = await api.as(alice).get(`/wikis/${wiki.id}/tree`)
+
+    expect(response.statusCode).toBe(404)
+  })
+})

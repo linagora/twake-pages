@@ -64,6 +64,19 @@ export function registerWikis(
     }
   )
 
+  app.get(
+    '/wikis/:wikiId/tree',
+    { preHandler: deps.requireIdentity },
+    async (request, reply) => {
+      const identity = request.identity
+      if (!identity) return reply.code(401).send()
+      const params = wikiParams.safeParse(request.params)
+      if (!params.success) return refuse(reply, 'not_found')
+      const tree = await store.tree(identity, params.data.wikiId)
+      return tree ?? refuse(reply, 'not_found')
+    }
+  )
+
   app.patch(
     '/wikis/:wikiId',
     { preHandler: deps.requireIdentity },

@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { eq } from 'drizzle-orm'
 import { pino } from 'pino'
 import { inject } from 'vitest'
 import { buildApp } from '../app.ts'
@@ -91,12 +92,15 @@ export async function aSpaceWiki(
   })
 }
 
-/** A page written straight into the wiki, as the pages routes will write it. */
+/**
+ * A page written straight into the wiki, as the pages routes will write it,
+ * in the trash on its own when `deleted`.
+ */
 export async function aPageIn(
   db: Db,
   author: TestUser,
   wikiId: string,
-  page: { title: string; position: string; parentId?: string }
+  page: { title: string; position: string; parentId?: string; deleted?: true }
 ): Promise<string> {
   return inTenant(db, author, async tx => {
     const [written] = await tx
@@ -113,6 +117,16 @@ export async function aPageIn(
       })
       .returning({ id: pages.id })
     if (!written) throw new Error('no page')
+    if (page.deleted) {
+      await tx
+        .update(pages)
+        .set({
+          deletedAt: new Date(),
+          deletedBy: author.userId,
+          trashRootId: written.id
+        })
+        .where(eq(pages.id, written.id))
+    }
     return written.id
   })
 }

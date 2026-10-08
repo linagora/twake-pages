@@ -26,6 +26,14 @@ export interface Wiki extends WikiSummary {
   version: number
 }
 
+export interface TreePage {
+  id: string
+  parentId: string | null
+  position: string
+  title: string
+  kind: 'document' | 'database'
+}
+
 const PERSONAL_WIKI_NAME = 'Personal'
 
 export const PURGE_WIKI_JOB = 'purge-wiki'
@@ -191,6 +199,38 @@ export function createWikiStore(db: Db) {
 
     wiki(identity: Identity, wikiId: string): Promise<Wiki | null> {
       return inTenant(db, identity, tx => wikiOf(tx, identity.userId, wikiId))
+    },
+
+    /** The live pages of the wiki, but its home page, which is outside the tree. */
+    tree(
+      identity: Identity,
+      wikiId: string
+    ): Promise<{ version: number; pages: TreePage[] } | null> {
+      return inTenant(db, identity, async tx => {
+        // The version is read first, so a change committed before the pages
+        // are read reaches the client again through the stream.
+        const wiki = await wikiOf(tx, identity.userId, wikiId)
+        if (!wiki) return null
+        const tree = await tx
+          .select({
+            id: pages.id,
+            parentId: pages.parentId,
+            // A check gives every page but the home page a position.
+            position: sql<string>`${pages.position}`,
+            title: pages.title,
+            kind: pages.kind
+          })
+          .from(pages)
+          .where(
+            and(
+              eq(pages.wikiId, wikiId),
+              eq(pages.home, false),
+              isNull(pages.deletedAt)
+            )
+          )
+          .orderBy(asc(pages.position), asc(pages.id))
+        return { version: wiki.version, pages: tree }
+      })
     },
 
     createWiki(
