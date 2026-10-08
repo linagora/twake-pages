@@ -104,13 +104,16 @@ const wikiRowsOf = (someone: TestUser, wikiId: string) =>
   )
 
 /** A space of the person's organization, with them as its admin. */
-async function aSpaceOf(admin: TestUser) {
+async function aSpaceOf(admin: TestUser, editors: TestUser[] = []) {
   if (!admin.organizationId) throw new Error('spaces are B2B')
   const space = { organizationId: admin.organizationId, id: randomUUID() }
   await deliver('twake.space.created', {
     ...space,
     name: 'Ops',
-    members: [member(admin, 'admin')]
+    members: [
+      member(admin, 'admin'),
+      ...editors.map(editor => member(editor, 'editor'))
+    ]
   })
   return space
 }
@@ -185,12 +188,7 @@ describe('space members and name', () => {
   it('gives a person added to the space the wiki, in their space role, and follows its changes', async () => {
     const admin = aUser()
     const newcomer = aUser({ organizationId: admin.organizationId })
-    const space = { organizationId: admin.organizationId, id: randomUUID() }
-    await deliver('twake.space.created', {
-      ...space,
-      name: 'Ops',
-      members: [member(admin, 'admin')]
-    })
+    const space = await aSpaceOf(admin)
 
     await deliver('twake.space.member.added', {
       ...space,
@@ -241,12 +239,7 @@ describe('space members and name', () => {
 
   it('renames the wiki with the space', async () => {
     const admin = aUser()
-    const space = { organizationId: admin.organizationId, id: randomUUID() }
-    await deliver('twake.space.created', {
-      ...space,
-      name: 'Ops',
-      members: [member(admin, 'admin')]
-    })
+    const space = await aSpaceOf(admin)
 
     await deliver('twake.space.updated', { ...space, name: 'Operations' })
 
@@ -260,12 +253,7 @@ describe('twake.space.member.removed', () => {
   it('takes the wiki from a person removed from the space, and keeps the pages they wrote', async () => {
     const admin = aUser()
     const leaver = aUser({ organizationId: admin.organizationId })
-    const space = { organizationId: admin.organizationId, id: randomUUID() }
-    await deliver('twake.space.created', {
-      ...space,
-      name: 'Ops',
-      members: [member(admin, 'admin'), member(leaver, 'editor')]
-    })
+    const space = await aSpaceOf(admin, [leaver])
     const wiki = await spaceWikiOf(leaver)
     const pageId = await aPageIn(db, leaver, wiki.id, {
       title: 'Runbook',
@@ -288,12 +276,7 @@ describe('twake.space.member.removed', () => {
   it('takes the wiki from a person the event names by email only', async () => {
     const admin = aUser()
     const leaver = aUser({ organizationId: admin.organizationId })
-    const space = { organizationId: admin.organizationId, id: randomUUID() }
-    await deliver('twake.space.created', {
-      ...space,
-      name: 'Ops',
-      members: [member(admin, 'admin'), member(leaver, 'editor')]
-    })
+    const space = await aSpaceOf(admin, [leaver])
 
     await deliver('twake.space.member.removed', {
       ...space,
@@ -310,12 +293,7 @@ describe('twake.space.member.removed', () => {
 describe('twake.space.deleted', () => {
   it('puts the wiki out of reach, until its purge 30 days later', async () => {
     const admin = aUser()
-    const space = { organizationId: admin.organizationId, id: randomUUID() }
-    await deliver('twake.space.created', {
-      ...space,
-      name: 'Ops',
-      members: [member(admin, 'admin')]
-    })
+    const space = await aSpaceOf(admin)
     const wiki = await spaceWikiOf(admin)
     const before = await versionOf(admin, wiki.id)
 
@@ -332,12 +310,7 @@ describe('twake.space.deleted', () => {
 
   it('leaves the wiki to the wiki purge job', async () => {
     const admin = aUser()
-    const space = { organizationId: admin.organizationId, id: randomUUID() }
-    await deliver('twake.space.created', {
-      ...space,
-      name: 'Ops',
-      members: [member(admin, 'admin')]
-    })
+    const space = await aSpaceOf(admin)
     const wiki = await spaceWikiOf(admin)
     await aPageIn(db, admin, wiki.id, { title: 'Runbook', position: 'a0' })
     await deliver('twake.space.deleted', space)
@@ -398,12 +371,7 @@ describe('live updates', () => {
   it('moves the version of the wiki each time the space changes its members or its name', async () => {
     const admin = aUser()
     const newcomer = aUser({ organizationId: admin.organizationId })
-    const space = { organizationId: admin.organizationId, id: randomUUID() }
-    await deliver('twake.space.created', {
-      ...space,
-      name: 'Ops',
-      members: [member(admin, 'admin')]
-    })
+    const space = await aSpaceOf(admin)
     const wiki = await spaceWikiOf(admin)
     const versions = [await versionOf(admin, wiki.id)]
 
@@ -586,16 +554,7 @@ describe('twake.space.synced', () => {
     const leaver = aUser({ organizationId: admin.organizationId })
     const promoted = aUser({ organizationId: admin.organizationId })
     const joiner = aUser({ organizationId: admin.organizationId })
-    const space = { organizationId: admin.organizationId, id: randomUUID() }
-    await deliver('twake.space.created', {
-      ...space,
-      name: 'Ops',
-      members: [
-        member(admin, 'admin'),
-        member(leaver, 'editor'),
-        member(promoted, 'editor')
-      ]
-    })
+    const space = await aSpaceOf(admin, [leaver, promoted])
 
     await deliver('twake.space.synced', {
       ...space,
@@ -623,12 +582,7 @@ describe('twake.space.synced', () => {
   it('keeps a member the snapshot lists without a uuid', async () => {
     const admin = aUser()
     const editor = aUser({ organizationId: admin.organizationId })
-    const space = { organizationId: admin.organizationId, id: randomUUID() }
-    await deliver('twake.space.created', {
-      ...space,
-      name: 'Ops',
-      members: [member(admin, 'admin'), member(editor, 'editor')]
-    })
+    const space = await aSpaceOf(admin, [editor])
 
     await deliver('twake.space.synced', {
       ...space,
