@@ -4,7 +4,7 @@ import { pino } from 'pino'
 import { inject } from 'vitest'
 import { buildApp } from '../app.ts'
 import { listenToChanges } from '../infra/changes.ts'
-import { createDb, inTenant, type Db } from '../infra/db.ts'
+import { createDb, inTenant, type Db, type Tx } from '../infra/db.ts'
 import type { Identity } from '../modules/auth/index.ts'
 import { anIdentity } from '../modules/auth/testing.ts'
 import { pages, pageVersions } from '../modules/pages/schema.ts'
@@ -94,6 +94,21 @@ export async function aSpaceWiki(
   })
 }
 
+/** A version of the page by its author, as publishing will write it. */
+export async function addVersion(
+  tx: Tx,
+  author: TestUser,
+  version: { pageId: string; number: number; title: string }
+) {
+  await tx.insert(pageVersions).values({
+    ...version,
+    organizationId: author.organizationId,
+    authorId: author.userId,
+    authorEmail: author.email,
+    authorName: author.name ?? null
+  })
+}
+
 /**
  * A page written straight into the wiki, as the pages routes will write it,
  * with its first version, in the trash on its own when `deleted`.
@@ -119,14 +134,10 @@ export async function aPageIn(
       })
       .returning({ id: pages.id })
     if (!written) throw new Error('no page')
-    await tx.insert(pageVersions).values({
+    await addVersion(tx, author, {
       pageId: written.id,
-      organizationId: author.organizationId,
       number: 1,
-      title: page.title,
-      authorId: author.userId,
-      authorEmail: author.email,
-      authorName: author.name ?? null
+      title: page.title
     })
     if (page.deleted) {
       await tx

@@ -5,6 +5,7 @@ import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest'
 import { createDb, inTenant } from '../../infra/db.ts'
 import {
   aB2cUser,
+  addVersion,
   aPageIn,
   aUser,
   aWikiOf,
@@ -18,7 +19,6 @@ import {
   pageFavorites,
   pageLabels,
   pages,
-  pageVersions,
   pageVisits
 } from './schema.ts'
 
@@ -65,15 +65,7 @@ const pageOf = async (user: TestUser, pageId: string) =>
 const publish = (editor: TestUser, pageId: string, number: number) =>
   inTenant(db, editor, async tx => {
     const title = `Version ${String(number)}`
-    await tx.insert(pageVersions).values({
-      pageId,
-      organizationId: editor.organizationId,
-      number,
-      title,
-      authorId: editor.userId,
-      authorEmail: editor.email,
-      authorName: editor.name ?? null
-    })
+    await addVersion(tx, editor, { pageId, number, title })
     await tx
       .update(pages)
       .set({
