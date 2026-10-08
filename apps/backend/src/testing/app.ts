@@ -257,6 +257,21 @@ export async function versionOf(
   }>().version
 }
 
+/** The titles of the parent's children, in their order in the wiki's tree. */
+export async function titlesUnder(
+  api: Awaited<ReturnType<typeof startApp>>,
+  user: TestUser,
+  wikiId: string,
+  parentId: string | null
+) {
+  const tree = (await api.as(user).get(`/wikis/${wikiId}/tree`)).json<{
+    pages: { parentId: string | null; title: string }[]
+  }>()
+  return tree.pages
+    .filter(page => page.parentId === parentId)
+    .map(page => page.title)
+}
+
 /** The person's wikis, as `GET /wikis` lists them. */
 export async function wikisOf(
   api: Awaited<ReturnType<typeof startApp>>,
@@ -378,6 +393,92 @@ export function createPage(
     ...page
   })
 }
+
+/** A page made through the API by the person, by its id. */
+export async function aPage(
+  app: Awaited<ReturnType<typeof startApp>>,
+  user: TestUser,
+  wikiId: string,
+  page: PageToCreate
+) {
+  return (await createPage(app, user, wikiId, page)).json<{ id: string }>().id
+}
+
+/** A parent the test makes in or beside the person's wiki, by its id. */
+type ParentOf = (test: {
+  app: Awaited<ReturnType<typeof startApp>>
+  db: Db
+  user: TestUser
+  wiki: { id: string; homePageId: string }
+}) => Promise<string>
+
+/**
+ * The parents no page of the wiki goes under, which creating a page and
+ * moving one answer invalid_parent for.
+ */
+export const INVALID_PARENTS: [string, ParentOf][] = [
+  [
+    'a page of another wiki',
+    async ({ app, user }) => {
+      const other = await aWikiOf(app, user, 'Other')
+      return aPage(app, user, other.id, { title: 'Elsewhere' })
+    }
+  ],
+  [
+    'a page in the trash',
+    ({ db, user, wiki }) =>
+      aPageIn(db, user, wiki.id, {
+        title: 'Drafts',
+        position: 'a0',
+        deleted: true
+      })
+  ],
+  [
+    'the home page, which is outside the tree',
+    ({ wiki }) => Promise.resolve(wiki.homePageId)
+  ],
+  ['an unknown page', () => Promise.resolve(randomUUID())]
+]
+
+/**
+ * The pages a test names as neighbours at the top of the wiki's tree: Plans
+ * and Goals there, Q1 under Plans, and Drafts in the trash.
+ */
+export async function neighbourPagesIn(
+  app: Awaited<ReturnType<typeof startApp>>,
+  db: Db,
+  user: TestUser,
+  wikiId: string
+) {
+  const drafts = await aPageIn(db, user, wikiId, {
+    title: 'Drafts',
+    position: 'a0',
+    deleted: true
+  })
+  const plans = await aPage(app, user, wikiId, { title: 'Plans' })
+  const goals = await aPage(app, user, wikiId, { title: 'Goals' })
+  const child = await aPage(app, user, wikiId, { title: 'Q1', parentId: plans })
+  return { drafts, plans, goals, child }
+}
+
+export type NeighbourPages = Awaited<ReturnType<typeof neighbourPagesIn>>
+
+/**
+ * The neighbours that are not side by side at the top of the tree, which
+ * creating a page and moving one answer stale_neighbours for.
+ */
+export const STALE_NEIGHBOURS: [
+  string,
+  (pages: NeighbourPages) => Pick<PageToCreate, 'afterId' | 'beforeId'>
+][] = [
+  ['a page under another parent', ({ child }) => ({ afterId: child })],
+  ['a page in the trash', ({ drafts }) => ({ beforeId: drafts })],
+  [
+    'two siblings that are not next to each other',
+    ({ plans, goals }) => ({ afterId: goals, beforeId: plans })
+  ],
+  ['an unknown page', () => ({ afterId: randomUUID() })]
+]
 
 /** BlockNote's styled text, here with no style. */
 export const styled = (text: string) => ({ type: 'text', text, styles: {} })

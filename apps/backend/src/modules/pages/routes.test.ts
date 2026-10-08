@@ -12,10 +12,14 @@ import {
   aWikiOf,
   createPage,
   GRIST_ORIGIN,
+  INVALID_PARENTS,
   joinWiki,
+  neighbourPagesIn,
   removeFromWiki,
+  STALE_NEIGHBOURS,
   startApp,
   styled,
+  titlesUnder,
   versionOf,
   type TestUser
 } from '../../testing/app.ts'
@@ -417,20 +421,6 @@ describe('GET /pages/:pageId', () => {
 })
 
 describe('POST /wikis/:wikiId/pages', () => {
-  /** The titles of the parent's children, in their order in the tree. */
-  const titlesUnder = async (
-    user: TestUser,
-    wikiId: string,
-    parentId: string | null
-  ) => {
-    const tree = (await api.as(user).get(`/wikis/${wikiId}/tree`)).json<{
-      pages: { parentId: string | null; title: string }[]
-    }>()
-    return tree.pages
-      .filter(page => page.parentId === parentId)
-      .map(page => page.title)
-  }
-
   it.each([
     ['in an organization', () => aUser({ name: 'Alice Martin' })],
     ['in B2C', aB2cUser]
@@ -514,7 +504,7 @@ describe('POST /wikis/:wikiId/pages', () => {
       })
     })
 
-    expect(await titlesUnder(alice, wiki.id, null)).toEqual(titles)
+    expect(await titlesUnder(api, alice, wiki.id, null)).toEqual(titles)
   })
 
   it('places a child page under its parent, last among its children', async () => {
@@ -538,108 +528,50 @@ describe('POST /wikis/:wikiId/pages', () => {
       parentId: onboarding.id,
       ancestors: [{ id: onboarding.id, title: 'Onboarding' }]
     })
-    expect(await titlesUnder(alice, wiki.id, onboarding.id)).toEqual([
+    expect(await titlesUnder(api, alice, wiki.id, onboarding.id)).toEqual([
       'Accounts',
       'Laptop setup'
     ])
-    expect(await titlesUnder(alice, wiki.id, null)).toEqual(['Onboarding'])
+    expect(await titlesUnder(api, alice, wiki.id, null)).toEqual(['Onboarding'])
   })
 
-  type ParentOf = (
-    alice: TestUser,
-    wiki: { id: string; homePageId: string }
-  ) => Promise<string>
+  it.each(INVALID_PARENTS)(
+    'answers invalid_parent for %s',
+    async (_case, parentOf) => {
+      const alice = aUser()
+      const wiki = await aWikiOf(api, alice)
+      const parentId = await parentOf({ app: api, db, user: alice, wiki })
+      const before = await versionOf(api, alice, wiki.id)
 
-  it.each<[string, ParentOf]>([
-    [
-      'a page of another wiki',
-      async alice => {
-        const other = await aWikiOf(api, alice, 'Other')
-        const page = await createPage(api, alice, other.id, {
-          title: 'Elsewhere'
-        })
-        return page.json<Page>().id
-      }
-    ],
-    [
-      'a page in the trash',
-      (alice, wiki) =>
-        aPageIn(db, alice, wiki.id, {
-          title: 'Drafts',
-          position: 'a0',
-          deleted: true
-        })
-    ],
-    [
-      'the home page, which is outside the tree',
-      (_alice, wiki) => Promise.resolve(wiki.homePageId)
-    ],
-    ['an unknown page', () => Promise.resolve(randomUUID())]
-  ])('answers invalid_parent for %s', async (_case, parentOf) => {
-    const alice = aUser()
-    const wiki = await aWikiOf(api, alice)
-    const parentId = await parentOf(alice, wiki)
-    const before = await versionOf(api, alice, wiki.id)
-
-    const response = await createPage(api, alice, wiki.id, {
-      title: 'Laptop setup',
-      parentId
-    })
-
-    expect(response.statusCode).toBe(400)
-    expect(response.json()).toEqual({ error: 'invalid_parent' })
-    expect(await versionOf(api, alice, wiki.id)).toBe(before)
-  })
-
-  type StaleNeighbours = (pages: {
-    plans: string
-    goals: string
-    child: string
-    drafts: string
-  }) => { afterId?: string; beforeId?: string }
-
-  it.each<[string, StaleNeighbours]>([
-    ['a page under another parent', ({ child }) => ({ afterId: child })],
-    ['a page in the trash', ({ drafts }) => ({ beforeId: drafts })],
-    [
-      'two siblings that are not next to each other',
-      ({ plans, goals }) => ({ afterId: goals, beforeId: plans })
-    ],
-    ['an unknown page', () => ({ afterId: randomUUID() })]
-  ])('answers stale_neighbours for %s', async (_case, neighbours) => {
-    const alice = aUser()
-    const wiki = await aWikiOf(api, alice)
-    const drafts = await aPageIn(db, alice, wiki.id, {
-      title: 'Drafts',
-      position: 'a0',
-      deleted: true
-    })
-    const plans = (
-      await createPage(api, alice, wiki.id, { title: 'Plans' })
-    ).json<Page>()
-    const goals = (
-      await createPage(api, alice, wiki.id, { title: 'Goals' })
-    ).json<Page>()
-    const child = await createPage(api, alice, wiki.id, {
-      title: 'Q1',
-      parentId: plans.id
-    })
-    const before = await versionOf(api, alice, wiki.id)
-
-    const response = await createPage(api, alice, wiki.id, {
-      title: 'Onboarding',
-      ...neighbours({
-        plans: plans.id,
-        goals: goals.id,
-        child: child.json<Page>().id,
-        drafts
+      const response = await createPage(api, alice, wiki.id, {
+        title: 'Laptop setup',
+        parentId
       })
-    })
 
-    expect(response.statusCode).toBe(409)
-    expect(response.json()).toEqual({ error: 'stale_neighbours' })
-    expect(await versionOf(api, alice, wiki.id)).toBe(before)
-  })
+      expect(response.statusCode).toBe(400)
+      expect(response.json()).toEqual({ error: 'invalid_parent' })
+      expect(await versionOf(api, alice, wiki.id)).toBe(before)
+    }
+  )
+
+  it.each(STALE_NEIGHBOURS)(
+    'answers stale_neighbours for %s',
+    async (_case, neighbours) => {
+      const alice = aUser()
+      const wiki = await aWikiOf(api, alice)
+      const neighbourPages = await neighbourPagesIn(api, db, alice, wiki.id)
+      const before = await versionOf(api, alice, wiki.id)
+
+      const response = await createPage(api, alice, wiki.id, {
+        title: 'Onboarding',
+        ...neighbours(neighbourPages)
+      })
+
+      expect(response.statusCode).toBe(409)
+      expect(response.json()).toEqual({ error: 'stale_neighbours' })
+      expect(await versionOf(api, alice, wiki.id)).toBe(before)
+    }
+  )
 
   it('lets an editor of the wiki create a page', async () => {
     const alice = aUser()
@@ -1059,7 +991,7 @@ describe('POST /wikis/:wikiId/pages', () => {
         content: [linkingTo('javascript:alert(1)')]
       })
 
-      expect(await titlesUnder(alice, wiki.id, null)).toEqual([])
+      expect(await titlesUnder(api, alice, wiki.id, null)).toEqual([])
       expect(await versionOf(api, alice, wiki.id)).toBe(before)
     })
   })
