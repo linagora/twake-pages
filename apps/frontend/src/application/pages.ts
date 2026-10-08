@@ -23,7 +23,7 @@ export interface UserSettings {
   name: string | null
 }
 
-/** Name: 1 to 100 characters; description: at most 500. Both trimmed. */
+/** Name: 1 to 100 characters, trimmed; description: at most 500. */
 export interface NewWiki {
   name: string
   description?: string

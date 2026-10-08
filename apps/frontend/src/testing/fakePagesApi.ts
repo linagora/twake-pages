@@ -280,9 +280,8 @@ function checkText(value: string, max: number) {
 }
 
 function checkDescription(value = '') {
-  const trimmed = value.trim()
-  if (trimmed.length > 500) throw refuse('invalid_request')
-  return trimmed
+  if (value.length > 500) throw refuse('invalid_request')
+  return value
 }
 
 function checkGristUrl(value: string | undefined) {

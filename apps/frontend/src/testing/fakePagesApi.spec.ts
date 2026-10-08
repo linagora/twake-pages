@@ -88,6 +88,28 @@ describe('fakePagesApi', () => {
       }).toEqual({ created: 0, seeded: 0, personal: 0 })
     })
 
+    it('trims the name of a wiki, and keeps its description as given', async () => {
+      const api = fakePagesApi()
+
+      const wiki = await api.createWiki({
+        name: ' Engineering ',
+        description: ' How we build '
+      })
+      const changed = await api.renameWiki(wiki.id, {
+        description: ' Our way '
+      })
+
+      expect({
+        name: wiki.name,
+        description: wiki.description,
+        changed: changed.description
+      }).toEqual({
+        name: 'Engineering',
+        description: ' How we build ',
+        changed: ' Our way '
+      })
+    })
+
     it('hides a wiki from people who are no members', async () => {
       const api = fakePagesApi()
       const wiki = api.withWiki()
