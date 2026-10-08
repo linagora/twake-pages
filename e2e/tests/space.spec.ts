@@ -1,14 +1,9 @@
-import { randomUUID } from 'node:crypto'
 import { expect, test, type Page } from '@playwright/test'
-import { publishPlatformEvent, wikiOfSpace } from './platform.ts'
-import { asPerson, signIn } from './signIn.ts'
+import { publishPlatformEvent } from './platform.ts'
+import { asPerson } from './signIn.ts'
+import { aliceSpaceWiki, ORGANIZATION } from './space.ts'
 
-// As the mock SSO has them
-const ORGANIZATION = 'acme.e2e.test'
-const ALICE = {
-  uuid: '0a11ce00-0000-4000-8000-000000000001',
-  email: 'alice@acme.e2e.test'
-}
+// As the mock SSO has him
 const BOB = {
   uuid: '0b0b0000-0000-4000-8000-000000000002',
   email: 'bob@acme.e2e.test'
@@ -20,19 +15,7 @@ test("creates a space's wiki for its members, and opens it to a person added to 
   page,
   browser
 }) => {
-  const spaceId = randomUUID()
-  const name = `Design Sprint ${spaceId.slice(0, 8)}`
-  publishPlatformEvent('twake.space.created', {
-    organizationId: ORGANIZATION,
-    id: spaceId,
-    name,
-    members: [{ ...ALICE, role: 'admin' }]
-  })
-
-  await expect
-    .poll(() => wikiOfSpace(spaceId), { timeout: 15_000 })
-    .toEqual({ id: expect.any(String), kind: 'wiki' })
-  await signIn(page, 'alice')
+  const { spaceId, name } = await aliceSpaceWiki(page)
   await expect(wikis(page).getByText(name, { exact: true })).toBeVisible()
 
   const bob = await asPerson(browser, 'bob')
