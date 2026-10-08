@@ -434,6 +434,42 @@ describe('fakePagesApi', () => {
       ).rejects.toEqual(invalid)
     })
 
+    it('refuses to publish a title with a NUL character or a lone surrogate', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki()
+      const page = api.withPage(wiki.id, { title: 'Onboarding' })
+      const invalid = new ApiError(400, 'invalid_request')
+
+      await expect(
+        api.publish(page.id, {
+          baseVersion: 1,
+          title: 'On\u0000boarding',
+          content: []
+        })
+      ).rejects.toEqual(invalid)
+      await expect(
+        api.publish(page.id, {
+          baseVersion: 1,
+          title: 'Onboarding \ud83d',
+          content: []
+        })
+      ).rejects.toEqual(invalid)
+    })
+
+    it('checks the blocks of a draft before its page, as the backend does', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki({ role: 'viewer' })
+      const page = api.withPage(wiki.id, { title: 'Onboarding' })
+
+      await expect(
+        api.publish(page.id, {
+          baseVersion: 2,
+          title: 'Onboarding',
+          content: [paragraph('Steps\u0000')]
+        })
+      ).rejects.toEqual(new ApiError(400, 'invalid_content'))
+    })
+
     describe('its blocks', () => {
       const linkingTo = (href: string) => ({
         type: 'paragraph',

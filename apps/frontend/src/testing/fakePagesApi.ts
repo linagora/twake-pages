@@ -1055,7 +1055,9 @@ function signedIn(world: World, person: Person): FakePagesApi {
     ),
     publish: vi.fn<PagesApi['publish']>((pageId, draft) =>
       answer(() => {
-        const title = checkText(draft.title, 200)
+        const title = checkTitle(draft.title)
+        // As the backend, which checks them before it locks the wiki.
+        const content = 'content' in draft ? checkBlocks(draft.content) : []
         const { page, wiki } = liveAccess(pageId)
         if ((page.kind === 'document') !== 'content' in draft) {
           throw refuse('invalid_request')
@@ -1066,7 +1068,7 @@ function signedIn(world: World, person: Person): FakePagesApi {
         }
         addVersion(page, wiki, {
           title,
-          content: 'content' in draft ? checkBlocks(draft.content) : [],
+          content,
           gristUrl: 'gristUrl' in draft ? checkGristUrl(draft.gristUrl) : null
         })
         return pageFor(page)
