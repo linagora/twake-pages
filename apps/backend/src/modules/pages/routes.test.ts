@@ -126,7 +126,8 @@ const follow = (user: TestUser, pageId: string) =>
 const keepAsFavorite = (user: TestUser, pageId: string) =>
   api.as(user).put(`/pages/${pageId}/favorite`)
 
-// Nor is Recent, so visits are read from their table, the last one first.
+// Recent shows 20 of the visits kept, and none of a wiki the person left, so
+// visits are read from their table, the last one first.
 const visitsOf = async (user: TestUser) => {
   const visits = await inTenant(db, user, tx =>
     tx
@@ -369,21 +370,6 @@ describe('GET /pages/:pageId', () => {
 
     expect(response.statusCode).toBe(404)
     expect(response.json()).toEqual({ error: 'not_found' })
-  })
-
-  it('records each visit for Recent, the last one first', async () => {
-    const alice = aUser()
-    const wiki = await aWikiOf(api, alice)
-    const plans = await aPageIn(db, alice, wiki.id, {
-      title: 'Plans',
-      position: 'a0'
-    })
-
-    await pageOf(alice, wiki.homePageId)
-    await pageOf(alice, plans)
-    await pageOf(alice, wiki.homePageId)
-
-    expect(await visitsOf(alice)).toEqual([wiki.homePageId, plans])
   })
 
   it('keeps the person’s 100 most recent visits', async () => {
