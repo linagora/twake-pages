@@ -218,6 +218,11 @@ export interface PageRef {
   wiki: Pick<WikiSummary, 'id' | 'name' | 'kind'>
 }
 
+/** A page as `GET /recent` lists it, with when the person opened it. */
+export interface RecentPage extends PageRef {
+  visitedAt: string
+}
+
 /** The job planned to purge the deleted wiki. */
 export async function purgeJobOf(db: Db, wikiId: string) {
   const [job] = await db

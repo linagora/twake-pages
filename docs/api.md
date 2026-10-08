@@ -239,7 +239,7 @@ Notifications are never sent to the person who acted, nor to people who are no l
 | Method and path | Answer |
 |---|---|
 | `GET /favorites` | `{ pages: PageRef[] }`, live pages, most recently marked first |
-| `GET /recent` | `{ pages: (PageRef & { visitedAt: string })[] }`, live pages, at most 20 |
+| `GET /recent` | `{ pages: (PageRef & { visitedAt: string })[] }`, live pages, the last opened first, at most 20 |
 | `GET /search?q=&wikiId=` | `{ results: SearchResult[] }`, at most 50, best first; `q` 1 to 200 characters; without `wikiId`, every wiki of the person |
 
 ## Settings and health
