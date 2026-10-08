@@ -23,7 +23,6 @@ import { pageFollowers } from '../notifications/schema.ts'
 import { MAX_BLOCKS_BYTES } from './blocks.ts'
 import {
   labels,
-  pageFavorites,
   pageLabels,
   pages,
   pageVersions,
@@ -114,7 +113,7 @@ const label = (
     )
   })
 
-// Nor are following and favorites.
+// Nor is following.
 const follow = (user: TestUser, pageId: string) =>
   inTenant(db, user, tx =>
     tx.insert(pageFollowers).values({
@@ -125,13 +124,7 @@ const follow = (user: TestUser, pageId: string) =>
   )
 
 const keepAsFavorite = (user: TestUser, pageId: string) =>
-  inTenant(db, user, tx =>
-    tx.insert(pageFavorites).values({
-      pageId,
-      organizationId: user.organizationId,
-      userId: user.userId
-    })
-  )
+  api.as(user).put(`/pages/${pageId}/favorite`)
 
 // Nor is Recent, so visits are read from their table, the last one first.
 const visitsOf = async (user: TestUser) => {
