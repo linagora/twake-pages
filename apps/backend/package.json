@@ -19,6 +19,7 @@
     "@linagora/rabbitmq-client": "^0.6.0",
     "drizzle-orm": "1.0.0-rc.4",
     "fastify": "^5.12.5",
+    "fractional-indexing": "^4.0.0",
     "jose": "^6.2.12",
     "nodemailer": "^10.0.15",
     "openid-client": "^6.8.8",
