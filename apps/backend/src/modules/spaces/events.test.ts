@@ -199,8 +199,8 @@ describe('space members and name', () => {
       members: [member(newcomer, 'editor')]
     })
 
-    // No route serves the members yet: this reads them as the list will.
-    const wiki = await spaceWikiOf(admin)
+    const wiki = await spaceWikiOf(newcomer)
+    // No route lists a wiki's members yet: this reads the name the list will show.
     const [membership] = await inTenant(db, admin, tx =>
       tx
         .select({ name: wikiMembers.name })
