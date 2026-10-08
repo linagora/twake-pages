@@ -3,11 +3,12 @@ import { z } from 'zod'
 import type { Db } from '../../infra/db.ts'
 import type { HttpServer } from '../../infra/http.ts'
 import { refuse } from '../../infra/refusals.ts'
+import { storable } from '../../infra/text.ts'
 import type { RequireIdentity } from '../auth/index.ts'
 import { MAX_BLOCKS_BYTES, pageBlocks } from './blocks.ts'
 import { createPageStore } from './store.ts'
 
-const pageTitle = z.string().trim().min(1).max(200)
+const pageTitle = z.string().trim().min(1).max(200).refine(storable)
 
 // Database pages come with their own ticket.
 const newPage = z.object({

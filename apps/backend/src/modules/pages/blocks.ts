@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { Refused } from '../../infra/refusals.ts'
+import { storable } from '../../infra/text.ts'
 
 // A page's blocks are BlockNote's JSON, stored as sent: the server reads them
 // to check them and to keep their text, and never rewrites them.
@@ -67,14 +68,17 @@ function blocksAllowed(
   if (Buffer.byteLength(JSON.stringify(blocks)) > MAX_BLOCKS_BYTES) {
     return false
   }
-  // Every object of the blocks, wherever it sits: a link in a table cell or
-  // in a child block is checked as one in a paragraph.
+  // Every object and string of the blocks, wherever it sits: a link in a
+  // table cell or in a child block is checked as one in a paragraph.
   const pending: unknown[] = [...blocks]
   while (pending.length > 0) {
     const value = pending.pop()
-    if (isList(value)) {
+    if (typeof value === 'string') {
+      if (!storable(value)) return false
+    } else if (isList(value)) {
       for (const item of value) pending.push(item)
     } else if (isFields(value)) {
+      if (!Object.keys(value).every(storable)) return false
       const rule =
         typeof value.type === 'string' ? RULES.get(value.type) : undefined
       if (rule && !rule(value, gristOrigins)) return false

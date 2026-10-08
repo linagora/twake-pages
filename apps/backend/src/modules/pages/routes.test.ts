@@ -735,6 +735,14 @@ describe('POST /wikis/:wikiId/pages', () => {
       'a title over 200 characters',
       { title: 'a'.repeat(201), kind: 'document', parentId: null }
     ],
+    [
+      'a NUL character in the title',
+      { title: 'On\u0000boarding', kind: 'document', parentId: null }
+    ],
+    [
+      'a lone surrogate in the title',
+      { title: 'Onboarding \ud83d', kind: 'document', parentId: null }
+    ],
     ['no parent', { title: 'Onboarding', kind: 'document' }],
     [
       'a malformed neighbour',
@@ -997,7 +1005,26 @@ describe('POST /wikis/:wikiId/pages', () => {
         'a Grist embed on another origin behind a user name',
         anAddressed('gristEmbed', `https://${gristHost}@docs.example.com/`)
       ],
-      ['a Grist embed at no address at all', anAddressed('gristEmbed', 'Tasks')]
+      [
+        'a Grist embed at no address at all',
+        anAddressed('gristEmbed', 'Tasks')
+      ],
+      [
+        'a NUL character in a text',
+        aBlock('paragraph', { content: [styled('Steps\u0000')] })
+      ],
+      [
+        'a lone surrogate in a text',
+        aBlock('paragraph', { content: [styled('Steps \ud83d')] })
+      ],
+      [
+        'a NUL character in a key',
+        aBlock('heading', { props: { 'level\u0000': 2 } })
+      ],
+      [
+        'a lone surrogate in a key',
+        aBlock('heading', { props: { '\udc00level': 2 } })
+      ]
     ])('answers invalid_content for %s', async (_case, block) => {
       const alice = aUser()
       const wiki = await aWikiOf(api, alice)
