@@ -5,18 +5,22 @@ import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest'
 import { createDb, inTenant } from '../../infra/db.ts'
 import {
   aB2cUser,
+  aBlock,
   addVersion,
   aPageIn,
   aUser,
   aWikiOf,
   createPage,
+  GRIST_ORIGIN,
   joinWiki,
   removeFromWiki,
   startApp,
+  styled,
   versionOf,
   type TestUser
 } from '../../testing/app.ts'
 import { pageFollowers } from '../notifications/schema.ts'
+import { MAX_BLOCKS_BYTES } from './blocks.ts'
 import {
   labels,
   pageFavorites,
@@ -46,6 +50,7 @@ interface Person {
 interface Page {
   id: string
   parentId: string | null
+  content: unknown[]
   version: number
   createdBy: Person
   updatedBy: Person
@@ -726,5 +731,252 @@ describe('POST /wikis/:wikiId/pages', () => {
 
     expect(response.statusCode).toBe(400)
     expect(response.json()).toEqual({ error: 'invalid_request' })
+  })
+
+  describe('its blocks', () => {
+    const aLink = (href: string, text = 'the guide') => ({
+      type: 'link',
+      href,
+      content: [styled(text)]
+    })
+
+    const linkingTo = (href: string) =>
+      aBlock('paragraph', { content: [aLink(href)] })
+
+    const aTable = (...rows: string[][]) =>
+      aBlock('table', {
+        content: {
+          type: 'tableContent',
+          columnWidths: [null, null],
+          rows: rows.map(cells => ({
+            cells: cells.map(text => ({
+              type: 'tableCell',
+              props: { textAlignment: 'left' },
+              content: [styled(text)]
+            }))
+          }))
+        }
+      })
+
+    /** A block whose address is its `url` prop: a media or a Grist embed. */
+    const anAddressed = (type: string, url: unknown) =>
+      aBlock(type, { props: { url } })
+
+    it('stores them as sent', async () => {
+      const alice = aUser()
+      const wiki = await aWikiOf(api, alice)
+      const blocks = [
+        aBlock('heading', { props: { level: 2 }, content: [styled('Steps')] }),
+        aBlock('paragraph', {
+          content: [styled('Read '), aLink('https://example.com/guide')],
+          children: [aBlock('paragraph', { content: 'Then ask' })]
+        }),
+        aTable(['Laptop', 'Badge']),
+        anAddressed('image', 'https://example.com/desk.png')
+      ]
+
+      const created = await createPage(api, alice, wiki.id, {
+        title: 'Onboarding',
+        content: blocks
+      })
+
+      expect(created.json<Page>().content).toEqual(blocks)
+      const page = await pageOf(alice, created.json<Page>().id)
+      expect(page.content).toEqual(blocks)
+    })
+
+    /** A paragraph of blocks that weigh `bytes` in JSON. */
+    const weighing = (bytes: number) => {
+      const block = aBlock('paragraph', { content: [styled('')] })
+      const filler = 'x'.repeat(bytes - JSON.stringify([block]).length)
+      return [{ ...block, content: [styled(filler)] }]
+    }
+
+    // The page and its version each keep the blocks: 4 MiB to write, which a
+    // busy machine takes seconds over.
+    it('takes 2 MiB of them in JSON', { timeout: 30_000 }, async () => {
+      const alice = aUser()
+      const wiki = await aWikiOf(api, alice)
+
+      const response = await createPage(api, alice, wiki.id, {
+        title: 'Onboarding',
+        content: weighing(MAX_BLOCKS_BYTES)
+      })
+
+      expect(response.statusCode).toBe(201)
+    })
+
+    it.each([
+      ['a byte over 2 MiB in JSON', MAX_BLOCKS_BYTES + 1],
+      ['in a body over the size of any request', 2 * MAX_BLOCKS_BYTES]
+    ])('answers invalid_content for blocks %s', async (_case, bytes) => {
+      const alice = aUser()
+      const wiki = await aWikiOf(api, alice)
+
+      const response = await createPage(api, alice, wiki.id, {
+        title: 'Onboarding',
+        content: weighing(bytes)
+      })
+
+      expect(response.statusCode).toBe(400)
+      expect(response.json()).toEqual({ error: 'invalid_content' })
+    })
+
+    it.each([
+      'https://example.com/guide',
+      'http://example.com/guide',
+      'mailto:alice@example.com'
+    ])('takes a link to %s', async href => {
+      const alice = aUser()
+      const wiki = await aWikiOf(api, alice)
+
+      const response = await createPage(api, alice, wiki.id, {
+        title: 'Onboarding',
+        content: [linkingTo(href)]
+      })
+
+      expect(response.statusCode).toBe(201)
+    })
+
+    it.each([
+      ['an image', 'image'],
+      ['a video', 'video'],
+      ['an audio block', 'audio'],
+      ['a file', 'file']
+    ])('takes %s at an https: address, or at none yet', async (_case, type) => {
+      const alice = aUser()
+      const wiki = await aWikiOf(api, alice)
+
+      const response = await createPage(api, alice, wiki.id, {
+        title: 'Onboarding',
+        content: [
+          anAddressed(type, 'https://example.com/desk'),
+          anAddressed(type, '')
+        ]
+      })
+
+      expect(response.statusCode).toBe(201)
+    })
+
+    it('takes a Grist embed on a Grist origin, or on none yet', async () => {
+      const alice = aUser()
+      const wiki = await aWikiOf(api, alice)
+
+      const response = await createPage(api, alice, wiki.id, {
+        title: 'Onboarding',
+        content: [
+          anAddressed('gristEmbed', `${GRIST_ORIGIN}/o/docs/4kq2/Tasks`),
+          anAddressed('gristEmbed', '')
+        ]
+      })
+
+      expect(response.statusCode).toBe(201)
+    })
+
+    const scriptLink = aLink('javascript:alert(1)')
+
+    const gristHost = new URL(GRIST_ORIGIN).host
+
+    it.each([
+      ['a link to javascript:alert(1)', linkingTo('javascript:alert(1)')],
+      [
+        'a link to JavaScript:alert(1) after a space',
+        linkingTo(' JavaScript:alert(1)')
+      ],
+      [
+        'a link to data:text/html',
+        linkingTo('data:text/html,<script>alert(1)</script>')
+      ],
+      [
+        'a link to ftp://example.com/guide',
+        linkingTo('ftp://example.com/guide')
+      ],
+      ['a link to /pages/guide', linkingTo('/pages/guide')],
+      [
+        'a link in a child block',
+        aBlock('paragraph', {
+          content: [styled('Steps')],
+          children: [aBlock('bulletListItem', { content: [scriptLink] })]
+        })
+      ],
+      [
+        'a link in a table cell',
+        aBlock('table', {
+          content: {
+            type: 'tableContent',
+            columnWidths: [null],
+            rows: [{ cells: [{ type: 'tableCell', content: [scriptLink] }] }]
+          }
+        })
+      ],
+      [
+        'an image at an http: address',
+        anAddressed('image', 'http://example.com/desk')
+      ],
+      [
+        'a video at an http: address',
+        anAddressed('video', 'http://example.com/desk')
+      ],
+      [
+        'an audio block at an http: address',
+        anAddressed('audio', 'http://example.com/desk')
+      ],
+      [
+        'a file at an http: address',
+        anAddressed('file', 'http://example.com/desk')
+      ],
+      [
+        'an image at a data: address',
+        anAddressed('image', 'data:image/png;base64,iVBORw0KGgo=')
+      ],
+      [
+        'an image at a blob: address',
+        anAddressed('image', 'blob:https://example.com/0d6c')
+      ],
+      ['an image at a path', anAddressed('image', '/files/desk.png')],
+      ['an image at a number', anAddressed('image', 12)],
+      [
+        'a Grist embed on another origin',
+        anAddressed('gristEmbed', 'https://docs.example.com/o/docs/4kq2')
+      ],
+      [
+        'a Grist embed on a look-alike origin',
+        anAddressed('gristEmbed', `${GRIST_ORIGIN}.example.net/o/docs/4kq2`)
+      ],
+      [
+        'a Grist embed on the Grist host over http:',
+        anAddressed('gristEmbed', `http://${gristHost}/o/docs/4kq2`)
+      ],
+      [
+        'a Grist embed on another origin behind a user name',
+        anAddressed('gristEmbed', `https://${gristHost}@docs.example.com/`)
+      ],
+      ['a Grist embed at no address at all', anAddressed('gristEmbed', 'Tasks')]
+    ])('answers invalid_content for %s', async (_case, block) => {
+      const alice = aUser()
+      const wiki = await aWikiOf(api, alice)
+
+      const response = await createPage(api, alice, wiki.id, {
+        title: 'Onboarding',
+        content: [block]
+      })
+
+      expect(response.statusCode).toBe(400)
+      expect(response.json()).toEqual({ error: 'invalid_content' })
+    })
+
+    it('stores nothing of a page whose blocks it refuses', async () => {
+      const alice = aUser()
+      const wiki = await aWikiOf(api, alice)
+      const before = await versionOf(api, alice, wiki.id)
+
+      await createPage(api, alice, wiki.id, {
+        title: 'Onboarding',
+        content: [linkingTo('javascript:alert(1)')]
+      })
+
+      expect(await titlesUnder(alice, wiki.id, null)).toEqual([])
+      expect(await versionOf(api, alice, wiki.id)).toBe(before)
+    })
   })
 })

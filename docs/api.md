@@ -15,7 +15,7 @@ A refusal answers `{ error: <Refusal> }` with its status:
 | `invalid_parent` | 400 | the parent is not a live page of the same wiki, is its home page, or is the page itself or one of its descendants |
 | `stale_neighbours` | 409 | `afterId` or `beforeId` is not a live sibling under the given parent |
 | `edit_conflict` | 409 | publishing from a version older than the current one (body below) |
-| `invalid_content` | 400 | blocks too large (over 2 MiB of JSON), a link that is not `http:`, `https:` or `mailto:`, or a Grist address outside `GRIST_ORIGINS` |
+| `invalid_content` | 400 | blocks too large (over 2 MiB of JSON), a link that is not `http:`, `https:` or `mailto:`, an image, video, audio or file address that is not `https:`, or a Grist embed outside `GRIST_ORIGINS` |
 | `invalid_grist_url` | 400 | a database page address outside `GRIST_ORIGINS` |
 | `not_in_trash` | 409 | restoring or purging a page that is not the root of a deleted branch |
 | `in_trash` | 409 | publishing, moving, labelling or commenting a deleted page |
@@ -190,7 +190,7 @@ interface NewPage {
 }
 ```
 
-`title` is 1 to 200 characters, trimmed. `content` is an array of BlockNote blocks. The server checks its size and links (see `invalid_content`) and keeps a plain text copy, but never rewrites it.
+`title` is 1 to 200 characters, trimmed. `content` is an array of BlockNote blocks. The server checks its size, its links and the addresses of its blocks (see `invalid_content`) and keeps a plain text copy, but never rewrites it. A link is an inline `{ type: 'link', href }`, wherever it sits. An `image`, `video`, `audio` or `file` block, and a Grist embed (`type: 'gristEmbed'`), hold their address in `props.url`, empty until they have one.
 
 ## Trash
 

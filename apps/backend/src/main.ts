@@ -45,7 +45,8 @@ const server = await buildApp({
       audience: config.OIDC_AUDIENCE
     }
   })),
-  isReady: async () => accepting && (await sql`select 1`).length === 1
+  isReady: async () => accepting && (await sql`select 1`).length === 1,
+  gristOrigins: config.GRIST_ORIGINS
 })
 await server.listen({ host: config.HTTP_HOST, port: config.HTTP_PORT })
 

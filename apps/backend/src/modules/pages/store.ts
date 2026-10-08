@@ -6,6 +6,7 @@ import type { Identity } from '../auth/index.ts'
 import { pageFollowers } from '../notifications/schema.ts'
 import { checkRole, roleOn } from '../wikis/access.ts'
 import { bumpWiki } from '../wikis/live.ts'
+import { checkBlocks, type Blocks } from './blocks.ts'
 import {
   labels,
   pageFavorites,
@@ -160,8 +161,8 @@ export type Author = Pick<Identity, 'userId' | 'email' | 'name'>
 
 /**
  * Writes a page of blocks in its wiki's tenant, with its version 1 by its
- * author. The follower is the author, as the creator of any page follows it,
- * unless told otherwise.
+ * author, empty unless given checked blocks. The follower is the author, as
+ * the creator of any page follows it, unless told otherwise.
  */
 export async function addPage(
   tx: Tx,
@@ -170,6 +171,7 @@ export async function addPage(
     wikiId: string
     organizationId: string | null
     title: string
+    content?: Blocks
     home?: true
     parentId?: string | null
     position?: string
@@ -196,6 +198,7 @@ export async function addPage(
     organizationId: added.organizationId,
     number: 1,
     title: added.title,
+    content: page.content,
     authorId: author.userId,
     authorEmail: author.email,
     authorName: author.name
@@ -215,9 +218,11 @@ export interface NewPage {
   parentId: string | null
   afterId?: string | undefined
   beforeId?: string | undefined
+  /** Unchecked, until the store checks them. */
+  content: Blocks
 }
 
-export function createPageStore(db: Db) {
+export function createPageStore(db: Db, gristOrigins: readonly string[]) {
   return {
     /**
      * A page of a wiki the person is a member of, in the trash or not. Each
@@ -235,6 +240,9 @@ export function createPageStore(db: Db) {
     /** A page of blocks, version 1 by its creator, who follows it. */
     createPage(identity: Identity, wikiId: string, input: NewPage) {
       return writeOrRefuse(db, identity, async tx => {
+        // Before the wiki's row lock, which 2 MiB of blocks to check would
+        // hold longer.
+        const blocks = checkBlocks(input.content, gristOrigins)
         await checkRole(tx, identity, wikiId, 'editor')
         const wiki = await bumpWiki(tx, wikiId)
         if (input.parentId !== null) {
@@ -262,6 +270,7 @@ export function createPageStore(db: Db) {
           wikiId,
           organizationId: wiki.organizationId,
           title: input.title,
+          ...blocks,
           parentId: input.parentId,
           position: positionBetween(siblings, input.afterId, input.beforeId)
         })

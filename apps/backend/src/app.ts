@@ -21,6 +21,7 @@ export async function buildApp(deps: {
   provider: IdentityProvider
   authenticate: Authenticate
   isReady: () => Promise<boolean>
+  gristOrigins: string[]
 }) {
   const app = createServer({ logger: deps.logger, isReady: deps.isReady })
   // The frontend serves its own routes, such as /wikis/<id>, on the same origin.
@@ -33,7 +34,11 @@ export async function buildApp(deps: {
       })
       const streamVersions = versionStreams(api)
       registerWikis(api, { db: deps.db, requireIdentity })
-      registerPages(api, { db: deps.db, requireIdentity })
+      registerPages(api, {
+        db: deps.db,
+        requireIdentity,
+        gristOrigins: deps.gristOrigins
+      })
       registerLive(api, {
         db: deps.db,
         requireIdentity,

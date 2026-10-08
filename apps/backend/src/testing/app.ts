@@ -228,6 +228,9 @@ export async function wikisOf(
     .wikis
 }
 
+/** The Grist origin of the app the tests start. */
+export const GRIST_ORIGIN = 'https://grist.example.com'
+
 export async function startApp() {
   const { sql, db } = createDb(inject('databaseUrl'))
   const settingsChanges = await listenToChanges(sql, SETTINGS_CHANNEL)
@@ -247,7 +250,8 @@ export async function startApp() {
           JSON.parse(Buffer.from(token, 'base64url').toString()) as Identity
         )
       ),
-    isReady: () => Promise.resolve(true)
+    isReady: () => Promise.resolve(true),
+    gristOrigins: [GRIST_ORIGIN]
   })
 
   function tokenOf(user: TestUser) {
@@ -308,6 +312,7 @@ export interface PageToCreate {
   parentId?: string | null
   afterId?: string
   beforeId?: string
+  content?: unknown[]
 }
 
 /** `POST /wikis/:wikiId/pages` by the person, for a page of blocks. */
@@ -323,3 +328,15 @@ export function createPage(
     ...page
   })
 }
+
+/** BlockNote's styled text, here with no style. */
+export const styled = (text: string) => ({ type: 'text', text, styles: {} })
+
+/** A block as BlockNote writes it, with no content unless given some. */
+export const aBlock = (type: string, fields: Record<string, unknown> = {}) => ({
+  id: randomUUID(),
+  type,
+  props: {},
+  children: [],
+  ...fields
+})
