@@ -95,7 +95,7 @@ As `task_followers`: `page_id, org_id, user_id, tenant`, primary key `(page_id, 
 
 ### notifications
 
-As in Twake Tasks, about pages: `id, page_id (cascade), wiki_id, org_id, user_id, reason (text: published, commented, mentioned), actor_id, actor_email, actor_name, version, comment_id, created_at, read_at, tenant`; index `(user_id, created_at)` and `(user_id, wiki_id) where read_at is null`; the restrictive `own_select`, `own_update`, `own_delete` policies of Twake Tasks.
+As in Twake Tasks, about pages: `id, page_id (cascade), wiki_id, org_id, user_id, reason (text: published, commented, mentioned), actor_id, actor_email, actor_name, version, comment_id (cascade), created_at, read_at, tenant`; index `(user_id, created_at)` and `(user_id, wiki_id) where read_at is null`; the restrictive `own_select`, `own_update`, `own_delete` policies of Twake Tasks.
 
 ### page_favorites, page_visits
 
