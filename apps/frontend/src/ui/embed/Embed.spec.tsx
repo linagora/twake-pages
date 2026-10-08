@@ -13,7 +13,11 @@ import {
 
 import { fakePagesApi } from '@/testing/fakePagesApi'
 import { renderBrowserRoute, renderRoute } from '@/testing/renderWithProviders'
-import { connectTwakeSpace, disconnectTwakeSpace } from '@/ui/embed/twakeSpace'
+import {
+  connectTwakeSpace,
+  disconnectTwakeSpace,
+  getTwakeSpace
+} from '@/ui/embed/twakeSpace'
 
 const SPACE = 'https://space.example.com'
 
@@ -80,7 +84,6 @@ describe('the embedded view', () => {
 })
 
 describe('the history of the embedded view', () => {
-  const OTHER = 'http://localhost:3000'
   let frame: HTMLIFrameElement
   let space: Window
   let post: MockInstance<Window['postMessage']>
@@ -101,15 +104,26 @@ describe('the history of the embedded view', () => {
     })
   }
 
-  // Like TwakeSpace, waits for the first path the app reports: the view shows
-  // before the effect that listens to TwakeSpace has run.
-  async function renderEmbed(path: string, pagesApi = fakePagesApi()) {
+  const greet = (origin = SPACE) => {
+    tell({ type: 'twake-embed:hello' }, origin)
+  }
+
+  // Like TwakeSpace, greets the frame and waits for the first path the app
+  // reports: the view shows before the effect that listens to TwakeSpace has
+  // run.
+  async function renderEmbed(
+    path: string,
+    { pagesApi = fakePagesApi(), greeted = true } = {}
+  ) {
     window.history.replaceState(null, '', path)
     connectTwakeSpace(space)
     const { router } = renderBrowserRoute({ pagesApi })
-    await waitFor(() => {
-      expect(pathMessages()).not.toEqual([])
-    })
+    if (greeted) {
+      greet()
+      await waitFor(() => {
+        expect(pathMessages()).not.toEqual([])
+      })
+    }
     return router
   }
 
@@ -128,7 +142,21 @@ describe('the history of the embedded view', () => {
     window.history.replaceState(null, '', '/')
   })
 
-  it('reports the first path as a replace', async () => {
+  it('only says it is ready, to any origin, until TwakeSpace greets the frame', async () => {
+    const pagesApi = fakePagesApi()
+    const wiki = pagesApi.withWiki({ kind: 'space' })
+    await renderEmbed(`/embed/wikis/${wiki.id}`, { pagesApi, greeted: false })
+    await screen.findByRole('navigation', { name: 'Wiki' })
+
+    expect(post).toHaveBeenCalled()
+    for (const [message, target] of post.mock.calls) {
+      expect(message).toEqual({ type: 'twake-embed:ready' })
+      expect(target).toBe('*')
+    }
+    expect(getTwakeSpace()?.hostOrigin()).toBeNull()
+  })
+
+  it('reports the first path as a replace, to the origin that greeted', async () => {
     await renderEmbed('/embed/wikis/w1/pages/p1')
 
     expect(post).toHaveBeenCalledWith(
@@ -140,10 +168,14 @@ describe('the history of the embedded view', () => {
       },
       SPACE
     )
-    expect(post).toHaveBeenCalledWith(
-      expect.objectContaining({ type: 'twake-embed:path' }),
-      OTHER
-    )
+    expect(getTwakeSpace()?.hostOrigin()).toBe(SPACE)
+    const targets = post.mock.calls
+      .filter(
+        ([message]) =>
+          (message as { type: string }).type !== 'twake-embed:ready'
+      )
+      .map(([, target]) => target)
+    expect(new Set(targets)).toEqual(new Set([SPACE]))
   })
 
   it('reports a navigation of the app as a push that adds no entry', async () => {
@@ -167,7 +199,7 @@ describe('the history of the embedded view', () => {
     const pagesApi = fakePagesApi()
     const wiki = pagesApi.withWiki({ kind: 'space' })
     const page = pagesApi.withPage(wiki.id, { title: 'Roadmap' })
-    await renderEmbed(`/embed/wikis/${wiki.id}`, pagesApi)
+    await renderEmbed(`/embed/wikis/${wiki.id}`, { pagesApi })
     const reportedAt = async (path: string) => {
       await waitFor(() => {
         expect(pathMessages().at(-1)).toEqual({

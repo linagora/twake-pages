@@ -20,7 +20,7 @@
     "@emotion/styled": "^11.14.1",
     "@linagora/twake-bar": "^1.0.0",
     "@linagora/twake-css": "^1.0.0",
-    "@linagora/twake-embed": "^1.1.0",
+    "@linagora/twake-embed": "^3.1.0",
     "@linagora/twake-icons": "^2.12.0",
     "@linagora/twake-mui": "^10.5.1",
     "@linagora/twake-oidc": "^1.0.0",

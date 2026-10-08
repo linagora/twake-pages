@@ -25,9 +25,11 @@ interface PostedMessage {
 
 // A stand-in for TwakeSpace that frames the embed as it does: a named frame,
 // and over the whole page an overlay frame on the app's origin, clipped to
-// the region the app reports. It keeps the messages the frame posts, and
-// sends the frame elsewhere as TwakeSpace's Back does. A real server: Chrome
-// keeps pages it did not load off the network from framing localhost.
+// the region the app reports. It greets the frame on each of its loads and
+// whenever the frame says it is ready, as TwakeSpace does: the frame posts
+// nothing else before. It keeps the messages the frame posts, and sends the
+// frame elsewhere as TwakeSpace's Back does. A real server: Chrome keeps
+// pages it did not load off the network from framing localhost.
 function twakeSpace(wikiId: string, port: number) {
   const server = createServer((_request, response) => {
     response.setHeader('content-type', 'text/html')
@@ -42,10 +44,15 @@ function twakeSpace(wikiId: string, port: number) {
       <script>
         const pages = document.getElementById('pages')
         const overlay = document.getElementById('overlay')
+        const greet = () => {
+          pages.contentWindow.postMessage({ type: 'twake-embed:hello' }, '${APP}')
+        }
+        pages.addEventListener('load', greet)
         window.posted = []
         addEventListener('message', event => {
           if (event.origin !== '${APP}' || event.source !== pages.contentWindow) return
           window.posted.push(event.data)
+          if (event.data?.type === 'twake-embed:ready') greet()
           if (event.data?.type !== 'twake-embed:overlay-region') return
           const region = event.data.region
           overlay.style.clipPath = region === 'full' ? 'none' : region.length === 0 ? 'inset(0 0 100% 0)'
