@@ -402,6 +402,18 @@ export function createPageStore(db: Db, gristOrigins: readonly string[]) {
             userId: identity.userId
           })
           .onConflictDoNothing()
+        await queuePageEvent(
+          tx,
+          identity,
+          'published',
+          {
+            id: pageId,
+            wikiId: found.wikiId,
+            organizationId: page.organizationId,
+            title: input.title
+          },
+          { version: number, preview: previewOf(blocks.text) }
+        )
         return changedPage(tx, identity, pageId)
       })
     }

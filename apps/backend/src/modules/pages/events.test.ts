@@ -13,6 +13,7 @@ import {
   movePage,
   paragraph,
   personalWikiOf,
+  publish,
   startApp,
   type TestUser
 } from '../../testing/app.ts'
@@ -208,5 +209,46 @@ describe('com.twake.pages.page.moved.v1', () => {
 
     expect(response.statusCode).toBe(200)
     expect(await eventsOf(plans)).toEqual([created])
+  })
+})
+
+describe('com.twake.pages.page.published.v1', () => {
+  it('goes out through the outbox when an editor publishes a page', async () => {
+    const alice = aUser()
+    const wiki = await aWikiOf(api, alice)
+    const created = await createPage(api, alice, wiki.id, {
+      title: 'Onboarding'
+    })
+    const pageId = created.json<{ id: string }>().id
+
+    await publish(api, alice, pageId, {
+      baseVersion: 1,
+      title: 'Welcome',
+      content: [paragraph('Steps'), paragraph('Ask for a laptop')]
+    })
+
+    expect(await eventsOf(pageId)).toEqual([
+      expect.objectContaining({ type: 'com.twake.pages.page.created.v1' }),
+      {
+        specversion: '1.0',
+        id: expect.stringMatching(UUID_V7) as string,
+        source: 'twake://pages',
+        type: 'com.twake.pages.page.published.v1',
+        time: expect.stringMatching(TIME) as string,
+        twakeorg: alice.organizationId,
+        twakeactorid: alice.userId,
+        twakeactor: alice.email,
+        data: {
+          object: {
+            type: 'page',
+            id: pageId,
+            title: 'Welcome',
+            container: { kind: 'wiki', id: wiki.id }
+          },
+          version: 2,
+          preview: 'Steps\nAsk for a laptop'
+        }
+      }
+    ])
   })
 })
