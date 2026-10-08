@@ -11,12 +11,34 @@ const page = new DOMParser().parseFromString(
   'text/html'
 )
 
-const neverSignedIn = () => fakeSession(() => new Promise(() => undefined))
+// A sign-in that never ends, unless told to give up
+const neverSignedIn = () => {
+  let reject: (error: Error) => void = () => undefined
+  const session = fakeSession(
+    () =>
+      new Promise((_, settle) => {
+        reject = settle
+      })
+  )
+  return {
+    ...session,
+    giveUp: () => {
+      vi.spyOn(console, 'error').mockImplementation(() => undefined)
+      reject(new Error('no answer from the SSO'))
+    }
+  }
+}
 
 const failing = () => {
   vi.spyOn(console, 'error').mockImplementation(() => undefined)
   return fakeSession(() => Promise.reject(new Error('bad state')))
 }
+
+// Until the gate offers a way out of a sign-in that does not end
+const pastTheTimeout = () =>
+  act(async () => {
+    await vi.advanceTimersByTimeAsync(8000)
+  })
 
 describe('SessionGate', () => {
   beforeEach(() => {
@@ -85,19 +107,13 @@ describe('SessionGate', () => {
 
   it('keeps saying it is slow when the sign-in gives up afterwards', async () => {
     vi.useFakeTimers()
-    let giveUp: (error: Error) => void = () => undefined
-    vi.spyOn(console, 'error').mockImplementation(() => undefined)
-    const session = fakeSession(
-      () =>
-        new Promise((_, reject) => {
-          giveUp = reject
-        })
-    )
+    const session = neverSignedIn()
     renderWithProviders(<p>app</p>, { session })
+    await pastTheTimeout()
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(8000)
-      giveUp(new Error('discovery timed out'))
+      session.giveUp()
+      await Promise.resolve()
     })
 
     expect(
@@ -171,6 +187,24 @@ describe('SessionGate', () => {
     )
 
     expect(await screen.findByText('app')).toBeInTheDocument()
+  })
+
+  it('keeps showing the app when the first sign-in gives up after the person signed in again', async () => {
+    vi.useFakeTimers()
+    const session = neverSignedIn()
+    vi.mocked(session.signIn).mockResolvedValue(fakeUser())
+    renderWithProviders(<p>app</p>, { session })
+    await pastTheTimeout()
+    fireEvent.click(screen.getByRole('button', { name: 'Back to sign-in' }))
+    await act(() => Promise.resolve())
+    expect(screen.getByText('app')).toBeInTheDocument()
+
+    await act(async () => {
+      session.giveUp()
+      await Promise.resolve()
+    })
+
+    expect(screen.getByText('app')).toBeInTheDocument()
   })
 
   it('signs in again when another tab signs out', async () => {

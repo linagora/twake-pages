@@ -87,7 +87,11 @@ export function SessionGate({
       },
       (error: unknown) => {
         console.error('Sign-in failed:', error)
-        setState({ status: 'failed' })
+        // Unlike Tasks, keeps the sign-in the person made meanwhile: the gate
+        // offers it before a silent sign-in in TwakeSpace gives up.
+        setState(state =>
+          state.status === 'signedIn' ? state : { status: 'failed' }
+        )
       }
     )
   }, [session])
