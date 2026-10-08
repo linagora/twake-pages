@@ -15,6 +15,7 @@ import { WikiFrame } from '@/ds/WikiFrame'
 import { useI18n } from '@/ui/i18n/useI18n'
 import { BackToWikis } from '@/ui/shell/Problems'
 import { EntryLink } from '@/ui/shell/SidebarLink'
+import { PageTree } from '@/ui/wiki/PageTree'
 import { useWiki } from '@/ui/wiki/queries'
 
 /** `back` leads to the person's wikis, which the frame of TwakeSpace has not. */
@@ -53,6 +54,7 @@ export function WikiLayout({ back = true }: { back?: boolean }): ReactElement {
             <WikiLink to="search" label={t('search.title')} />
             <WikiLink to="trash" label={t('trash.title')} />
           </List>
+          <PageTree wikiId={wiki.data.id} />
         </nav>
       }
     >

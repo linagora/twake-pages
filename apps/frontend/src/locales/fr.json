@@ -42,6 +42,11 @@
     "notFound": "Ce wiki n'existe pas, ou vous ne pouvez pas l'ouvrir.",
     "loadFailed": "Le wiki n'a pas pu être chargé."
   },
+  "tree": {
+    "title": "Pages",
+    "empty": "Aucune page pour l'instant",
+    "loadFailed": "Les pages n'ont pas pu être chargées."
+  },
   "page": {
     "title": "Page",
     "edit": "Modifier la page",

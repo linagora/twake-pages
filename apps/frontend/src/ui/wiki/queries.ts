@@ -1,9 +1,11 @@
 import { useQuery, type UseQueryResult } from '@tanstack/react-query'
 
+import type { Tree } from '@/application/pages'
 import type { Wiki, WikiSummary } from '@/domain/wiki'
 import { usePagesApi } from '@/ui/PagesApiProvider'
 
 export const wikisKey = ['wikis']
+// What is shown of a wiki sits below its key, to reload it all at once.
 const wikiKey = (wikiId: string) => ['wikis', wikiId] as const
 
 export function useWikis(): UseQueryResult<WikiSummary[]> {
@@ -16,5 +18,13 @@ export function useWiki(wikiId: string): UseQueryResult<Wiki> {
   return useQuery({
     queryKey: wikiKey(wikiId),
     queryFn: () => api.getWiki(wikiId)
+  })
+}
+
+export function useTree(wikiId: string): UseQueryResult<Tree> {
+  const api = usePagesApi()
+  return useQuery({
+    queryKey: [...wikiKey(wikiId), 'tree'],
+    queryFn: () => api.getTree(wikiId)
   })
 }
