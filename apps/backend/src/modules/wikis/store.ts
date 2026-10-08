@@ -61,21 +61,28 @@ export const purgeWiki: Handler = async (raw, tx) => {
   return undefined
 }
 
-/** Purges the deleted wiki for good 30 days from now. */
-export async function planPurge(
-  tx: Tx,
-  wiki: { id: string; organizationId: string | null; createdBy: string }
-): Promise<void> {
+/**
+ * Puts the wiki out of reach now, and purges it for good 30 days later. Its
+ * version moves first, while bumpWiki still finds it.
+ */
+export async function putOutOfReach(tx: Tx, wikiId: string) {
+  const bumped = await bumpWiki(tx, wikiId)
+  const [wiki] = await tx
+    .update(wikis)
+    .set({ deletedAt: sql`now()` })
+    .where(eq(wikis.id, wikiId))
+    .returning({
+      organizationId: wikis.organizationId,
+      createdBy: wikis.createdBy
+    })
+  if (!wiki) throw new Error(`wiki ${wikiId} is out of reach`)
   await schedule(tx, {
     kind: PURGE_WIKI_JOB,
-    key: `${PURGE_WIKI_JOB}:${wiki.id}`,
-    payload: {
-      wikiId: wiki.id,
-      organizationId: wiki.organizationId,
-      createdBy: wiki.createdBy
-    },
+    key: `${PURGE_WIKI_JOB}:${wikiId}`,
+    payload: { wikiId, ...wiki },
     runAt: new Date(Date.now() + RETENTION_MS)
   })
+  return bumped
 }
 
 type Author = Pick<Identity, 'userId' | 'email' | 'name'>
@@ -305,19 +312,9 @@ export function createWikiStore(db: Db) {
     deleteWiki(identity: Identity, wikiId: string): Promise<Result<null>> {
       return writeOrRefuse(db, identity, async tx => {
         await checkRole(tx, identity, wikiId, 'admin')
-        const { kind } = await bumpWiki(tx, wikiId)
+        const { kind } = await putOutOfReach(tx, wikiId)
+        // The refusal rolls the deletion back.
         if (kind !== 'shared') throw new Refused('managed')
-        const [wiki] = await tx
-          .update(wikis)
-          .set({ deletedAt: sql`now()` })
-          .where(eq(wikis.id, wikiId))
-          .returning({
-            id: wikis.id,
-            organizationId: wikis.organizationId,
-            createdBy: wikis.createdBy
-          })
-        if (!wiki) throw new Error(`wiki ${wikiId} is out of reach`)
-        await planPurge(tx, wiki)
         return null
       })
     }
