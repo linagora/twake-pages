@@ -43,7 +43,10 @@ export function useWiki(wikiId: string): UseQueryResult<Wiki> {
 }
 
 // The answer is the wiki as it now is, which the list shows by name.
-function showWiki(queryClient: QueryClient, wiki: Wiki): Promise<void> {
+function cacheWikiAndInvalidateList(
+  queryClient: QueryClient,
+  wiki: Wiki
+): Promise<void> {
   queryClient.setQueryData(wikiKey(wiki.id), wiki)
   return queryClient.invalidateQueries({ queryKey: wikisKey, exact: true })
 }
@@ -53,7 +56,7 @@ export function useCreateWiki(): UseMutationResult<Wiki, Error, NewWiki> {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (wiki: NewWiki) => api.createWiki(wiki),
-    onSuccess: wiki => showWiki(queryClient, wiki)
+    onSuccess: wiki => cacheWikiAndInvalidateList(queryClient, wiki)
   })
 }
 
@@ -69,7 +72,7 @@ export function useEditWiki(
         wiki.id,
         wiki.kind === 'shared' ? { name, description } : { description }
       ),
-    onSuccess: edited => showWiki(queryClient, edited)
+    onSuccess: edited => cacheWikiAndInvalidateList(queryClient, edited)
   })
 }
 
