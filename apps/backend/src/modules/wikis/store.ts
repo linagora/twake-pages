@@ -61,6 +61,23 @@ export const purgeWiki: Handler = async (raw, tx) => {
   return undefined
 }
 
+/** Purges the deleted wiki for good 30 days from now. */
+export async function planPurge(
+  tx: Tx,
+  wiki: { id: string; organizationId: string | null; createdBy: string }
+): Promise<void> {
+  await schedule(tx, {
+    kind: PURGE_WIKI_JOB,
+    key: `${PURGE_WIKI_JOB}:${wiki.id}`,
+    payload: {
+      wikiId: wiki.id,
+      organizationId: wiki.organizationId,
+      createdBy: wiki.createdBy
+    },
+    runAt: new Date(Date.now() + RETENTION_MS)
+  })
+}
+
 type Author = Pick<Identity, 'userId' | 'email' | 'name'>
 
 export async function addHomePage(
@@ -295,16 +312,12 @@ export function createWikiStore(db: Db) {
           .set({ deletedAt: sql`now()` })
           .where(eq(wikis.id, wikiId))
           .returning({
+            id: wikis.id,
             organizationId: wikis.organizationId,
             createdBy: wikis.createdBy
           })
         if (!wiki) throw new Error(`wiki ${wikiId} is out of reach`)
-        await schedule(tx, {
-          kind: PURGE_WIKI_JOB,
-          key: `${PURGE_WIKI_JOB}:${wikiId}`,
-          payload: { wikiId, ...wiki },
-          runAt: new Date(Date.now() + RETENTION_MS)
-        })
+        await planPurge(tx, wiki)
         return null
       })
     }

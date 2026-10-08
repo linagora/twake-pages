@@ -1,10 +1,13 @@
 import { randomUUID } from 'node:crypto'
-import { sql as raw } from 'drizzle-orm'
+import { eq, sql as raw } from 'drizzle-orm'
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest'
 import type { PlatformEvent } from '../../events/envelope.ts'
 import { outbox } from '../../events/schema.ts'
-import { createDb } from '../../infra/db.ts'
+import { createDb, inTenant } from '../../infra/db.ts'
+import { jobs } from '../../scheduler/schema.ts'
 import { aPageIn, aUser, startApp, type TestUser } from '../../testing/app.ts'
+import { wikis } from '../wikis/schema.ts'
+import { purgeWiki } from '../wikis/store.ts'
 import { spaceRoutes } from './events.ts'
 
 let api: Awaited<ReturnType<typeof startApp>>
@@ -76,6 +79,25 @@ async function provisionedEvents(spaceId: string) {
     .orderBy(outbox.id)
   return queued.map(row => row.event)
 }
+
+async function purgeJobOf(wikiId: string) {
+  const [job] = await db
+    .select()
+    .from(jobs)
+    .where(eq(jobs.key, `purge-wiki:${wikiId}`))
+  if (!job) throw new Error(`no purge job for wiki ${wikiId}`)
+  return job
+}
+
+// Anyone in the organization sees its wikis' rows, deleted or not, until
+// they are purged.
+const wikiRowsOf = (someone: TestUser, wikiId: string) =>
+  inTenant(db, someone, tx =>
+    tx
+      .select({ id: wikis.id, version: wikis.version })
+      .from(wikis)
+      .where(eq(wikis.id, wikiId))
+  )
 
 describe('twake.space.created', () => {
   it('creates the wiki of the space, named after it, with its members in their space roles', async () => {
@@ -230,6 +252,48 @@ describe('twake.space.updated', () => {
     expect(await spaceWikis(admin)).toEqual([
       expect.objectContaining({ name: 'Operations' })
     ])
+  })
+})
+
+describe('twake.space.deleted', () => {
+  it('puts the wiki out of reach, until its purge 30 days later', async () => {
+    const admin = aUser()
+    const space = { organizationId: admin.organizationId, id: randomUUID() }
+    await deliver('twake.space.created', {
+      ...space,
+      name: 'Ops',
+      members: [member(admin, 'admin')]
+    })
+    const wiki = await spaceWikiOf(admin)
+    const before = await versionOf(admin, wiki.id)
+
+    await deliver('twake.space.deleted', space)
+
+    expect(await spaceWikis(admin)).toEqual([])
+    expect((await api.as(admin).get(`/wikis/${wiki.id}`)).statusCode).toBe(404)
+    const [row] = await wikiRowsOf(admin, wiki.id)
+    expect(row?.version).toBeGreaterThan(before)
+    const job = await purgeJobOf(wiki.id)
+    const days = (job.runAt.getTime() - Date.now()) / 86_400_000
+    expect(Math.round(days)).toBe(30)
+  })
+
+  it('leaves the wiki to the wiki purge job', async () => {
+    const admin = aUser()
+    const space = { organizationId: admin.organizationId, id: randomUUID() }
+    await deliver('twake.space.created', {
+      ...space,
+      name: 'Ops',
+      members: [member(admin, 'admin')]
+    })
+    const wiki = await spaceWikiOf(admin)
+    await aPageIn(db, admin, wiki.id, { title: 'Runbook', position: 'a0' })
+    await deliver('twake.space.deleted', space)
+    const job = await purgeJobOf(wiki.id)
+
+    await db.transaction(tx => purgeWiki(job.payload, tx))
+
+    expect(await wikiRowsOf(admin, wiki.id)).toEqual([])
   })
 })
 

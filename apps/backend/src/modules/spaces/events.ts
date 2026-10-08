@@ -1,11 +1,11 @@
-import { and, eq, inArray, ne, or, sql, type SQL } from 'drizzle-orm'
+import { and, eq, inArray, isNull, ne, or, sql, type SQL } from 'drizzle-orm'
 import { z } from 'zod'
 import type { OutgoingEvent, PlatformEvent } from '../../events/envelope.ts'
 import { enqueue } from '../../events/outbox.ts'
 import { parseOrDrop, type Handler } from '../../events/router.ts'
 import { asOrganization, type Tx } from '../../infra/db.ts'
 import { memberRole, wikiMembers, wikis } from '../wikis/schema.ts'
-import { addHomePage } from '../wikis/store.ts'
+import { addHomePage, planPurge } from '../wikis/store.ts'
 import { spaces } from './schema.ts'
 
 const timestamp = z.iso.datetime({ offset: true })
@@ -182,6 +182,24 @@ async function renameSpace(tx: Tx, space: SpaceRef, name: string) {
   if (renamed.length > 0) await touch(tx, wikiId)
 }
 
+/** Puts the space's wiki out of reach now, for the wiki purge job to take. */
+async function deleteSpace(tx: Tx, space: SpaceRef): Promise<void> {
+  const wikiId = await wikiOf(tx, space)
+  if (!wikiId) return
+  const [deleted] = await tx
+    .update(wikis)
+    .set({ deletedAt: sql`now()` })
+    .where(and(eq(wikis.id, wikiId), isNull(wikis.deletedAt)))
+    .returning({
+      id: wikis.id,
+      organizationId: wikis.organizationId,
+      createdBy: wikis.createdBy
+    })
+  if (!deleted) return
+  await touch(tx, wikiId)
+  await planPurge(tx, deleted)
+}
+
 export function spaceRoutes(): ReadonlyMap<string, Handler<PlatformEvent>> {
   // A replay creates nothing, and publishes the same event again.
   const onCreated: Handler<PlatformEvent> = async (event, tx) => {
@@ -216,9 +234,16 @@ export function spaceRoutes(): ReadonlyMap<string, Handler<PlatformEvent>> {
     )
   }
 
+  const onDeleted: Handler<PlatformEvent> = async (event, tx) => {
+    const space = parseOrDrop(spaceEvent, event.body, event.routingKey)
+    await asOrganization(tx, space.organizationId)
+    await deleteSpace(tx, space)
+  }
+
   return new Map([
     ['twake.space.created', onCreated],
     ['twake.space.updated', onUpdated],
+    ['twake.space.deleted', onDeleted],
     ['twake.space.member.added', onMembersChanged],
     ['twake.space.member.role.changed', onMembersChanged],
     ['twake.space.member.removed', onMembersRemoved]
