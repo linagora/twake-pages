@@ -13,6 +13,7 @@ import type {
   Block,
   Page,
   PageKind,
+  PageRef,
   TrashEntry,
   TreePage,
   Version,
@@ -152,6 +153,8 @@ interface StoredPage {
   followers: Set<string>
   /** When each person marked it, by person id. */
   favoredBy: Map<string, string>
+  /** When each person last opened it, by person id. */
+  visitedBy: Map<string, string>
   /** Label names, sorted. */
   labels: string[]
   /** Null while the page is live. */
@@ -213,6 +216,85 @@ function labelName(value: string) {
   const name = value.trim().toLowerCase()
   if (!LABEL.test(name)) throw refuse('invalid_label')
   return name
+}
+
+const WORD = /[\p{L}\p{N}]+/gu
+
+const wordsOf = (value: string) => value.toLowerCase().match(WORD) ?? []
+
+// The text of inline content: styled text, and the text of links.
+function inlineText(value: unknown): string {
+  if (Array.isArray(value)) return value.map(inlineText).join('')
+  if (typeof value !== 'object' || value === null) return ''
+  if ('text' in value && typeof value.text === 'string') return value.text
+  return 'content' in value ? inlineText(value.content) : ''
+}
+
+// The plain text of blocks, a line each, as search reads it.
+function plainText(blocks: unknown[]): string {
+  return blocks
+    .flatMap(block => {
+      if (typeof block !== 'object' || block === null) return []
+      const { content, children } = block as {
+        content?: unknown
+        children?: unknown
+      }
+      return [
+        inlineText(content),
+        Array.isArray(children) ? plainText(children) : ''
+      ]
+    })
+    .filter(line => line !== '')
+    .join('\n')
+}
+
+// The words of a query as full text search reads them: whole words, but the
+// last one, which may be a beginning.
+function queryOf(query: string) {
+  const words = wordsOf(query)
+  const tests = words.map((each, index) =>
+    index === words.length - 1
+      ? (word: string) => word.startsWith(each)
+      : (word: string) => word === each
+  )
+  return {
+    /** Whether a page with these words has every word of the query. */
+    matches: (pageWords: string[]) =>
+      tests.length > 0 && tests.every(test => pageWords.some(test)),
+    /** Whether the word is one the query looks for. */
+    finds: (word: string) => tests.some(test => test(word))
+  }
+}
+
+const FOUND_START = String.fromCharCode(0xe000)
+const FOUND_END = String.fromCharCode(0xe001)
+const WORDS_BEFORE = 5
+const WORDS_AFTER = 8
+
+// A few words of the text around the first one found, the words found
+// marked; the text's first words when none is.
+function excerptOf(text: string, finds: (word: string) => boolean) {
+  const words = [...text.matchAll(WORD)]
+  const first = Math.max(
+    0,
+    words.findIndex(word => finds(word[0].toLowerCase()))
+  )
+  const shown = words.slice(
+    Math.max(0, first - WORDS_BEFORE),
+    first + WORDS_AFTER + 1
+  )
+  let excerpt = ''
+  let end: number | null = null
+  for (const word of shown) {
+    if (end !== null) {
+      excerpt += text.slice(end, word.index).replace(/\s+/gu, ' ')
+    }
+    excerpt += finds(word[0].toLowerCase())
+      ? `${FOUND_START}${word[0]}${FOUND_END}`
+      : word[0]
+    end = word.index + word[0].length
+  }
+  return excerpt
 }
 
 // Answers like the network would: later, and with copies.
@@ -500,6 +582,27 @@ function signedIn(world: World, person: Person): FakePagesApi {
   const branchOf = (root: StoredPage) =>
     pagesOf(root.wikiId).filter(page => page.deletion?.rootId === root.id)
 
+  // The live pages of every wiki of the person, each with its wiki.
+  const myLivePages = () =>
+    [...world.pages.values()].flatMap(page => {
+      const wiki = wikiOf(page.wikiId)
+      return wiki?.members.has(person.id) && !page.deletion
+        ? [{ page, wiki }]
+        : []
+    })
+
+  const refOf = ({
+    page,
+    wiki
+  }: {
+    page: StoredPage
+    wiki: StoredWiki
+  }): PageRef => ({
+    id: page.id,
+    title: currentOf(page).title,
+    wiki: { id: wiki.id, name: wiki.name }
+  })
+
   const pageFor = (page: StoredPage): Page => {
     const version = currentOf(page)
     return {
@@ -557,6 +660,7 @@ function signedIn(world: World, person: Person): FakePagesApi {
       ],
       followers: new Set([person.id]),
       favoredBy: new Map(),
+      visitedBy: new Map(),
       labels: [],
       deletion: null
     }
@@ -850,7 +954,11 @@ function signedIn(world: World, person: Person): FakePagesApi {
       })
     ),
     getPage: vi.fn<PagesApi['getPage']>(pageId =>
-      answer(() => pageFor(pageAccess(pageId).page))
+      answer(() => {
+        const { page } = pageAccess(pageId)
+        page.visitedBy.set(person.id, now())
+        return pageFor(page)
+      })
     ),
     publish: vi.fn<PagesApi['publish']>((pageId, draft) =>
       answer(() => {
@@ -1134,6 +1242,64 @@ function signedIn(world: World, person: Person): FakePagesApi {
           counts.set(wiki.id, (counts.get(wiki.id) ?? 0) + 1)
         }
         return [...counts].map(([wikiId, count]) => ({ wikiId, count }))
+      })
+    ),
+
+    favorites: vi.fn<PagesApi['favorites']>(() =>
+      answer(() =>
+        myLivePages()
+          .flatMap(seen => {
+            const markedAt = seen.page.favoredBy.get(person.id)
+            return markedAt ? [{ seen, markedAt }] : []
+          })
+          .sort((a, b) => (a.markedAt < b.markedAt ? 1 : -1))
+          .map(({ seen }) => refOf(seen))
+      )
+    ),
+    recent: vi.fn<PagesApi['recent']>(() =>
+      answer(() =>
+        myLivePages()
+          .flatMap(seen => {
+            const visitedAt = seen.page.visitedBy.get(person.id)
+            return visitedAt ? [{ ...refOf(seen), visitedAt }] : []
+          })
+          .sort((a, b) => (a.visitedAt < b.visitedAt ? 1 : -1))
+          .slice(0, 20)
+      )
+    ),
+    // Ranked as the title weighs more than the text, then the latest first.
+    search: vi.fn<PagesApi['search']>((query, wikiId) =>
+      answer(() => {
+        const { matches, finds } = queryOf(text(query, 200))
+        if (wikiId !== undefined) access(wikiId)
+        return myLivePages()
+          .filter(seen => wikiId === undefined || seen.wiki.id === wikiId)
+          .flatMap(seen => {
+            const { title, content, createdAt } = currentOf(seen.page)
+            const body = plainText(content)
+            const titleWords = wordsOf(title)
+            const textWords = wordsOf(body)
+            if (!matches([...titleWords, ...textWords])) return []
+            return [
+              {
+                result: {
+                  page: refOf(seen),
+                  excerpt: excerptOf(body, finds),
+                  updatedAt: createdAt
+                },
+                inTitle: titleWords.filter(finds).length,
+                inText: textWords.filter(finds).length
+              }
+            ]
+          })
+          .sort(
+            (a, b) =>
+              b.inTitle - a.inTitle ||
+              b.inText - a.inText ||
+              (a.result.updatedAt < b.result.updatedAt ? 1 : -1)
+          )
+          .slice(0, 50)
+          .map(({ result }) => result)
       })
     )
   }

@@ -4,11 +4,13 @@ import type {
   Block,
   Page,
   PageKind,
+  PageRef,
   TrashEntry,
   TreePage,
   Version,
   VersionSummary
 } from '@/domain/page'
+import type { SearchResult } from '@/domain/search'
 import type { Invite, Member, Role, Wiki, WikiSummary } from '@/domain/wiki'
 
 /** The person's Twake Workplace settings; null where they never chose. */
@@ -120,6 +122,9 @@ export interface Badge {
   count: number
 }
 
+/** A page the person opened lately, and when they last did. */
+export type RecentPage = PageRef & { visitedAt: string }
+
 /** Why the backend refused a request: the `error` of its answer. */
 export type Refusal =
   | 'not_found'
@@ -221,6 +226,13 @@ export interface PagesApi {
   markRead: (selection: ReadSelection) => Promise<void>
   /** The wikis with unread notifications, and how many. */
   badges: () => Promise<Badge[]>
+
+  /** Live pages, the latest marked first. */
+  favorites: () => Promise<PageRef[]>
+  /** Live pages, the latest opened first; at most 20. */
+  recent: () => Promise<RecentPage[]>
+  /** At most 50 live pages, best first, from every wiki of the person or one. */
+  search: (query: string, wikiId?: string) => Promise<SearchResult[]>
 }
 
 export class ApiError extends Error {

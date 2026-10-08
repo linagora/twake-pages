@@ -30,6 +30,10 @@ async function badgesOf(api: FakePagesApi) {
 
 const nothing = { notifications: [], unread: 0 }
 
+// A word found by a search, as its excerpt marks it.
+const found = (word: string) =>
+  `${String.fromCharCode(0xe000)}${word}${String.fromCharCode(0xe001)}`
+
 describe('fakePagesApi', () => {
   describe('wikis', () => {
     it("makes the person's personal wiki on the first list", async () => {
@@ -1098,6 +1102,181 @@ describe('fakePagesApi', () => {
       expect(notifications).toHaveLength(100)
       expect(notifications[0]?.version).toBe(102)
       expect(unread).toBe(101)
+    })
+  })
+
+  describe('finding', () => {
+    it('lists the live favorite pages, the latest marked first', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki({ name: 'Handbook' })
+      const onboarding = api.withPage(wiki.id, { title: 'Onboarding' })
+      const setup = api.withPage(wiki.id, { title: 'Setup' })
+      const laptop = api.withPage(wiki.id, { title: 'Laptop' })
+      await api.setFavorite(onboarding.id, true)
+      await api.setFavorite(setup.id, true)
+      await api.setFavorite(laptop.id, true)
+      await api.deletePage(laptop.id)
+
+      const favorites = await api.favorites()
+
+      expect(favorites).toEqual([
+        {
+          id: setup.id,
+          title: 'Setup',
+          wiki: { id: wiki.id, name: 'Handbook' }
+        },
+        {
+          id: onboarding.id,
+          title: 'Onboarding',
+          wiki: { id: wiki.id, name: 'Handbook' }
+        }
+      ])
+      await expect(
+        api.signedInAs('bob@example.com').favorites()
+      ).resolves.toEqual([])
+    })
+
+    it('lists the live pages the person opened, the latest visit first', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki({ name: 'Handbook' })
+      const onboarding = api.withPage(wiki.id, { title: 'Onboarding' })
+      const setup = api.withPage(wiki.id, { title: 'Setup' })
+      const laptop = api.withPage(wiki.id, { title: 'Laptop' })
+      await api.getPage(onboarding.id)
+      await api.getPage(setup.id)
+      await api.getPage(laptop.id)
+      await api.getPage(onboarding.id)
+      await api.deletePage(laptop.id)
+
+      const recent = await api.recent()
+
+      expect(recent).toMatchObject([
+        {
+          id: onboarding.id,
+          title: 'Onboarding',
+          wiki: { id: wiki.id, name: 'Handbook' }
+        },
+        {
+          id: setup.id,
+          title: 'Setup',
+          wiki: { id: wiki.id, name: 'Handbook' }
+        }
+      ])
+      await expect(api.signedInAs('bob@example.com').recent()).resolves.toEqual(
+        []
+      )
+    })
+
+    it('keeps the 20 latest recent pages', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki()
+      for (let number = 1; number <= 21; number += 1) {
+        const page = api.withPage(wiki.id, { title: `Page ${String(number)}` })
+        await api.getPage(page.id)
+      }
+
+      const recent = await api.recent()
+
+      expect(recent).toHaveLength(20)
+      expect(recent[0]?.title).toBe('Page 21')
+      expect(recent.at(-1)?.title).toBe('Page 2')
+    })
+  })
+
+  describe('search', () => {
+    it('finds the live pages with every word, the last one as a beginning', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki({ name: 'Handbook' })
+      const checklist = api.withPage(wiki.id, {
+        title: 'Release checklist',
+        content: [paragraph('Tag the version')]
+      })
+      api.withPage(wiki.id, {
+        title: 'Onboarding',
+        content: [paragraph('Read the release notes first')]
+      })
+      const old = api.withPage(wiki.id, { title: 'Old release notes' })
+      await api.deletePage(old.id)
+      const titles = async (query: string) =>
+        (await api.search(query)).map(result => result.page.title)
+
+      expect(await titles('release')).toEqual([
+        'Release checklist',
+        'Onboarding'
+      ])
+      expect(await titles('RELEASE NO')).toEqual(['Onboarding'])
+      expect(await titles('releas notes')).toEqual([])
+      await expect(api.search('checklist')).resolves.toMatchObject([
+        {
+          page: {
+            id: checklist.id,
+            title: 'Release checklist',
+            wiki: { id: wiki.id, name: 'Handbook' }
+          },
+          updatedAt: checklist.updatedAt
+        }
+      ])
+    })
+
+    it('cuts an excerpt of the text around the first word found', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki()
+      api.withPage(wiki.id, {
+        title: 'Onboarding',
+        content: [
+          paragraph(
+            'Before your first day, IT prepares a laptop with the tools you need and an account for every app.'
+          ),
+          paragraph('Ask Bob')
+        ]
+      })
+      const excerpt = async (query: string) =>
+        (await api.search(query))[0]?.excerpt
+
+      expect(await excerpt('laptop')).toBe(
+        `first day, IT prepares a ${found('laptop')} with the tools you need and an account`
+      )
+      expect(await excerpt('bob')).toBe(
+        `account for every app. Ask ${found('Bob')}`
+      )
+      expect(await excerpt('onboarding')).toBe(
+        'Before your first day, IT prepares a laptop with'
+      )
+    })
+
+    it('searches every wiki of the person, or one of them', async () => {
+      const api = fakePagesApi()
+      const handbook = api.withWiki({ name: 'Handbook' })
+      const guide = api.withWiki({ name: 'Guide' })
+      api.withPage(handbook.id, { title: 'Release checklist' })
+      api.withPage(guide.id, { title: 'Release notes' })
+      const bob = api.signedInAs('bob@example.com')
+      const secret = bob.withWiki({ name: 'Secret' })
+      bob.withPage(secret.id, { title: 'Release plan' })
+      const titles = async (wikiId?: string) =>
+        (await api.search('release', wikiId)).map(result => result.page.title)
+
+      expect(await titles()).toEqual(['Release notes', 'Release checklist'])
+      expect(await titles(guide.id)).toEqual(['Release notes'])
+      await expect(api.search('release', secret.id)).rejects.toEqual(
+        new ApiError(404, 'not_found')
+      )
+    })
+
+    it('answers the 50 best pages, for 1 to 200 characters', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki()
+      for (let number = 1; number <= 51; number += 1) {
+        api.withPage(wiki.id, { title: `Release ${String(number)}` })
+      }
+
+      await expect(api.search('release')).resolves.toHaveLength(50)
+      await expect(api.search(' ')).rejects.toEqual(
+        new ApiError(400, 'invalid_request')
+      )
+      await expect(api.search('a'.repeat(201))).rejects.toEqual(
+        new ApiError(400, 'invalid_request')
+      )
     })
   })
 })

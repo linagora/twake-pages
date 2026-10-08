@@ -5,10 +5,12 @@ import {
   type Label,
   type LabelledPage,
   type PagesApi,
-  type PersonMatch
+  type PersonMatch,
+  type RecentPage
 } from '@/application/pages'
 import type { Comment } from '@/domain/comment'
-import type { TrashEntry, VersionSummary } from '@/domain/page'
+import type { PageRef, TrashEntry, VersionSummary } from '@/domain/page'
+import type { SearchResult } from '@/domain/search'
 import type { WikiSummary } from '@/domain/wiki'
 
 export type Send = (request: Request) => Promise<Response>
@@ -190,6 +192,22 @@ export function httpPagesApi(baseUrl: string, send: Send): PagesApi {
     listNotifications: () => call('GET', '/notifications'),
     markRead: selection => call('POST', '/notifications/read', selection),
     badges: () =>
-      call<{ badges: Badge[] }>('GET', '/badges').then(({ badges }) => badges)
+      call<{ badges: Badge[] }>('GET', '/badges').then(({ badges }) => badges),
+
+    favorites: () =>
+      call<{ pages: PageRef[] }>('GET', '/favorites').then(
+        ({ pages }) => pages
+      ),
+    recent: () =>
+      call<{ pages: RecentPage[] }>('GET', '/recent').then(
+        ({ pages }) => pages
+      ),
+    search: (query, wikiId) =>
+      call<{ results: SearchResult[] }>(
+        'GET',
+        `/search?${new URLSearchParams(
+          wikiId === undefined ? { q: query } : { q: query, wikiId }
+        ).toString()}`
+      ).then(({ results }) => results)
   }
 }
