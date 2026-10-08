@@ -5,7 +5,7 @@ set -eu
 
 ME=$(basename "$0")
 OUT=/tmp/nginx
-RUNTIME_KEYS="SSO_BASE_URL SSO_CLIENT_ID SSO_SCOPE SSO_REDIRECT_URI SSO_POST_LOGOUT_REDIRECT POSTHOG_KEY POSTHOG_HOST"
+RUNTIME_KEYS="SSO_BASE_URL SSO_CLIENT_ID SSO_SCOPE SSO_REDIRECT_URI SSO_POST_LOGOUT_REDIRECT POSTHOG_KEY POSTHOG_HOST CSP_IMG_SRC"
 
 fail() {
   echo "$ME: error: $*" >&2
@@ -53,7 +53,8 @@ frame_src="'self'"
 [ -n "${SSO_BASE_URL:-}" ] && frame_src="$frame_src $(origin "$SSO_BASE_URL")"
 [ -n "${CSP_FRAME_SRC:-}" ] && frame_src="$frame_src $CSP_FRAME_SRC"
 frame_ancestors="'self'${CSP_FRAME_ANCESTORS:+ $CSP_FRAME_ANCESTORS}"
-# People's pictures come from Twake Workplace, on its own hosts.
+# People's pictures come from Twake Workplace, on its own hosts, and the images
+# of pages from the hosts the deployment allows, which /.env.js tells the editor.
 img_src="'self' data: blob:${CSP_IMG_SRC:+ $CSP_IMG_SRC}"
 permissions_policy=${PERMISSIONS_POLICY:-"accelerometer=(), geolocation=(), gyroscope=(), magnetometer=(), payment=(), usb=()"}
 check_sources CSP_CONNECT_SRC "$connect_src"

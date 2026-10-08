@@ -50,6 +50,7 @@ expect 'unknown routes fall back to index.html' "$(body "$BASE/wikis/42")" '*<di
 expect '/api goes to the backend' "$(curl -s -o /dev/null -w '%{http_code}' "$BASE/api/wikis")" '502'
 expect 'index.html is revalidated' "$(header / Cache-Control)" 'no-cache'
 expect '/.env.js comes from the environment' "$(body "$BASE/.env.js")" '*var SSO_CLIENT_ID = "twakepages"*'
+expect '/.env.js tells the editor the image hosts' "$(body "$BASE/.env.js")" '*var CSP_IMG_SRC = "https://avatars.example.com"*'
 expect '/.env.js is never cached' "$(header /.env.js Cache-Control)" 'no-store'
 script="$(body "$BASE/" | grep -o 'src="/static/js/index[^"]*"' | head -1 | cut -d'"' -f2)"
 expect 'hashed assets are cached for a year' "$(header "$script" Cache-Control)" '*immutable'
