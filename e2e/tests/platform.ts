@@ -26,6 +26,19 @@ await sql.end()
 process.stdout.write(JSON.stringify(row ?? null))
 `
 
+const sentPagePublished = `
+const { default: postgres } = await import('postgres')
+const sql = postgres(process.env.DATABASE_URL)
+const rows = await sql\`
+  select event from outbox
+  where event ->> 'type' = 'com.twake.pages.page.published.v1'
+    and event -> 'data' -> 'object' ->> 'id' = \${process.argv[1]}
+    and sent_at is not null
+  order by id\`
+await sql.end()
+process.stdout.write(JSON.stringify(rows.map(row => row.event)))
+`
+
 const revokedSession = `
 const { default: postgres } = await import('postgres')
 const sql = postgres(process.env.DATABASE_URL)
@@ -83,6 +96,17 @@ export function wikiOfSpace(spaceId: string) {
     id: string
     kind: string
   } | null
+}
+
+/**
+ * The `page.published` events of a page, once RabbitMQ has confirmed them on
+ * the activity exchange, the first one first.
+ */
+export function pagePublishedEvents(pageId: string) {
+  return JSON.parse(inBackend(sentPagePublished, pageId)) as {
+    type: string
+    data: Record<string, unknown>
+  }[]
 }
 
 /**
