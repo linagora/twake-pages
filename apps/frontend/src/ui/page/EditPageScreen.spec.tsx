@@ -462,3 +462,35 @@ describe('the draft of a page', () => {
     expect(screen.queryByText(DRAFT_KEPT)).not.toBeInTheDocument()
   })
 })
+
+/** Puts an image in the blocks by its address, from the block menu. */
+async function embedImage(url: string) {
+  await typeInBlocks(
+    await screen.findByRole('textbox', { name: 'Content' }),
+    '/'
+  )
+  // By their text: hidden, the menu and the panel name nothing.
+  fireEvent.click(await screen.findByText('Image'))
+  fireEvent.change(await screen.findByPlaceholderText('Enter URL'), {
+    target: { value: url }
+  })
+  fireEvent.click(screen.getByText('Embed image'))
+}
+
+describe('a refused publish', () => {
+  it('says why the content is refused, and keeps the draft', async () => {
+    const pagesApi = fakePagesApi()
+    const { editor } = aPage(pagesApi)
+    const { unmount } = renderRoute(editor, { pagesApi })
+    await embedImage('http://images.example.com/badge.png')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Publish' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'an image address that is not https'
+    )
+    unmount()
+    renderRoute(editor, { pagesApi })
+    expect(await screen.findByText(DRAFT_KEPT)).toBeVisible()
+  })
+})

@@ -8,6 +8,7 @@ import {
   useParams
 } from 'react-router'
 
+import { ApiError } from '@/application/pages'
 import { BlocksEditor } from '@/ds/BlocksEditor'
 import { PageHeader } from '@/ds/PageHeader'
 import type { Page } from '@/domain/page'
@@ -122,6 +123,7 @@ function PageEditor({
           </Button>
         }
       />
+      {publish.error && <PublishFailure error={publish.error} />}
       {kept && (
         <Alert
           severity="info"
@@ -156,5 +158,18 @@ function PageEditor({
         }}
       />
     </main>
+  )
+}
+
+/** Why the page was not published, above the draft it keeps. */
+function PublishFailure({ error }: { error: Error }): ReactElement {
+  const { t } = useI18n()
+  const refused = error instanceof ApiError ? error.code : null
+  return (
+    <Typography role="alert" color="error" className="u-mb-1">
+      {refused === 'invalid_content'
+        ? t('editor.invalidContent')
+        : t('editor.failed')}
+    </Typography>
   )
 }

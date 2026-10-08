@@ -184,7 +184,9 @@
     "content": "Contenu",
     "publish": "Publier",
     "draftKept": "Voici votre brouillon, commencé à partir de la version %{number}. Il est conservé dans ce navigateur jusqu'à ce que vous le publiiez ou l'abandonniez.",
-    "discard": "Abandonner le brouillon"
+    "discard": "Abandonner le brouillon",
+    "failed": "La page n'a pas pu être publiée. Votre brouillon est conservé.",
+    "invalidContent": "La page n'a pas pu être publiée, car son contenu est refusé : plus de 2 Mo, un lien qui n'est pas en http, https ou mailto, une adresse d'image qui n'est pas en https, ou un caractère qui ne peut pas être enregistré. Votre brouillon est conservé."
   },
   "labels": {
     "title": "Pages avec l'étiquette %{name}"
