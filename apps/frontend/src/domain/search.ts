@@ -6,3 +6,27 @@ export interface SearchResult {
   excerpt: string
   updatedAt: string
 }
+
+export interface ExcerptPart {
+  text: string
+  highlighted: boolean
+}
+
+const FOUND_START = String.fromCharCode(0xe000)
+const FOUND_END = String.fromCharCode(0xe001)
+
+/** An excerpt cut into plain text and the words found. */
+export function excerptParts(excerpt: string): ExcerptPart[] {
+  const [before = '', ...found] = excerpt.split(FOUND_START)
+  const parts = [
+    { text: before, highlighted: false },
+    ...found.flatMap(chunk => {
+      const [word = '', after = ''] = chunk.split(FOUND_END)
+      return [
+        { text: word, highlighted: true },
+        { text: after, highlighted: false }
+      ]
+    })
+  ]
+  return parts.filter(part => part.text !== '')
+}
