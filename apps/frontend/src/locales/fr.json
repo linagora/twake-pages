@@ -88,9 +88,68 @@
   "newPage": {
     "title": "Nouvelle page",
     "pageTitle": "Titre",
+    "template": "Modèle",
     "cancel": "Annuler",
     "create": "Créer",
     "failed": "La page n'a pas pu être créée."
+  },
+  "templates": {
+    "blank": {
+      "name": "Page vierge"
+    },
+    "meetingNotes": {
+      "name": "Compte rendu de réunion",
+      "attendees": "Participants",
+      "attendee": "Qui était là",
+      "agenda": "Ordre du jour",
+      "topic": "Un sujet à aborder",
+      "notes": "Notes",
+      "note": "Ce qui a été dit, sujet par sujet.",
+      "actions": "Actions",
+      "action": "Ce qu'il reste à faire, par qui et pour quand"
+    },
+    "decision": {
+      "name": "Décision",
+      "context": "Contexte",
+      "contextText": "Le problème à résoudre, et pourquoi il faut décider maintenant.",
+      "options": "Options",
+      "option": "Une option, avec ses avantages et ses inconvénients",
+      "decision": "Décision",
+      "decisionText": "L'option retenue, par qui, et pourquoi.",
+      "consequences": "Conséquences",
+      "consequencesText": "Ce qui change une fois la décision prise."
+    },
+    "howTo": {
+      "name": "Guide pratique",
+      "intro": "Ce que ce guide permet de faire, et pour qui.",
+      "before": "Avant de commencer",
+      "need": "Ce qu'il vous faut",
+      "steps": "Étapes",
+      "firstStep": "La première étape",
+      "nextStep": "L'étape suivante",
+      "problems": "En cas de problème",
+      "help": "Où trouver de l'aide."
+    },
+    "retrospective": {
+      "name": "Rétrospective",
+      "well": "Ce qui s'est bien passé",
+      "success": "Une réussite à garder",
+      "better": "Ce qui pourrait être amélioré",
+      "problem": "Un problème à résoudre",
+      "actions": "Actions",
+      "action": "Ce qu'il reste à faire, par qui et pour quand"
+    },
+    "requirements": {
+      "name": "Exigences",
+      "goal": "Objectif",
+      "goalText": "Le problème que ce travail résout, et pour qui.",
+      "requirements": "Exigences",
+      "requirement": "Ce que la solution doit faire",
+      "outOfScope": "Hors périmètre",
+      "excluded": "Ce que ce travail laisse de côté",
+      "questions": "Questions ouvertes",
+      "question": "Une question encore sans réponse"
+    }
   },
   "labels": {
     "title": "Pages avec l'étiquette %{name}"

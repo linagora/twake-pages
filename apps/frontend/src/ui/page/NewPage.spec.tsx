@@ -4,8 +4,9 @@ import { describe, expect, it } from 'vitest'
 import { ApiError } from '@/application/pages'
 import type { Role } from '@/domain/wiki'
 import { fakePagesApi } from '@/testing/fakePagesApi'
-import { typeIn } from '@/testing/forms'
+import { chooseIn, typeIn } from '@/testing/forms'
 import { renderRoute } from '@/testing/renderWithProviders'
+import type { SupportedLanguage } from '@/ui/i18n/languages'
 
 /** Opens the dialog of a new page from the home page of the wiki. */
 async function openNewPage(): Promise<HTMLElement> {
@@ -17,13 +18,22 @@ interface Opening {
   /** Where the routes start: `/wikis`, or `/embed/wikis` in TwakeSpace. */
   base?: string
   role?: Role
+  lang?: SupportedLanguage
 }
 
 /** The Engineering wiki, open on its home page. */
-function engineering({ base = '/wikis', role = 'admin' }: Opening = {}) {
+function engineering({
+  base = '/wikis',
+  role = 'admin',
+  lang = 'en'
+}: Opening = {}) {
   const pagesApi = fakePagesApi()
   const wiki = pagesApi.withWiki({ name: 'Engineering', role })
-  return { pagesApi, wiki, ...renderRoute(`${base}/${wiki.id}`, { pagesApi }) }
+  return {
+    pagesApi,
+    wiki,
+    ...renderRoute(`${base}/${wiki.id}`, { pagesApi, lang })
+  }
 }
 
 describe('a new page', () => {
@@ -98,5 +108,71 @@ describe('a new page', () => {
     expect(
       screen.queryByRole('button', { name: 'New page' })
     ).not.toBeInTheDocument()
+  })
+})
+
+/** The headings of the blocks of the open page, one level below its title. */
+const sections = () =>
+  within(screen.getByRole('main'))
+    .getAllByRole('heading', { level: 2 })
+    .map(heading => heading.textContent)
+
+describe('the template of a new page', () => {
+  it('is one of six, blank unless another is chosen', async () => {
+    engineering()
+
+    const dialog = await openNewPage()
+    const template = within(dialog).getByRole('combobox', { name: 'Template' })
+
+    expect(template).toHaveDisplayValue('Blank')
+    expect(
+      within(template)
+        .getAllByRole('option')
+        .map(option => option.textContent)
+    ).toEqual([
+      'Blank',
+      'Meeting notes',
+      'Decision',
+      'How-to',
+      'Retrospective',
+      'Requirements'
+    ])
+  })
+
+  it.each([
+    ['Meeting notes', ['Attendees', 'Agenda', 'Notes', 'Action items']],
+    ['Decision', ['Context', 'Options', 'Decision', 'Consequences']],
+    ['How-to', ['Before you start', 'Steps', 'If something goes wrong']],
+    ['Retrospective', ['What went well', 'What could be better', 'Actions']],
+    ['Requirements', ['Goal', 'Requirements', 'Out of scope', 'Open questions']]
+  ])('gives the page made from %s its sections', async (template, titles) => {
+    engineering()
+
+    const dialog = await openNewPage()
+    typeIn(dialog, 'Title', 'Onboarding')
+    chooseIn(dialog, 'Template', template)
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Create' }))
+
+    await screen.findByRole('heading', { level: 1, name: 'Onboarding' })
+    expect(sections()).toEqual(titles)
+  })
+
+  it('is written in the language of the person', async () => {
+    engineering({ lang: 'fr' })
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Nouvelle page' })
+    )
+    const dialog = screen.getByRole('dialog', { name: 'Nouvelle page' })
+    typeIn(dialog, 'Titre', 'Arrivée')
+    chooseIn(dialog, 'Modèle', 'Guide pratique')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Créer' }))
+
+    await screen.findByRole('heading', { level: 1, name: 'Arrivée' })
+    expect(sections()).toEqual([
+      'Avant de commencer',
+      'Étapes',
+      'En cas de problème'
+    ])
   })
 })

@@ -10,3 +10,16 @@ export function typeIn(
     target: { value }
   })
 }
+
+/** Chooses `option` in the select field labelled `field`, inside `container`. */
+export function chooseIn(
+  container: HTMLElement,
+  field: string,
+  option: string
+): void {
+  const select = within(container).getByRole('combobox', { name: field })
+  const { value } = within(select).getByRole<HTMLOptionElement>('option', {
+    name: option
+  })
+  fireEvent.change(select, { target: { value } })
+}

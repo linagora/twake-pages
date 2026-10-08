@@ -88,9 +88,68 @@
   "newPage": {
     "title": "New page",
     "pageTitle": "Title",
+    "template": "Template",
     "cancel": "Cancel",
     "create": "Create",
     "failed": "The page could not be created."
+  },
+  "templates": {
+    "blank": {
+      "name": "Blank"
+    },
+    "meetingNotes": {
+      "name": "Meeting notes",
+      "attendees": "Attendees",
+      "attendee": "Who took part",
+      "agenda": "Agenda",
+      "topic": "A topic to discuss",
+      "notes": "Notes",
+      "note": "What was said, topic by topic.",
+      "actions": "Action items",
+      "action": "What is to be done, by whom and by when"
+    },
+    "decision": {
+      "name": "Decision",
+      "context": "Context",
+      "contextText": "The problem to solve, and why it must be decided now.",
+      "options": "Options",
+      "option": "An option, with its pros and cons",
+      "decision": "Decision",
+      "decisionText": "The option chosen, by whom, and why.",
+      "consequences": "Consequences",
+      "consequencesText": "What changes once it is decided."
+    },
+    "howTo": {
+      "name": "How-to",
+      "intro": "What this guide helps to do, and for whom.",
+      "before": "Before you start",
+      "need": "What you need",
+      "steps": "Steps",
+      "firstStep": "The first step",
+      "nextStep": "The next step",
+      "problems": "If something goes wrong",
+      "help": "Where to find help."
+    },
+    "retrospective": {
+      "name": "Retrospective",
+      "well": "What went well",
+      "success": "A success to keep",
+      "better": "What could be better",
+      "problem": "A problem to solve",
+      "actions": "Actions",
+      "action": "What is to be done, by whom and by when"
+    },
+    "requirements": {
+      "name": "Requirements",
+      "goal": "Goal",
+      "goalText": "The problem this work solves, and for whom.",
+      "requirements": "Requirements",
+      "requirement": "What the solution must do",
+      "outOfScope": "Out of scope",
+      "excluded": "What this work leaves out",
+      "questions": "Open questions",
+      "question": "A question still to answer"
+    }
   },
   "labels": {
     "title": "Pages labelled %{name}"
