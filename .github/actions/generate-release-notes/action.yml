@@ -1,0 +1,46 @@
+name: Generate release notes
+description: |
+  Build a release body scoped to one app of the monorepo: the baseline is the
+  previous stable tag with the same prefix, and only commits touching the
+  app's directory (or its workflow files) are listed. GitHub's built-in note
+  generation compares against the last tag of *any* app, which leaks other
+  apps' PRs into the body.
+
+  Requires a checkout with fetch-depth: 0 (the baseline lookup and the
+  commit range need full history and tags).
+
+inputs:
+  path:
+    description: App directory, e.g. "apps/backend"
+    required: true
+  workflow-prefix:
+    description: 'Prefix of the app workflows, e.g. "backend" for .github/workflows/backend-*.yml'
+    required: true
+  tag-prefix:
+    description: 'Tag prefix, e.g. "backend-v"'
+    required: true
+
+outputs:
+  body-path:
+    description: Path to the generated markdown body
+    value: ${{ steps.notes.outputs.body-path }}
+
+runs:
+  using: composite
+  steps:
+    - name: Generate release notes
+      id: notes
+      shell: bash
+      env:
+        TAG: ${{ github.ref_name }}
+        PREFIX: ${{ inputs.tag-prefix }}
+        APP_PATH: ${{ inputs.path }}
+        WORKFLOW_PREFIX: ${{ inputs.workflow-prefix }}
+      run: |
+        out="${RUNNER_TEMP}/release-notes-${WORKFLOW_PREFIX}.md"
+        if ! "${GITHUB_ACTION_PATH}/generate-release-notes.sh" \
+            "$TAG" "$PREFIX" "$APP_PATH" "$WORKFLOW_PREFIX" "$out"; then
+          echo "::warning::Release notes generation failed; using a minimal body."
+          printf 'Release %s.\n' "$TAG" > "$out"
+        fi
+        echo "body-path=$out" >> "$GITHUB_OUTPUT"

@@ -1,0 +1,36 @@
+name: Frontend PR
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/frontend/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig.base.json'
+      - 'eslint.config.js'
+      - '.prettierrc'
+      - '.nvmrc'
+      - '.dockerignore'
+      - '.github/workflows/frontend-*.yml'
+      - '.github/workflows/reusable-*.yml'
+  merge_group:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    uses: ./.github/workflows/reusable-check.yml
+    with:
+      project: frontend
+
+  image:
+    uses: ./.github/workflows/reusable-image.yml
+    with:
+      project: frontend

@@ -1,0 +1,66 @@
+name: Frontend Release
+
+on:
+  push:
+    tags:
+      - "frontend-v[0-9]+.[0-9]+.[0-9]+*"
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/verify-release-tag
+        with:
+          project: frontend
+          tag-prefix: frontend-v
+          package-json-path: apps/frontend/package.json
+          allowed-branches: main
+      - id: version
+        run: echo "version=${GITHUB_REF_NAME#frontend-v}" >> "$GITHUB_OUTPUT"
+
+  check:
+    needs: [verify]
+    uses: ./.github/workflows/reusable-check.yml
+    with:
+      project: frontend
+
+  publish:
+    needs: [verify, check]
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/reusable-image.yml
+    with:
+      project: frontend
+      push: true
+      version: ${{ needs.verify.outputs.version }}
+
+  release:
+    needs: [verify, publish]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Generate release notes
+        id: notes
+        uses: ./.github/actions/generate-release-notes
+        with:
+          path: apps/frontend
+          workflow-prefix: frontend
+          tag-prefix: frontend-v
+      - uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Frontend ${{ needs.verify.outputs.version }}
+          body_path: ${{ steps.notes.outputs.body-path }}

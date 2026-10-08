@@ -1,0 +1,117 @@
+name: Verify release tag
+description: |
+  Sanity-check a release tag before publishing. Fails the job when any of
+  the following is not satisfied:
+    1. the tagged commit is reachable from an allowed branch
+    2. the new version is greater than the previous release on the
+       same version line (when line-aware) or globally (when not)
+    3. the version in package.json matches the version in the tag
+
+inputs:
+  project:
+    description: Subproject name, used only in error messages
+    required: true
+  tag-prefix:
+    description: 'Tag prefix to strip, e.g. "registration-v"'
+    required: true
+  package-json-path:
+    description: Path to the subproject's package.json
+    required: true
+  allowed-branches:
+    description: |
+      Comma-separated branch patterns the tagged commit must be reachable from.
+      Globs are accepted, e.g. "main" or "main,registration-release/*".
+    required: true
+  line-aware:
+    description: |
+      When "true", compare the new version only against existing tags on the
+      same major.minor line. Use this for projects with maintenance branches.
+    required: false
+    default: "false"
+
+runs:
+  using: composite
+  steps:
+    - name: Verify tag is reachable from an allowed branch
+      shell: bash
+      env:
+        ALLOWED: ${{ inputs.allowed-branches }}
+        SHA: ${{ github.sha }}
+        PROJECT: ${{ inputs.project }}
+      run: |
+        set -euo pipefail
+        IFS=',' read -ra patterns <<< "$ALLOWED"
+        for raw in "${patterns[@]}"; do
+          p=$(echo "$raw" | xargs)
+          [ -z "$p" ] && continue
+          git fetch origin "refs/heads/${p}:refs/remotes/origin/${p}" --depth=200 2>/dev/null || true
+        done
+        for raw in "${patterns[@]}"; do
+          p=$(echo "$raw" | xargs)
+          [ -z "$p" ] && continue
+          while IFS= read -r b; do
+            [ -z "$b" ] && continue
+            if git merge-base --is-ancestor "$SHA" "$b" 2>/dev/null; then
+              echo "OK: ${PROJECT} tag commit ${SHA} is reachable from ${b}"
+              exit 0
+            fi
+          done < <(git branch -r --format='%(refname:short)' --list "origin/${p}")
+        done
+        echo "::error::Tagged commit ${SHA} is not reachable from any allowed branch (${ALLOWED}). Refusing to publish."
+        exit 1
+
+    - name: Verify version is greater than the previous release
+      shell: bash
+      env:
+        TAG: ${{ github.ref_name }}
+        TAG_PREFIX: ${{ inputs.tag-prefix }}
+        LINE_AWARE: ${{ inputs.line-aware }}
+      run: |
+        set -euo pipefail
+        NEW=${TAG#"$TAG_PREFIX"}
+        if [ "$LINE_AWARE" = "true" ]; then
+          MAJOR_MINOR=$(echo "$NEW" | cut -d. -f1-2)
+          pattern="${TAG_PREFIX}${MAJOR_MINOR}.*"
+          scope="${MAJOR_MINOR}.x line"
+        else
+          pattern="${TAG_PREFIX}*"
+          scope="all releases"
+        fi
+        # sort -V ranks 1.0.0-rc1 above 1.0.0; with "~" it ranks a pre-release below its release.
+        semver_key() { sed 's/-/~/'; }
+        PREV_KEY=$(git tag -l "$pattern" \
+                 | { grep -vx "$TAG" || true; } \
+                 | sed "s|^${TAG_PREFIX}||" \
+                 | semver_key | sort -V | tail -n1)
+        PREV=${PREV_KEY/\~/-}
+        if [ -z "$PREV" ]; then
+          echo "OK: ${NEW} is the first release in scope (${scope})"
+          exit 0
+        fi
+        NEW_KEY=$(printf '%s\n' "$NEW" | semver_key)
+        TOP=$(printf '%s\n%s\n' "$PREV_KEY" "$NEW_KEY" | sort -V | tail -n1)
+        if [ "$TOP" != "$NEW_KEY" ] || [ "$PREV_KEY" = "$NEW_KEY" ]; then
+          echo "::error::New version ${NEW} is not greater than previous ${PREV} in scope (${scope}). Refusing to publish."
+          exit 1
+        fi
+        echo "OK: ${NEW} > ${PREV} in scope (${scope})"
+
+    - name: Verify package.json matches tag
+      shell: bash
+      env:
+        TAG: ${{ github.ref_name }}
+        TAG_PREFIX: ${{ inputs.tag-prefix }}
+        PKG: ${{ inputs.package-json-path }}
+      run: |
+        set -euo pipefail
+        TAG_VER=${TAG#"$TAG_PREFIX"}
+        if [ ! -f "$PKG" ]; then
+          echo "::error::package.json not found at ${PKG}"
+          exit 1
+        fi
+        PKG_VER=$(node -p "require('./${PKG}').version")
+        if [ "$TAG_VER" != "$PKG_VER" ]; then
+          echo "::error::Tag version ${TAG_VER} does not match ${PKG} version ${PKG_VER}. Refusing to publish."
+          exit 1
+        fi
+        echo "OK: tag and ${PKG} agree on ${TAG_VER}"
