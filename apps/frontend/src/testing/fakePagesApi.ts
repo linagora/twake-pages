@@ -192,7 +192,7 @@ const byName = (a: string, b: string) => a.localeCompare(b)
 
 const LABEL = /^[\p{L}\p{N}_-]{1,50}$/u
 
-function labelName(value: string) {
+function checkLabel(value: string) {
   const name = value.trim().toLowerCase()
   if (!LABEL.test(name)) throw refuse('invalid_label')
   return name
@@ -272,19 +272,19 @@ function excerptOf(text: string, finds: (word: string) => boolean) {
 const answer = <T>(work: () => T): Promise<T> =>
   Promise.resolve().then(() => structuredClone(work()))
 
-function text(value: string, max: number) {
+function checkText(value: string, max: number) {
   const trimmed = value.trim()
   if (trimmed === '' || trimmed.length > max) throw refuse('invalid_request')
   return trimmed
 }
 
-function description(value = '') {
+function checkDescription(value = '') {
   const trimmed = value.trim()
   if (trimmed.length > 500) throw refuse('invalid_request')
   return trimmed
 }
 
-function gristAddress(value: string | undefined) {
+function checkGristUrl(value: string | undefined) {
   if (value === undefined) throw refuse('invalid_request')
   const url = URL.parse(value)
   if (!url) throw refuse('invalid_request')
@@ -652,11 +652,11 @@ function signedIn(world: World, person: Person): FakePagesApi {
     bump(wiki)
   }
 
-  const makeWiki = (name: string, wikiDescription: string, kind: WikiKind) => {
+  const makeWiki = (name: string, description: string, kind: WikiKind) => {
     const wiki: StoredWiki = {
       id: nextId(),
       name,
-      description: wikiDescription,
+      description,
       kind,
       version: 0,
       createdBy: person.id,
@@ -755,8 +755,8 @@ function signedIn(world: World, person: Person): FakePagesApi {
     createWiki: vi.fn<PagesApi['createWiki']>(wiki =>
       answer(() => {
         const made = makeWiki(
-          text(wiki.name, 100),
-          description(wiki.description),
+          checkText(wiki.name, 100),
+          checkDescription(wiki.description),
           'shared'
         )
         return wikiFor(made.id)
@@ -771,9 +771,9 @@ function signedIn(world: World, person: Person): FakePagesApi {
         if (changes.name !== undefined && wiki.kind === 'space') {
           throw refuse('managed')
         }
-        if (changes.name !== undefined) wiki.name = text(changes.name, 100)
+        if (changes.name !== undefined) wiki.name = checkText(changes.name, 100)
         if (changes.description !== undefined) {
-          wiki.description = description(changes.description)
+          wiki.description = checkDescription(changes.description)
         }
         bump(wiki)
         return wikiFor(wikiId)
@@ -876,13 +876,13 @@ function signedIn(world: World, person: Person): FakePagesApi {
     ),
     searchPeople: vi.fn<PagesApi['searchPeople']>(query =>
       answer(() => {
-        const words = query.trim().toLowerCase()
-        if (words === '') return []
+        const term = query.trim().toLowerCase()
+        if (term === '') return []
         return [...world.people.values()]
           .filter(
             each =>
-              each.email.includes(words) ||
-              (each.name?.toLowerCase().includes(words) ?? false)
+              each.email.includes(term) ||
+              (each.name?.toLowerCase().includes(term) ?? false)
           )
           .sort(byEmail)
           .slice(0, 10)
@@ -893,7 +893,7 @@ function signedIn(world: World, person: Person): FakePagesApi {
     createPage: vi.fn<PagesApi['createPage']>((wikiId, input) =>
       answer(() => {
         const { wiki } = access(wikiId, 'editor')
-        const title = text(input.title, 200)
+        const title = checkText(input.title, 200)
         parentFor(wikiId, input.parentId)
         const position = positionBetween(
           siblingsOf(wikiId, input.parentId),
@@ -902,7 +902,7 @@ function signedIn(world: World, person: Person): FakePagesApi {
         )
         const body =
           input.kind === 'database'
-            ? { content: [], gristUrl: gristAddress(input.gristUrl) }
+            ? { content: [], gristUrl: checkGristUrl(input.gristUrl) }
             : { content: input.content ?? [], gristUrl: null }
         const page = makePage(wiki, {
           ...body,
@@ -923,7 +923,7 @@ function signedIn(world: World, person: Person): FakePagesApi {
     ),
     publish: vi.fn<PagesApi['publish']>((pageId, draft) =>
       answer(() => {
-        const title = text(draft.title, 200)
+        const title = checkText(draft.title, 200)
         const { page, wiki } = liveAccess(pageId)
         if ((page.kind === 'document') !== 'content' in draft) {
           throw refuse('invalid_request')
@@ -935,7 +935,7 @@ function signedIn(world: World, person: Person): FakePagesApi {
         addVersion(page, wiki, {
           title,
           content: 'content' in draft ? draft.content : [],
-          gristUrl: 'gristUrl' in draft ? gristAddress(draft.gristUrl) : null
+          gristUrl: 'gristUrl' in draft ? checkGristUrl(draft.gristUrl) : null
         })
         return pageFor(page)
       })
@@ -996,7 +996,7 @@ function signedIn(world: World, person: Person): FakePagesApi {
     setLabels: vi.fn<PagesApi['setLabels']>((pageId, names) =>
       answer(() => {
         const { page, wiki } = liveAccess(pageId)
-        page.labels = [...new Set(names.map(labelName))].sort(byName)
+        page.labels = [...new Set(names.map(checkLabel))].sort(byName)
         bump(wiki)
         return page.labels
       })
@@ -1114,7 +1114,7 @@ function signedIn(world: World, person: Person): FakePagesApi {
     ),
     addComment: vi.fn<PagesApi['addComment']>((pageId, input) =>
       answer(() => {
-        const body = text(input.body, 10_000)
+        const body = checkText(input.body, 10_000)
         const { page, wiki } = liveAccess(pageId, 'viewer')
         const parentId = input.parentId ?? null
         if (parentId !== null) {
@@ -1152,7 +1152,7 @@ function signedIn(world: World, person: Person): FakePagesApi {
     ),
     editComment: vi.fn<PagesApi['editComment']>((commentId, body) =>
       answer(() => {
-        const edited = text(body, 10_000)
+        const edited = checkText(body, 10_000)
         const { comment, page, wiki } = commentAccess(commentId)
         if (comment.author.id !== person.id) throw refuse('forbidden')
         if (page.deletion) throw refuse('in_trash')
@@ -1231,21 +1231,21 @@ function signedIn(world: World, person: Person): FakePagesApi {
     // data-model.md weighs the title above the text.
     search: vi.fn<PagesApi['search']>((query, wikiId) =>
       answer(() => {
-        const { matches, finds } = queryOf(text(query, 200))
+        const { matches, finds } = queryOf(checkText(query, 200))
         if (wikiId !== undefined) access(wikiId)
         return myLivePages()
           .filter(seen => wikiId === undefined || seen.wiki.id === wikiId)
           .flatMap(seen => {
             const { title, content, createdAt } = currentOf(seen.page)
-            const body = plainText(content)
+            const text = plainText(content)
             const titleWords = wordsOf(title)
-            const textWords = wordsOf(body)
+            const textWords = wordsOf(text)
             if (!matches([...titleWords, ...textWords])) return []
             return [
               {
                 result: {
                   page: refOf(seen),
-                  excerpt: excerptOf(body, finds),
+                  excerpt: excerptOf(text, finds),
                   updatedAt: createdAt
                 },
                 inTitle: titleWords.filter(finds).length,
