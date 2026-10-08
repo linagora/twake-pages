@@ -60,7 +60,13 @@ export function versionStreams(app: HttpServer): StreamVersions {
       'cache-control': 'no-store',
       'x-accel-buffering': 'no'
     })
+    // Unlike Twake Tasks, which sends every version announced: a change
+    // committed before the read below can be announced after it, so a
+    // version goes only when it is newer than the last one sent.
+    let sent = Number.NEGATIVE_INFINITY
     const send = (version: number) => {
+      if (version <= sent) return
+      sent = version
       stream.write(
         `event: version\nid: ${String(version)}\ndata: ${JSON.stringify({ version })}\n\n`
       )
