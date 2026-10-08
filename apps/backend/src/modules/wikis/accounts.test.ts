@@ -8,7 +8,9 @@ import {
   aSpaceWiki,
   aUser,
   joinWiki,
+  purgeJobOf,
   startApp,
+  versionOf,
   wikiRowsOf,
   type TestUser,
   type WikiSummary
@@ -124,6 +126,35 @@ describe.each([
       404
     )
     expect(await wikiRowsOf(db, gone, personal.id)).toEqual([])
+  })
+
+  it('moves the version of each wiki it leaves', async () => {
+    const gone = makeUser()
+    const admin = aPeerOf(gone)
+    const editor = aPeerOf(gone)
+    const left = await aWiki(admin, 'Roadmap', [[gone, 'viewer']])
+    const handedOn = await aWiki(gone, 'Handbook', [[editor, 'editor']])
+    const leftBefore = await versionOf(api, admin, left.id)
+    const handedOnBefore = await versionOf(api, editor, handedOn.id)
+
+    await deliver(routingKey, body(gone))
+
+    expect(await versionOf(api, admin, left.id)).toBeGreaterThan(leftBefore)
+    expect(await versionOf(api, editor, handedOn.id)).toBeGreaterThan(
+      handedOnBefore
+    )
+  })
+
+  it('leaves a wiki its admin deleted to its purge', async () => {
+    const gone = makeUser()
+    const admin = aPeerOf(gone)
+    const deleted = await aWiki(admin, 'Archive', [[gone, 'viewer']])
+    await api.as(admin).delete(`/wikis/${deleted.id}`)
+    const job = await purgeJobOf(db, deleted.id)
+
+    await deliver(routingKey, body(gone))
+
+    expect(await purgeJobOf(db, deleted.id)).toEqual(job)
   })
 })
 

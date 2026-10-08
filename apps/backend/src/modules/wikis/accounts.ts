@@ -1,4 +1,4 @@
-import { and, asc, eq, ne, notExists, sql } from 'drizzle-orm'
+import { and, asc, eq, isNull, ne, notExists, sql } from 'drizzle-orm'
 import { alias } from 'drizzle-orm/pg-core'
 import { z } from 'zod'
 import type { PlatformEvent } from '../../events/envelope.ts'
@@ -8,6 +8,7 @@ import {
   type Handler
 } from '../../events/router.ts'
 import { asOrganization, asTenant, type Tx } from '../../infra/db.ts'
+import { bumpWiki } from './live.ts'
 import { wikiMembers, wikis } from './schema.ts'
 
 // ldap-rest names B2B users by email until it sends their entryUUID.
@@ -94,6 +95,21 @@ async function handOnWikis(tx: Tx, userId: string) {
   }
 }
 
+// Unlike Twake Tasks, which moves no version here: a wiki's version moves with
+// its members, so the people showing a wiki the person leaves reload it. The
+// versions move first, wiki by wiki in a fixed order, so their row locks make
+// the changes to those wikis meanwhile wait, without a deadlock. A deleted
+// wiki is shown to no one, so its version stays.
+async function bumpWikisOf(tx: Tx, userId: string) {
+  const left = await tx
+    .select({ wikiId: wikiMembers.wikiId })
+    .from(wikiMembers)
+    .innerJoin(wikis, eq(wikis.id, wikiMembers.wikiId))
+    .where(and(eq(wikiMembers.userId, userId), isNull(wikis.deletedAt)))
+    .orderBy(asc(wikiMembers.wikiId))
+  for (const { wikiId } of left) await bumpWiki(tx, wikiId)
+}
+
 // Runs as the person, so a B2C tenant shows the wikis they belong to; their
 // memberships go last, since they are what makes those wikis visible. The
 // wikis it deletes go for good, as Twake Tasks deletes the projects of a
@@ -103,6 +119,7 @@ async function forget(tx: Tx, organizationId: string | null, userId: string) {
   await tx
     .delete(wikis)
     .where(and(eq(wikis.createdBy, userId), eq(wikis.kind, 'personal')))
+  await bumpWikisOf(tx, userId)
   await handOnWikis(tx, userId)
   await tx.delete(wikiMembers).where(eq(wikiMembers.userId, userId))
 }
