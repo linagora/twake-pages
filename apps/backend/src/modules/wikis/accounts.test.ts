@@ -233,6 +233,25 @@ describe.each(deletions)(
       expect(await wikiRowsOf(db, gone, personal.id)).toEqual([])
     })
 
+    it('promotes no one in a wiki another admin keeps', async () => {
+      const gone = makeUser()
+      const admin = aPeerOf(gone)
+      const editor = aPeerOf(gone)
+      await aWiki(gone, 'Handbook', [
+        [admin, 'admin'],
+        [editor, 'editor']
+      ])
+
+      await deliver(routingKey, body(gone))
+
+      expect(await sharedWikisOf(admin)).toEqual([
+        expect.objectContaining({ name: 'Handbook', role: 'admin' })
+      ])
+      expect(await sharedWikisOf(editor)).toEqual([
+        expect.objectContaining({ name: 'Handbook', role: 'editor' })
+      ])
+    })
+
     it('moves the version of each wiki it leaves', async () => {
       const gone = makeUser()
       const admin = aPeerOf(gone)
