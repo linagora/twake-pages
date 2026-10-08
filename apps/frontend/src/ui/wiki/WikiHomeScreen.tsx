@@ -6,6 +6,7 @@ import { useNavigate, useParams } from 'react-router'
 import { ListSkeleton } from '@/ds/EmptyState'
 import { PageHeader } from '@/ds/PageHeader'
 import { useI18n } from '@/ui/i18n/useI18n'
+import { EditAction } from '@/ui/page/EditAction'
 import { FavoriteButton } from '@/ui/page/FavoriteButton'
 import { NewPageDialog } from '@/ui/page/NewPageDialog'
 import { PageContent } from '@/ui/page/PageContent'
@@ -43,6 +44,11 @@ export function WikiHomeScreen(): ReactElement {
             }
             actions={
               <>
+                <EditAction
+                  wikiId={wikiId}
+                  pageId={wiki.data.homePageId}
+                  to={`pages/${wiki.data.homePageId}/edit`}
+                />
                 <HomePageFavorite
                   wikiId={wikiId}
                   pageId={wiki.data.homePageId}

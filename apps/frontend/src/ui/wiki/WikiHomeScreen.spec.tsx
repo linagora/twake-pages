@@ -276,3 +276,32 @@ describe('the home page as a favorite', () => {
     expect(pagesApi.getPage).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('the Edit action of the home page', () => {
+  it.each(['/wikis', '/embed/wikis'])(
+    'leads an editor of the wiki at %s/<wiki> to the editor of its home page',
+    async base => {
+      const pagesApi = fakePagesApi()
+      const wiki = pagesApi.withWiki({ name: 'Handbook', role: 'editor' })
+      renderRoute(`${base}/${wiki.id}`, { pagesApi })
+
+      expect(
+        await screen.findByRole('link', { name: 'Edit page' })
+      ).toHaveAttribute(
+        'href',
+        `${base}/${wiki.id}/pages/${wiki.homePageId}/edit`
+      )
+    }
+  )
+
+  it('is not offered to a viewer of the wiki', async () => {
+    const pagesApi = fakePagesApi()
+    const wiki = pagesApi.withWiki({ name: 'Handbook', role: 'viewer' })
+    renderRoute(`/wikis/${wiki.id}`, { pagesApi })
+
+    await screen.findByText('This page is empty.')
+    expect(
+      screen.queryByRole('link', { name: 'Edit page' })
+    ).not.toBeInTheDocument()
+  })
+})

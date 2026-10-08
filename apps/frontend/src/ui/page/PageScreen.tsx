@@ -6,6 +6,7 @@ import { ApiError } from '@/application/pages'
 import { PageHeader } from '@/ds/PageHeader'
 import type { Page } from '@/domain/page'
 import { useI18n } from '@/ui/i18n/useI18n'
+import { EditAction } from '@/ui/page/EditAction'
 import { FavoriteButton } from '@/ui/page/FavoriteButton'
 import { PageContent } from '@/ui/page/PageContent'
 import { PageMenu } from '@/ui/page/PageMenu'
@@ -47,6 +48,7 @@ export function PageScreen(): ReactElement {
         }
         actions={
           <>
+            <EditAction wikiId={wikiId} pageId={pageId} to="edit" />
             <FavoriteButton page={page.data} />
             <PageMenu page={page.data} />
           </>

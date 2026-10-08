@@ -258,3 +258,60 @@ describe('a page', () => {
     )
   })
 })
+
+describe('the Edit action of a page', () => {
+  it.each(['/wikis', '/embed/wikis'])(
+    'leads an editor of the wiki at %s/<wiki>/pages/<page> to the editor',
+    async base => {
+      const pagesApi = fakePagesApi()
+      const wiki = pagesApi.withWiki({ role: 'editor' })
+      const checklist = pagesApi.withPage(wiki.id, { title: 'Checklist' })
+      renderRoute(`${base}/${wiki.id}/pages/${checklist.id}`, { pagesApi })
+
+      expect(
+        await screen.findByRole('link', { name: 'Edit page' })
+      ).toHaveAttribute('href', `${base}/${wiki.id}/pages/${checklist.id}/edit`)
+    }
+  )
+
+  it('is not offered to a viewer of the wiki', async () => {
+    const pagesApi = fakePagesApi()
+    const wiki = pagesApi.withWiki({ role: 'viewer' })
+    const checklist = pagesApi.withPage(wiki.id, { title: 'Checklist' })
+    renderRoute(`/wikis/${wiki.id}/pages/${checklist.id}`, { pagesApi })
+
+    // Named after the wiki once its role is known.
+    await screen.findByRole('link', { name: 'Handbook' })
+    expect(
+      screen.queryByRole('link', { name: 'Edit page' })
+    ).not.toBeInTheDocument()
+  })
+
+  it('is not offered for a page in the trash', async () => {
+    const { pagesApi, wiki, checklist } = handbook()
+    await pagesApi.deletePage(checklist.id)
+    renderRoute(`/wikis/${wiki.id}/pages/${checklist.id}`, { pagesApi })
+
+    await screen.findByText('This page is in the trash.')
+    await screen.findByRole('link', { name: 'Handbook' })
+    expect(
+      screen.queryByRole('link', { name: 'Edit page' })
+    ).not.toBeInTheDocument()
+  })
+
+  it('is not offered for a database, which shows a Grist document', async () => {
+    const pagesApi = fakePagesApi()
+    const wiki = pagesApi.withWiki()
+    const budget = pagesApi.withPage(wiki.id, {
+      title: 'Budget',
+      kind: 'database'
+    })
+    renderRoute(`/wikis/${wiki.id}/pages/${budget.id}`, { pagesApi })
+
+    await screen.findByRole('heading', { level: 1, name: 'Budget' })
+    await screen.findByRole('link', { name: 'Handbook' })
+    expect(
+      screen.queryByRole('link', { name: 'Edit page' })
+    ).not.toBeInTheDocument()
+  })
+})
