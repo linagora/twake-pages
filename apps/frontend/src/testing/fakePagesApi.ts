@@ -706,9 +706,11 @@ function signedIn(world: World, person: Person): FakePagesApi {
     }
   }
 
+  const isManaged = (wiki: StoredWiki) => wiki.kind !== 'shared'
+
   const sharedWiki = (wikiId: string) => {
     const { wiki } = access(wikiId, 'admin')
-    if (wiki.kind !== 'shared') throw refuse('managed')
+    if (isManaged(wiki)) throw refuse('managed')
     return wiki
   }
 
@@ -781,7 +783,7 @@ function signedIn(world: World, person: Person): FakePagesApi {
     deleteWiki: vi.fn<PagesApi['deleteWiki']>(wikiId =>
       answer(() => {
         const { wiki } = access(wikiId, 'admin')
-        if (wiki.kind !== 'shared') throw refuse('managed')
+        if (isManaged(wiki)) throw refuse('managed')
         wiki.deleted = true
       })
     ),
@@ -818,7 +820,7 @@ function signedIn(world: World, person: Person): FakePagesApi {
         return {
           members: [...wiki.members.values()].map(memberOf).sort(byEmail),
           invites: role === 'admin' ? wiki.invites.toSorted(byEmail) : [],
-          managed: wiki.kind !== 'shared'
+          managed: isManaged(wiki)
         }
       })
     ),
@@ -867,7 +869,7 @@ function signedIn(world: World, person: Person): FakePagesApi {
       answer(() => {
         const wiki =
           userId === person.id ? access(wikiId).wiki : sharedWiki(wikiId)
-        if (wiki.kind !== 'shared') throw refuse('managed')
+        if (isManaged(wiki)) throw refuse('managed')
         keepAnAdmin(wiki, userId)
         if (!wiki.members.delete(userId)) throw refuse('not_found')
         bump(wiki)
