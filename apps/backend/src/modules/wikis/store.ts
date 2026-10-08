@@ -1,6 +1,8 @@
-import { and, asc, desc, eq, isNull, sql } from 'drizzle-orm'
-import { inTenant, type Db, type Tx } from '../../infra/db.ts'
+import { and, asc, desc, eq, isNotNull, isNull, sql } from 'drizzle-orm'
+import { z } from 'zod'
+import { asTenant, inTenant, type Db, type Tx } from '../../infra/db.ts'
 import { Refused, writeOrRefuse, type Result } from '../../infra/refusals.ts'
+import { schedule, type Handler } from '../../scheduler/scheduler.ts'
 import type { Identity } from '../auth/index.ts'
 import { notifications } from '../notifications/schema.ts'
 import { pages, pageVersions } from '../pages/schema.ts'
@@ -25,6 +27,31 @@ export interface Wiki extends WikiSummary {
 }
 
 const PERSONAL_WIKI_NAME = 'Personal'
+
+export const PURGE_WIKI_JOB = 'purge-wiki'
+
+const RETENTION_MS = 30 * 24 * 3600 * 1000
+
+const purgePayload = z.object({
+  wikiId: z.uuid(),
+  organizationId: z.string().nullable(),
+  createdBy: z.uuid()
+})
+
+// Runs as the wiki's creator, whom the wikis policy always lets see it. The
+// pages, and all that hangs off them, go with the wiki by cascade.
+export const purgeWiki: Handler = async (raw, tx) => {
+  const job = purgePayload.parse(raw)
+  await asTenant(tx, {
+    organizationId: job.organizationId,
+    userId: job.createdBy,
+    email: ''
+  })
+  await tx
+    .delete(wikis)
+    .where(and(eq(wikis.id, job.wikiId), isNotNull(wikis.deletedAt)))
+  return undefined
+}
 
 type Author = Pick<Identity, 'userId' | 'email' | 'name'>
 
@@ -212,6 +239,34 @@ export function createWikiStore(db: Db) {
         }
         await tx.update(wikis).set(changes).where(eq(wikis.id, wikiId))
         return changedWiki(tx, identity.userId, wikiId)
+      })
+    },
+
+    /**
+     * Puts a shared wiki out of reach, and purges it for good 30 days later.
+     * A personal wiki goes with its person, a space's with its space.
+     */
+    deleteWiki(identity: Identity, wikiId: string): Promise<Result<null>> {
+      return writeOrRefuse(db, identity, async tx => {
+        await checkRole(tx, identity, wikiId, 'admin')
+        const { kind } = await bumpWiki(tx, wikiId)
+        if (kind !== 'shared') throw new Refused('managed')
+        const [wiki] = await tx
+          .update(wikis)
+          .set({ deletedAt: sql`now()` })
+          .where(eq(wikis.id, wikiId))
+          .returning({
+            organizationId: wikis.organizationId,
+            createdBy: wikis.createdBy
+          })
+        if (!wiki) throw new Error(`wiki ${wikiId} is out of reach`)
+        await schedule(tx, {
+          kind: PURGE_WIKI_JOB,
+          key: `${PURGE_WIKI_JOB}:${wikiId}`,
+          payload: { wikiId, ...wiki },
+          runAt: new Date(Date.now() + RETENTION_MS)
+        })
+        return null
       })
     }
   }

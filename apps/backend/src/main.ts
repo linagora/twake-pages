@@ -11,6 +11,7 @@ import { startConsumer, startPublisher } from './infra/rabbitmq.ts'
 import { connectIdentityProvider } from './modules/auth/index.ts'
 import { settingsRoutes } from './modules/settings/events.ts'
 import { SETTINGS_CHANNEL } from './modules/settings/routes.ts'
+import { PURGE_WIKI_JOB, purgeWiki } from './modules/wikis/store.ts'
 import { createScheduler } from './scheduler/scheduler.ts'
 
 const config = loadConfig()
@@ -69,7 +70,7 @@ const consumer = await startConsumer(
 const stopScheduler = createScheduler({
   db,
   logger,
-  handlers: {}
+  handlers: { [PURGE_WIKI_JOB]: purgeWiki }
 }).start(5000)
 const stopRelay = createRelay({
   db,

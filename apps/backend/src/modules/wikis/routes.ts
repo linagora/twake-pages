@@ -85,4 +85,18 @@ export function registerWikis(
       return result.value
     }
   )
+
+  app.delete(
+    '/wikis/:wikiId',
+    { preHandler: deps.requireIdentity },
+    async (request, reply) => {
+      const identity = request.identity
+      if (!identity) return reply.code(401).send()
+      const params = wikiParams.safeParse(request.params)
+      if (!params.success) return refuse(reply, 'not_found')
+      const result = await store.deleteWiki(identity, params.data.wikiId)
+      if (!result.ok) return refuse(reply, result.error)
+      return reply.code(204).send()
+    }
+  )
 }

@@ -1,14 +1,18 @@
+import { eq } from 'drizzle-orm'
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest'
 import { createDb, inTenant } from '../../infra/db.ts'
+import { jobs } from '../../scheduler/schema.ts'
 import {
   aB2cUser,
+  aPageIn,
   aSpaceWiki,
   aUser,
   joinWiki,
   startApp,
   type TestUser
 } from '../../testing/app.ts'
-import { wikiInvites } from './schema.ts'
+import { wikiInvites, wikis } from './schema.ts'
+import { purgeWiki } from './store.ts'
 
 let api: Awaited<ReturnType<typeof startApp>>
 let baseUrl: string
@@ -57,6 +61,32 @@ const invite = (admin: TestUser, wikiId: string, email: string) =>
       role: 'editor',
       invitedBy: admin.userId
     })
+  )
+
+const purgeJobOf = async (wikiId: string) => {
+  const [job] = await db
+    .select()
+    .from(jobs)
+    .where(eq(jobs.key, `purge-wiki:${wikiId}`))
+  if (!job) throw new Error(`no purge job for wiki ${wikiId}`)
+  return job
+}
+
+// No policy shows the pages of a wiki that is gone: this counts them with the
+// policies lifted, in a transaction that puts them back before it commits.
+const pagesLeftIn = (wikiId: string) =>
+  sql.begin(async tx => {
+    await tx`alter table pages no force row level security`
+    const [left] = await tx<{ count: number }[]>`
+      select count(*)::int as count from pages where wiki_id = ${wikiId}`
+    await tx`alter table pages force row level security`
+    return left?.count
+  })
+
+// Its creator always sees a wiki, deleted or not, until it is purged.
+const wikiRowsOf = (creator: TestUser, wikiId: string) =>
+  inTenant(db, creator, tx =>
+    tx.select({ id: wikis.id }).from(wikis).where(eq(wikis.id, wikiId))
   )
 
 describe('GET /wikis', () => {
@@ -303,5 +333,74 @@ describe('PATCH /wikis/:wikiId', () => {
 
     expect(response.statusCode).toBe(400)
     expect(response.json()).toEqual({ error: 'invalid_request' })
+  })
+})
+
+describe('DELETE /wikis/:wikiId', () => {
+  it('puts a shared wiki out of reach, until its purge 30 days later', async () => {
+    const alice = aUser()
+    const wiki = await aWikiOf(alice)
+
+    const response = await api.as(alice).delete(`/wikis/${wiki.id}`)
+
+    expect(response.statusCode).toBe(204)
+    expect((await api.as(alice).get(`/wikis/${wiki.id}`)).statusCode).toBe(404)
+    expect((await wikisOf(alice)).map(listed => listed.name)).toEqual([
+      'Personal'
+    ])
+    const job = await purgeJobOf(wiki.id)
+    const days = (job.runAt.getTime() - Date.now()) / 86_400_000
+    expect(Math.round(days)).toBe(30)
+  })
+
+  it('purges the wiki for good, with its pages', async () => {
+    const alice = aB2cUser()
+    const wiki = await aWikiOf(alice)
+    const plans = await aPageIn(db, alice, wiki.id, {
+      title: 'Plans',
+      position: 'a0'
+    })
+    await aPageIn(db, alice, wiki.id, {
+      title: 'Q1',
+      position: 'a0',
+      parentId: plans
+    })
+    await api.as(alice).delete(`/wikis/${wiki.id}`)
+    const job = await purgeJobOf(wiki.id)
+    expect(await pagesLeftIn(wiki.id)).toBe(3)
+
+    await db.transaction(tx => purgeWiki(job.payload, tx))
+
+    expect(await pagesLeftIn(wiki.id)).toBe(0)
+    expect(await wikiRowsOf(alice, wiki.id)).toEqual([])
+  })
+
+  it.each([
+    [
+      'a personal wiki',
+      async (alice: TestUser) => (await wikisOf(alice))[0]?.id ?? ''
+    ],
+    ['a space’s wiki', (alice: TestUser) => aSpaceWiki(db, [[alice, 'admin']])]
+  ])('refuses to delete %s', async (_case, aWikiOfKind) => {
+    const alice = aUser()
+    const wikiId = await aWikiOfKind(alice)
+
+    const response = await api.as(alice).delete(`/wikis/${wikiId}`)
+
+    expect(response.statusCode).toBe(409)
+    expect(response.json()).toEqual({ error: 'managed' })
+    expect((await api.as(alice).get(`/wikis/${wikiId}`)).statusCode).toBe(200)
+  })
+
+  it('refuses an editor', async () => {
+    const alice = aUser()
+    const bob = aUser({ organizationId: alice.organizationId })
+    const wiki = await aWikiOf(alice)
+    await joinWiki(db, alice, wiki.id, bob, 'editor')
+
+    const response = await api.as(bob).delete(`/wikis/${wiki.id}`)
+
+    expect(response.statusCode).toBe(403)
+    expect(response.json()).toEqual({ error: 'forbidden' })
   })
 })

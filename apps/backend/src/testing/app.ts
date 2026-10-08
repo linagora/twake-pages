@@ -6,6 +6,7 @@ import { listenToChanges } from '../infra/changes.ts'
 import { createDb, inTenant, type Db } from '../infra/db.ts'
 import type { Identity } from '../modules/auth/index.ts'
 import { anIdentity } from '../modules/auth/testing.ts'
+import { pages } from '../modules/pages/schema.ts'
 import { SETTINGS_CHANNEL } from '../modules/settings/routes.ts'
 import type { Role } from '../modules/wikis/access.ts'
 import { wikiMembers, wikis } from '../modules/wikis/schema.ts'
@@ -87,6 +88,32 @@ export async function aSpaceWiki(
     )
     await addHomePage(tx, { ...someone, name: null }, wiki)
     return wiki.id
+  })
+}
+
+/** A page written straight into the wiki, as the pages routes will write it. */
+export async function aPageIn(
+  db: Db,
+  author: TestUser,
+  wikiId: string,
+  page: { title: string; position: string; parentId?: string }
+): Promise<string> {
+  return inTenant(db, author, async tx => {
+    const [written] = await tx
+      .insert(pages)
+      .values({
+        wikiId,
+        organizationId: author.organizationId,
+        parentId: page.parentId ?? null,
+        kind: 'document',
+        title: page.title,
+        position: page.position,
+        createdBy: author.userId,
+        updatedBy: author.userId
+      })
+      .returning({ id: pages.id })
+    if (!written) throw new Error('no page')
+    return written.id
   })
 }
 
