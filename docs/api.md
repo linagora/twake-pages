@@ -147,7 +147,7 @@ interface TrashEntry {
 | `GET /wikis/:wikiId/tree` | | `{ version, pages: TreePage[] }`, live pages only, home page excluded | member |
 | `GET /wikis/:wikiId/stream` | | `text/event-stream`, see Live updates | member |
 
-`name` is 1 to 100 characters, trimmed; `description` at most 500.
+`name` is 1 to 100 characters, trimmed; `description` at most 500. Neither holds a NUL character or a lone surrogate.
 
 The personal wiki is stored with the name `Personal`. Clients show a translated label for a wiki of kind `personal` instead of its name, as Twake Tasks shows `t('boards.personalProject')` for a personal project.
 

@@ -207,9 +207,14 @@ describe('POST /wikis', () => {
     ['a name that is no string', { name: 42 }],
     ['a blank name', { name: '   ' }],
     ['a name over 100 characters', { name: 'x'.repeat(101) }],
+    ['a NUL character in the name', { name: 'Ops\u0000' }],
     [
       'a description over 500 characters',
       { name: 'Ops', description: 'x'.repeat(501) }
+    ],
+    [
+      'a lone surrogate in the description',
+      { name: 'Ops', description: 'Runbooks \ud83d' }
     ]
   ])('refuses %s', async (_case, body) => {
     const response = await api.as(aUser()).post('/wikis', body)
@@ -348,7 +353,9 @@ describe('PATCH /wikis/:wikiId', () => {
   it.each([
     ['an empty body', {}],
     ['a blank name', { name: ' ' }],
-    ['a description over 500 characters', { description: 'x'.repeat(501) }]
+    ['a NUL character in the name', { name: 'Guide\u0000' }],
+    ['a description over 500 characters', { description: 'x'.repeat(501) }],
+    ['a lone surrogate in the description', { description: 'Runbooks \ud83d' }]
   ])('refuses %s', async (_case, body) => {
     const alice = aUser()
     const wiki = await aWikiOf(api, alice)
@@ -357,6 +364,7 @@ describe('PATCH /wikis/:wikiId', () => {
 
     expect(response.statusCode).toBe(400)
     expect(response.json()).toEqual({ error: 'invalid_request' })
+    expect((await api.as(alice).get(`/wikis/${wiki.id}`)).json()).toEqual(wiki)
   })
 })
 

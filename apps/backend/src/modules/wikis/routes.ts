@@ -2,12 +2,13 @@ import { z } from 'zod'
 import type { Db } from '../../infra/db.ts'
 import type { HttpServer } from '../../infra/http.ts'
 import { refuse } from '../../infra/refusals.ts'
+import { storable } from '../../infra/text.ts'
 import type { RequireIdentity } from '../auth/index.ts'
 import { createWikiStore } from './store.ts'
 
-const wikiName = z.string().trim().min(1).max(100)
+const wikiName = z.string().trim().min(1).max(100).refine(storable)
 
-const wikiDescription = z.string().max(500)
+const wikiDescription = z.string().max(500).refine(storable)
 
 const newWiki = z.object({
   name: wikiName,
