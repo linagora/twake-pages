@@ -14,6 +14,11 @@ const newWiki = z.object({
   description: wikiDescription.default('')
 })
 
+const wikiChanges = z
+  .object({ name: wikiName, description: wikiDescription })
+  .partial()
+  .refine(changes => Object.keys(changes).length > 0)
+
 const wikiParams = z.object({ wikiId: z.uuid() })
 
 export function registerWikis(
@@ -56,6 +61,28 @@ export function registerWikis(
       if (!params.success) return refuse(reply, 'not_found')
       const wiki = await store.wiki(identity, params.data.wikiId)
       return wiki ?? refuse(reply, 'not_found')
+    }
+  )
+
+  app.patch(
+    '/wikis/:wikiId',
+    { preHandler: deps.requireIdentity },
+    async (request, reply) => {
+      const identity = request.identity
+      if (!identity) return reply.code(401).send()
+      const params = wikiParams.safeParse(request.params)
+      if (!params.success) return refuse(reply, 'not_found')
+      const body = wikiChanges.safeParse(request.body)
+      if (!body.success) {
+        return reply.code(400).send({ error: 'invalid_request' })
+      }
+      const result = await store.updateWiki(
+        identity,
+        params.data.wikiId,
+        body.data
+      )
+      if (!result.ok) return refuse(reply, result.error)
+      return result.value
     }
   )
 }

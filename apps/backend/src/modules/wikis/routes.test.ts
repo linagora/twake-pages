@@ -1,6 +1,13 @@
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest'
 import { createDb, inTenant } from '../../infra/db.ts'
-import { aB2cUser, aUser, startApp, type TestUser } from '../../testing/app.ts'
+import {
+  aB2cUser,
+  aSpaceWiki,
+  aUser,
+  joinWiki,
+  startApp,
+  type TestUser
+} from '../../testing/app.ts'
 import { wikiInvites } from './schema.ts'
 
 let api: Awaited<ReturnType<typeof startApp>>
@@ -216,5 +223,85 @@ describe('GET /wikis/:wikiId', () => {
 
     expect(response.statusCode).toBe(404)
     expect(response.json()).toEqual({ error: 'not_found' })
+  })
+})
+
+describe('PATCH /wikis/:wikiId', () => {
+  it('lets an admin rename and describe the wiki', async () => {
+    const alice = aUser()
+    const wiki = await aWikiOf(alice)
+
+    const response = await api
+      .as(alice)
+      .patch(`/wikis/${wiki.id}`, { name: ' Guide ', description: 'All of it' })
+
+    expect(response.statusCode).toBe(200)
+    expect(response.json()).toEqual({
+      ...wiki,
+      name: 'Guide',
+      description: 'All of it',
+      version: 1
+    })
+  })
+
+  it.each(['editor', 'viewer'] as const)('refuses an %s', async role => {
+    const alice = aUser()
+    const bob = aUser({ organizationId: alice.organizationId })
+    const wiki = await aWikiOf(alice)
+    await joinWiki(db, alice, wiki.id, bob, role)
+
+    const response = await api
+      .as(bob)
+      .patch(`/wikis/${wiki.id}`, { name: 'Guide' })
+
+    expect(response.statusCode).toBe(403)
+    expect(response.json()).toEqual({ error: 'forbidden' })
+  })
+
+  it('hides the wiki from someone who is no member', async () => {
+    const alice = aUser()
+    const wiki = await aWikiOf(alice)
+
+    const response = await api
+      .as(aUser({ organizationId: alice.organizationId }))
+      .patch(`/wikis/${wiki.id}`, { name: 'Guide' })
+
+    expect(response.statusCode).toBe(404)
+    expect(response.json()).toEqual({ error: 'not_found' })
+  })
+
+  it('keeps the name of a space’s wiki, which comes from the space', async () => {
+    const alice = aUser()
+    const wikiId = await aSpaceWiki(db, [[alice, 'admin']])
+
+    const renamed = await api
+      .as(alice)
+      .patch(`/wikis/${wikiId}`, { name: 'Guide' })
+    const described = await api
+      .as(alice)
+      .patch(`/wikis/${wikiId}`, { description: 'Campaigns' })
+
+    expect(renamed.statusCode).toBe(409)
+    expect(renamed.json()).toEqual({ error: 'managed' })
+    expect(described.json()).toMatchObject({
+      name: 'Marketing',
+      description: 'Campaigns',
+      kind: 'space',
+      version: 1
+    })
+  })
+
+  it.each([
+    ['an empty body', {}],
+    ['a blank name', { name: ' ' }],
+    ['a description over 500 characters', { description: 'x'.repeat(501) }]
+  ])('refuses %s', async (_case, body) => {
+    const alice = aUser()
+    const wiki = await aWikiOf(alice)
+
+    const response = await api.as(alice).patch(`/wikis/${wiki.id}`, body)
+
+    expect(response.statusCode).toBe(400)
+    expect(response.json()).toEqual({ error: 'invalid_request' })
   })
 })

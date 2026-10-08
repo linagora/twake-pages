@@ -3,10 +3,13 @@ import { pino } from 'pino'
 import { inject } from 'vitest'
 import { buildApp } from '../app.ts'
 import { listenToChanges } from '../infra/changes.ts'
-import { createDb } from '../infra/db.ts'
+import { createDb, inTenant, type Db } from '../infra/db.ts'
 import type { Identity } from '../modules/auth/index.ts'
 import { anIdentity } from '../modules/auth/testing.ts'
 import { SETTINGS_CHANNEL } from '../modules/settings/routes.ts'
+import type { Role } from '../modules/wikis/access.ts'
+import { wikiMembers, wikis } from '../modules/wikis/schema.ts'
+import { addHomePage } from '../modules/wikis/store.ts'
 
 export interface TestUser {
   userId: string
@@ -28,6 +31,63 @@ export function aUser(overrides: Partial<TestUser> = {}): TestUser {
 
 export function aB2cUser(): TestUser {
   return aUser({ organizationId: null })
+}
+
+/** Adds the person to the owner's wiki, as sharing will. */
+export async function joinWiki(
+  db: Db,
+  owner: TestUser,
+  wikiId: string,
+  user: TestUser,
+  role: Role
+) {
+  await inTenant(db, owner, tx =>
+    tx.insert(wikiMembers).values({
+      wikiId,
+      organizationId: owner.organizationId,
+      userId: user.userId,
+      email: user.email,
+      role
+    })
+  )
+}
+
+/** A space's wiki, whose name and members come from the space integration. */
+export async function aSpaceWiki(
+  db: Db,
+  members: [TestUser, Role][]
+): Promise<string> {
+  const [first] = members
+  if (!first) throw new Error('a space wiki needs members')
+  const [someone] = first
+  const organizationId = someone.organizationId
+  return inTenant(db, someone, async tx => {
+    const [wiki] = await tx
+      .insert(wikis)
+      .values({
+        organizationId,
+        name: 'Marketing',
+        kind: 'space',
+        createdBy: randomUUID()
+      })
+      .returning({
+        id: wikis.id,
+        organizationId: wikis.organizationId,
+        name: wikis.name
+      })
+    if (!wiki) throw new Error('no wiki')
+    await tx.insert(wikiMembers).values(
+      members.map(([user, role]) => ({
+        wikiId: wiki.id,
+        organizationId,
+        userId: user.userId,
+        email: user.email,
+        role
+      }))
+    )
+    await addHomePage(tx, { ...someone, name: null }, wiki)
+    return wiki.id
+  })
 }
 
 export async function startApp() {

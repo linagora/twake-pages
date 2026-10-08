@@ -1,9 +1,11 @@
 import { and, asc, desc, eq, isNull, sql } from 'drizzle-orm'
 import { inTenant, type Db, type Tx } from '../../infra/db.ts'
+import { Refused, writeOrRefuse, type Result } from '../../infra/refusals.ts'
 import type { Identity } from '../auth/index.ts'
 import { notifications } from '../notifications/schema.ts'
 import { pages, pageVersions } from '../pages/schema.ts'
-import { accessibleWikis, type Role } from './access.ts'
+import { accessibleWikis, checkRole, type Role } from './access.ts'
+import { bumpWiki } from './live.ts'
 import { wikiMembers, wikis } from './schema.ts'
 
 export type WikiKind = 'personal' | 'shared' | 'space'
@@ -114,6 +116,13 @@ async function wikiOf(tx: Tx, userId: string, wikiId: string) {
   return wiki ?? null
 }
 
+// For a change the person just made, so the wiki is in their reach.
+async function changedWiki(tx: Tx, userId: string, wikiId: string) {
+  const wiki = await wikiOf(tx, userId, wikiId)
+  if (!wiki) throw new Error(`wiki ${wikiId} is out of reach`)
+  return wiki
+}
+
 const summaryOf = (wiki: Wiki): WikiSummary => ({
   id: wiki.id,
   name: wiki.name,
@@ -185,9 +194,24 @@ export function createWikiStore(db: Db) {
           role: 'admin'
         })
         await addHomePage(tx, identity, wiki)
-        const created = await wikiOf(tx, identity.userId, wiki.id)
-        if (!created) throw new Error(`wiki ${wiki.id} is out of reach`)
-        return created
+        return changedWiki(tx, identity.userId, wiki.id)
+      })
+    },
+
+    /** A space's wiki takes its name from the space. */
+    updateWiki(
+      identity: Identity,
+      wikiId: string,
+      changes: { name?: string | undefined; description?: string | undefined }
+    ): Promise<Result<Wiki>> {
+      return writeOrRefuse(db, identity, async tx => {
+        await checkRole(tx, identity, wikiId, 'admin')
+        const { kind } = await bumpWiki(tx, wikiId)
+        if (kind === 'space' && changes.name !== undefined) {
+          throw new Refused('managed')
+        }
+        await tx.update(wikis).set(changes).where(eq(wikis.id, wikiId))
+        return changedWiki(tx, identity.userId, wikiId)
       })
     }
   }
