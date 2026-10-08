@@ -7,6 +7,7 @@ import { pageFollowers } from '../notifications/schema.ts'
 import { checkRole, roleOn } from '../wikis/access.ts'
 import { bumpWiki } from '../wikis/live.ts'
 import { checkBlocks, type Blocks } from './blocks.ts'
+import { previewOf, queuePageEvent } from './events.ts'
 import {
   labels,
   pageFavorites,
@@ -275,6 +276,9 @@ export function createPageStore(db: Db, gristOrigins: readonly string[]) {
           ...blocks,
           parentId: input.parentId,
           position: positionBetween(siblings, input.afterId, input.beforeId)
+        })
+        await queuePageEvent(tx, identity, 'created', page, {
+          preview: previewOf(blocks.text)
         })
         return changedPage(tx, identity, page.id)
       })

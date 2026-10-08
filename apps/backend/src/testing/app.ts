@@ -228,6 +228,18 @@ export async function wikisOf(
     .wikis
 }
 
+/** The person's personal wiki, which `GET /wikis` makes on their first visit. */
+export async function personalWikiOf(
+  api: Awaited<ReturnType<typeof startApp>>,
+  user: TestUser
+) {
+  const personal = (await wikisOf(api, user)).find(
+    wiki => wiki.kind === 'personal'
+  )
+  if (!personal) throw new Error('no personal wiki')
+  return personal
+}
+
 /** The Grist origin of the app the tests start. */
 export const GRIST_ORIGIN = 'https://grist.example.com'
 

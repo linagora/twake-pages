@@ -11,6 +11,7 @@ import {
   aSpaceWiki,
   aUser,
   joinWiki,
+  personalWikiOf,
   purgeJobOf,
   startApp,
   versionOf,
@@ -68,14 +69,6 @@ async function aWiki(
     await joinWiki(db, admin, wiki.id, user, role)
   }
   return wiki
-}
-
-async function personalWikiOf(user: TestUser) {
-  const personal = (await wikisOf(api, user)).find(
-    wiki => wiki.kind === 'personal'
-  )
-  if (!personal) throw new Error('no personal wiki')
-  return personal
 }
 
 /** What `GET /wikis/:wikiId` answers the person: 404 for a wiki they left. */
@@ -216,7 +209,7 @@ describe.each(deletions)(
       const firstEditor = aPeerOf(gone)
       const laterEditor = aPeerOf(gone)
       const viewer = aPeerOf(gone)
-      const personal = await personalWikiOf(gone)
+      const personal = await personalWikiOf(api, gone)
       const left = await aWiki(admin, 'Roadmap', [[gone, 'editor']])
       const handedOn = await aWiki(gone, 'Handbook', [
         [firstEditor, 'editor'],
@@ -389,7 +382,7 @@ describe.each(deletions.filter(({ matchedBy }) => matchedBy === 'email'))(
   ({ routingKey, makeUser, body }) => {
     it('is found whatever the case of its email', async () => {
       const gone = { ...makeUser(), email: `Gone-${randomUUID()}@Example.com` }
-      const personal = await personalWikiOf(gone)
+      const personal = await personalWikiOf(api, gone)
 
       await deliver(
         routingKey,
