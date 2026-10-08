@@ -252,9 +252,46 @@ describe('a child page', () => {
     await engineering({ role: 'viewer', parent: 'live', open: 'parent' })
 
     await screen.findByRole('heading', { level: 1, name: 'Onboarding' })
+    await screen.findByRole('treeitem', { name: 'Onboarding' })
 
     expect(
       screen.queryByRole('button', { name: 'Page options' })
     ).not.toBeInTheDocument()
+    expect(
+      screen.queryByTitle('New page under Onboarding')
+    ).not.toBeInTheDocument()
   })
+
+  it.each(['/wikis', '/embed/wikis'])(
+    'opens once created under its parent, from the tree at %s/<wiki>',
+    async base => {
+      const { pagesApi, wiki, parent, router } = await engineering({
+        base,
+        parent: 'live'
+      })
+
+      fireEvent.click(await screen.findByTitle('New page under Onboarding'))
+      const dialog = screen.getByRole('dialog', {
+        name: 'New page under Onboarding'
+      })
+      typeIn(dialog, 'Title', 'Laptop setup')
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Create' }))
+
+      expect(
+        await screen.findByRole('heading', { level: 1, name: 'Laptop setup' })
+      ).toBeVisible()
+      const child = within(
+        screen.getByRole('group', { name: 'Onboarding' })
+      ).getByRole('treeitem', { name: 'Laptop setup' })
+      expect(child).toHaveAttribute('aria-current', 'page')
+      expect(router.state.location.pathname).toBe(child.getAttribute('href'))
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+      expect(pagesApi.createPage).toHaveBeenCalledWith(wiki.id, {
+        title: 'Laptop setup',
+        kind: 'document',
+        parentId: parent?.id,
+        content: []
+      })
+    }
+  )
 })

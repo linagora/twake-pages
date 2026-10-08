@@ -1,4 +1,4 @@
-import { Bottom, Icon, Right } from '@linagora/twake-icons'
+import { Bottom, Icon, Plus, Right } from '@linagora/twake-icons'
 import { Box } from '@linagora/twake-mui'
 import {
   useId,
@@ -35,6 +35,12 @@ export interface TreeItemProps {
   children: ReactElement
 }
 
+/** An entry made under another from its row, with the mouse. */
+export interface TreeAdd<Entry> {
+  label: (parent: Entry) => string
+  onAdd: (parent: Entry) => void
+}
+
 interface Shown<Entry> {
   entry: Entry
   parent: string | null
@@ -55,7 +61,8 @@ export function Tree<Entry extends TreeEntry<Entry>>({
   expanded,
   onExpand,
   label,
-  item
+  item,
+  add
 }: {
   labelledBy: string
   entries: Entry[]
@@ -64,6 +71,7 @@ export function Tree<Entry extends TreeEntry<Entry>>({
   onExpand: (id: string, expanded: boolean) => void
   label: (entry: Entry) => string
   item: (entry: Entry, props: TreeItemProps) => ReactElement
+  add?: TreeAdd<Entry> | undefined
 }): ReactElement {
   const base = useId()
   const itemId = (id: string) => `${base}item-${id}`
@@ -155,6 +163,14 @@ export function Tree<Entry extends TreeEntry<Entry>>({
               },
               children: <span id={labelId(entry.id)}>{label(entry)}</span>
             })}
+            {add && (
+              <Add
+                label={add.label(entry)}
+                onAdd={() => {
+                  add.onAdd(entry)
+                }}
+              />
+            )}
           </Row>
           {open && (
             <Box
@@ -234,6 +250,17 @@ function Row({
   )
 }
 
+// The square holding an icon of a row: its chevron, or its +.
+const ROW_ICON = {
+  flex: '0 0 auto',
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  width: 24,
+  height: 24,
+  color: 'text.secondary'
+} as const
+
 // For the mouse: the keyboard expands and collapses from the item itself.
 function Chevron({
   shown,
@@ -250,19 +277,44 @@ function Chevron({
       aria-hidden
       onClick={shown ? onToggle : undefined}
       sx={{
-        flex: '0 0 auto',
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        width: 24,
-        height: 24,
+        ...ROW_ICON,
         mr: 0.5,
-        color: 'text.secondary',
         cursor: shown ? 'pointer' : 'default',
         visibility: shown ? 'visible' : 'hidden'
       }}
     >
       <Icon icon={open ? Bottom : Right} size={12} />
+    </Box>
+  )
+}
+
+// For the mouse too, shown on the row it points at, and always on a touch
+// screen. The caller offers the keyboard the same action outside the tree.
+function Add({
+  label,
+  onAdd
+}: {
+  label: string
+  onAdd: () => void
+}): ReactElement {
+  return (
+    <Box
+      component="span"
+      aria-hidden
+      title={label}
+      onClick={onAdd}
+      sx={{
+        ...ROW_ICON,
+        ml: 0.5,
+        borderRadius: 1,
+        cursor: 'pointer',
+        visibility: 'hidden',
+        '*:hover > &': { visibility: 'visible' },
+        '&:hover': { bgcolor: 'action.hover' },
+        '@media (hover: none)': { visibility: 'visible' }
+      }}
+    >
+      <Icon icon={Plus} size={12} />
     </Box>
   )
 }

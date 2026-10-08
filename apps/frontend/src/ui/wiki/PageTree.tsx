@@ -1,23 +1,29 @@
 import { FileOutline } from '@linagora/twake-icons'
 import { ListSubheader, Typography } from '@linagora/twake-mui'
 import { useId, useState, type ReactElement } from 'react'
-import { Link as RouterLink, useParams } from 'react-router'
+import { Link as RouterLink, useNavigate, useParams } from 'react-router'
 
 import { EmptyState, ListSkeleton } from '@/ds/EmptyState'
 import { Tree } from '@/ds/Tree'
+import type { TreePage } from '@/domain/page'
 import { ancestorsOf, buildTree } from '@/domain/tree'
 import { useI18n } from '@/ui/i18n/useI18n'
-import { useTree } from '@/ui/wiki/queries'
+import { NewPageDialog } from '@/ui/page/NewPageDialog'
+import { useTree, useWiki } from '@/ui/wiki/queries'
 
 export function PageTree({ wikiId }: { wikiId: string }): ReactElement {
   const { t } = useI18n()
+  const navigate = useNavigate()
   const titleId = useId()
   const { pageId = null } = useParams()
+  const wiki = useWiki(wikiId)
   const tree = useTree(wikiId)
   const pages = tree.data?.pages ?? []
   const path =
     pageId === null ? [] : ancestorsOf(pages, pageId).map(page => page.id)
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set())
+  const [parent, setParent] = useState<TreePage | null>(null)
+  const editable = wiki.data !== undefined && wiki.data.role !== 'viewer'
 
   // The pages above the open one expand each time it changes place: when
   // another page opens, or this one moves.
@@ -60,6 +66,29 @@ export function PageTree({ wikiId }: { wikiId: string }): ReactElement {
           item={(page, props) => (
             <RouterLink {...props} to={`pages/${page.id}`} />
           )}
+          // The keyboard finds New child page in the menu of the page.
+          add={
+            editable
+              ? {
+                  label: page => t('newPage.under', { title: page.title }),
+                  onAdd: setParent
+                }
+              : undefined
+          }
+        />
+      )}
+      {parent && (
+        <NewPageDialog
+          wikiId={wikiId}
+          parent={parent}
+          onClose={() => {
+            setParent(null)
+          }}
+          onCreated={page => {
+            // The tree stays for the new page.
+            setParent(null)
+            void navigate(`pages/${page.id}`)
+          }}
         />
       )}
     </>
