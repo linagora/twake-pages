@@ -142,7 +142,7 @@ async function changedPage(tx: Tx, identity: Identity, pageId: string) {
 }
 
 // The home page is outside the tree, so it takes no child page.
-async function checkParent(tx: Tx, wikiId: string, parentId: string) {
+export async function checkParent(tx: Tx, wikiId: string, parentId: string) {
   const [parent] = await tx
     .select({ id: pages.id })
     .from(pages)
@@ -158,7 +158,7 @@ async function checkParent(tx: Tx, wikiId: string, parentId: string) {
 }
 
 /** The live pages under the parent, or at the top of the tree, in order. */
-function siblingsUnder(tx: Tx, wikiId: string, parentId: string | null) {
+export function siblingsUnder(tx: Tx, wikiId: string, parentId: string | null) {
   return tx
     .select({
       id: pages.id,
@@ -238,11 +238,15 @@ export async function addPage(
   return added
 }
 
-export interface NewPage {
-  title: string
+/** Where a page goes: under its parent, or at the top, between neighbours. */
+export interface PageMove {
   parentId: string | null
   afterId?: string | undefined
   beforeId?: string | undefined
+}
+
+export interface NewPage extends PageMove {
+  title: string
   /** Unchecked, until the store checks them. */
   content: Blocks
 }

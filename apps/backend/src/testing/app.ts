@@ -8,6 +8,7 @@ import { createDb, inTenant, type Db, type Tx } from '../infra/db.ts'
 import type { Identity } from '../modules/auth/index.ts'
 import { anIdentity } from '../modules/auth/testing.ts'
 import { pages, pageVersions } from '../modules/pages/schema.ts'
+import type { PageMove } from '../modules/pages/store.ts'
 import { SETTINGS_CHANNEL } from '../modules/settings/routes.ts'
 import type { Role } from '../modules/wikis/access.ts'
 import { WIKI_CHANNEL } from '../modules/wikis/live.ts'
@@ -402,6 +403,16 @@ export async function aPage(
   page: PageToCreate
 ) {
   return (await createPage(app, user, wikiId, page)).json<{ id: string }>().id
+}
+
+/** `POST /pages/:pageId/move` by the person. */
+export function movePage(
+  app: Awaited<ReturnType<typeof startApp>>,
+  user: TestUser,
+  pageId: string,
+  to: PageMove
+) {
+  return app.as(user).post(`/pages/${pageId}/move`, to)
 }
 
 /** A parent the test makes in or beside the person's wiki, by its id. */

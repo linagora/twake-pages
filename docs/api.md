@@ -192,6 +192,8 @@ interface NewPage {
 
 `title` is 1 to 200 characters, trimmed, with no NUL character and no lone surrogate, which the server refuses rather than strips. `content` is an array of BlockNote blocks. The server checks its size, its strings, its links and the addresses of its blocks (see `invalid_content`) and keeps a plain text copy, a line per block, per table cell and per caption (`props.caption`), but never rewrites it. A link is an inline `{ type: 'link', href }`, wherever it sits. An `image`, `video`, `audio` or `file` block, and a Grist embed (`type: 'gristEmbed'`), hold their address in `props.url`, empty until they have one.
 
+A move takes the page with its child pages, which keep their places under it. Its `afterId` and `beforeId` name the page's new siblings as they are once the page is lifted out, as Twake Tasks names those of a moved task: the page itself is never one of them.
+
 ## Trash
 
 | Method and path | Answer | Who |

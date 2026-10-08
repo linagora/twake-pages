@@ -6,6 +6,7 @@ import { refuse } from '../../infra/refusals.ts'
 import { storable } from '../../infra/text.ts'
 import type { RequireIdentity } from '../auth/index.ts'
 import { MAX_BLOCKS_BYTES, pageBlocks } from './blocks.ts'
+import { createMoveStore } from './move.ts'
 import { createPageStore } from './store.ts'
 
 const pageTitle = z.string().trim().min(1).max(200).refine(storable)
@@ -23,6 +24,8 @@ const newPage = z.object({
 const wikiParams = z.object({ wikiId: z.uuid() })
 
 export const pageParams = z.object({ pageId: z.uuid() })
+
+const pageMove = newPage.pick({ parentId: true, afterId: true, beforeId: true })
 
 // Every route that writes blocks gives its body room for 2 MiB of them and its
 // other fields. Over that, Fastify refuses the body before the route reads it,
@@ -45,6 +48,7 @@ export function registerPages(
   deps: { db: Db; requireIdentity: RequireIdentity; gristOrigins: string[] }
 ): void {
   const store = createPageStore(deps.db, deps.gristOrigins)
+  const moveStore = createMoveStore(deps.db)
 
   app.post(
     '/wikis/:wikiId/pages',
@@ -78,6 +82,28 @@ export function registerPages(
       if (!params.success) return refuse(reply, 'not_found')
       const page = await store.page(identity, params.data.pageId)
       return page ?? refuse(reply, 'not_found')
+    }
+  )
+
+  app.post(
+    '/pages/:pageId/move',
+    { preHandler: deps.requireIdentity },
+    async (request, reply) => {
+      const identity = request.identity
+      if (!identity) return reply.code(401).send()
+      const params = pageParams.safeParse(request.params)
+      if (!params.success) return refuse(reply, 'not_found')
+      const body = pageMove.safeParse(request.body)
+      if (!body.success) {
+        return reply.code(400).send({ error: 'invalid_request' })
+      }
+      const result = await moveStore.movePage(
+        identity,
+        params.data.pageId,
+        body.data
+      )
+      if (!result.ok) return refuse(reply, result.error)
+      return result.value
     }
   )
 }
