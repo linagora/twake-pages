@@ -7,5 +7,7 @@ declare global {
     SSO_SCOPE?: string
     SSO_REDIRECT_URI?: string
     SSO_POST_LOGOUT_REDIRECT?: string
+    /** The sources the pages show images from, separated by spaces. */
+    CSP_IMG_SRC?: string
   }
 }

@@ -12,6 +12,7 @@ import {
   sendSignedIn
 } from '@/adapters/oidc/oidcSession'
 import { relayCallback } from '@/adapters/oidc/ssoFrame'
+import { readImageSources } from '@/adapters/runtime/imageSources'
 import { App } from '@/app/App'
 import { connectTwakeSpace } from '@/ui/embed/twakeSpace'
 
@@ -20,6 +21,7 @@ if (!container) throw new Error('Root element #root not found')
 
 const apiUrl = window.location.origin
 const config = readSsoConfig(window, apiUrl)
+const imageSources = readImageSources(window, window.location.origin)
 
 if (!relayCallback()) {
   const space = connectTwakeSpace()
@@ -36,7 +38,12 @@ if (!relayCallback()) {
 
   createRoot(container).render(
     <StrictMode>
-      <App session={session} pagesApi={pagesApi} overlay={overlay} />
+      <App
+        session={session}
+        pagesApi={pagesApi}
+        imageSources={imageSources}
+        overlay={overlay}
+      />
     </StrictMode>
   )
 }

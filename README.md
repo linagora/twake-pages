@@ -24,6 +24,8 @@ var SSO_POST_LOGOUT_REDIRECT = 'http://localhost:3400/'
 
 The `workplaceFqdn` scope names the person's Twake Workplace platform, which shows its top bar once it accepts the app's SSO client for token exchange. Without it the app shows its own header.
 
+The development server sends no Content Security Policy, so it shows images from any host. A deployment shows images from the hosts in its `CSP_IMG_SRC` only, and the editor warns of the others. To see the warnings of yours, put its hosts in `apps/frontend/public/.env.js` too: `var CSP_IMG_SRC = 'https://images.example.com'`.
+
 Start the backend and the frontend, and open http://localhost:3400.
 
 ```bash

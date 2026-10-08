@@ -11,9 +11,12 @@ import {
 import { ApiError, EditConflict } from '@/application/pages'
 import { BlocksEditor } from '@/ds/BlocksEditor'
 import { PageHeader } from '@/ds/PageHeader'
+import { imageHostsNotShown } from '@/domain/images'
 import type { Page } from '@/domain/page'
 import { useI18n } from '@/ui/i18n/useI18n'
+import { useImageSources } from '@/ui/ImageSourcesProvider'
 import { ConflictNotice, PublishOverDialog } from '@/ui/page/ConflictNotice'
+import { ImagesNotShown } from '@/ui/page/ImagesNotShown'
 import { useDraft } from '@/ui/page/useDraft'
 import { useEditable } from '@/ui/page/useEditable'
 import { useWikiPage } from '@/ui/page/useWikiPage'
@@ -83,6 +86,8 @@ function PageEditor({
   const [confirming, setConfirming] = useState(false)
   const conflict =
     publish.error instanceof EditConflict ? publish.error.current : null
+  const imageSources = useImageSources()
+  const hidden = imageHostsNotShown(draft.content, imageSources)
   const path = pathOf(page)
 
   const restart = () => {
@@ -181,6 +186,9 @@ function PageEditor({
         margin="dense"
         slotProps={{ htmlInput: { maxLength: 200 } }}
       />
+      {hidden.length > 0 && (
+        <ImagesNotShown hosts={hidden} added={imageSources.added} />
+      )}
       <BlocksEditor
         initial={start.content}
         label={t('editor.content')}

@@ -496,6 +496,56 @@ describe('a refused publish', () => {
   })
 })
 
+describe('an image of the blocks', () => {
+  // As the deployment adds them to the app's own.
+  const imageSources = {
+    self: window.location.origin,
+    added: ['https://avatars.example.com', 'https://images.example.com']
+  }
+
+  it('is said not to show from a host the app takes no images from', async () => {
+    const pagesApi = fakePagesApi()
+    renderRoute(aPage(pagesApi).editor, { pagesApi, imageSources })
+
+    await embedImage('https://elsewhere.example.org/badge.png')
+
+    expect(
+      await screen.findByText(/^Images from elsewhere.example.org will not/)
+    ).toHaveTextContent(
+      'Images from elsewhere.example.org will not show, as Twake Pages shows images from https://avatars.example.com and https://images.example.com only.'
+    )
+  })
+
+  it('is said not to show from any host, when the app takes images from none', async () => {
+    const pagesApi = fakePagesApi()
+    renderRoute(aPage(pagesApi).editor, {
+      pagesApi,
+      imageSources: { self: window.location.origin, added: [] }
+    })
+
+    await embedImage('https://images.example.com/badge.png')
+
+    expect(
+      await screen.findByText(/^Images from images.example.com will not/)
+    ).toHaveTextContent(
+      'Images from images.example.com will not show, as Twake Pages shows no images from other sites.'
+    )
+  })
+
+  it('shows from a host the app takes images from, with nothing said', async () => {
+    const pagesApi = fakePagesApi()
+    renderRoute(aPage(pagesApi).editor, { pagesApi, imageSources })
+
+    await embedImage('https://images.example.com/badge.png')
+
+    expect(await screen.findByRole('img')).toHaveAttribute(
+      'src',
+      'https://images.example.com/badge.png'
+    )
+    expect(screen.queryByText(/will not show/)).not.toBeInTheDocument()
+  })
+})
+
 describe('an edit conflict', () => {
   afterEach(() => {
     followZone(null)

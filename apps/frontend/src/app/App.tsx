@@ -7,7 +7,9 @@ import type { SpaceOverlay } from '@linagora/twake-mui'
 import { AppProviders } from '@/app/AppProviders'
 import { makeQueryClient } from '@/app/queryClient'
 import { routes } from '@/app/routes'
+import type { ImageSources } from '@/domain/images'
 import { findPreferredLanguage } from '@/ui/i18n/languages'
+import { ImageSourcesProvider } from '@/ui/ImageSourcesProvider'
 import { PagesApiProvider } from '@/ui/PagesApiProvider'
 import { SessionGate } from '@/ui/session/SessionGate'
 import { FollowSettings } from '@/ui/settings/FollowSettings'
@@ -15,12 +17,14 @@ import { FollowSettings } from '@/ui/settings/FollowSettings'
 export interface AppProps {
   session: SessionService
   pagesApi: PagesApi
+  imageSources: ImageSources
   overlay?: SpaceOverlay | null
 }
 
 export function App({
   session,
   pagesApi,
+  imageSources,
   overlay = null
 }: AppProps): ReactElement {
   const [queryClient] = useState(makeQueryClient)
@@ -30,9 +34,11 @@ export function App({
     <AppProviders lang={lang} queryClient={queryClient} overlay={overlay}>
       <SessionGate session={session}>
         <PagesApiProvider api={pagesApi}>
-          <FollowSettings>
-            <AppRouter />
-          </FollowSettings>
+          <ImageSourcesProvider sources={imageSources}>
+            <FollowSettings>
+              <AppRouter />
+            </FollowSettings>
+          </ImageSourcesProvider>
         </PagesApiProvider>
       </SessionGate>
     </AppProviders>

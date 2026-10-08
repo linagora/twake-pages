@@ -9,6 +9,7 @@ import {
   type Refusal,
   type UserSettings
 } from '@/application/pages'
+import { isFields, isList, type Fields } from '@/domain/blocks'
 import { mentionsIn, type Comment } from '@/domain/comment'
 import type { Notification, NotificationReason } from '@/domain/notification'
 import type {
@@ -202,13 +203,6 @@ function checkLabel(value: string) {
 const WORD = /[\p{L}\p{N}]+/gu
 
 const wordsOf = (value: string) => value.toLowerCase().match(WORD) ?? []
-
-type Fields = Record<string, unknown>
-
-const isFields = (value: unknown): value is Fields =>
-  typeof value === 'object' && value !== null && !Array.isArray(value)
-
-const isList = (value: unknown): value is unknown[] => Array.isArray(value)
 
 // Styled text and the text of a link, or plain strings, which BlockNote takes
 // for short.
