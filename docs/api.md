@@ -221,7 +221,7 @@ A label name is trimmed and lowercased, 1 to 50 letters, digits, `-` or `_`. The
 
 ## Following and notifications
 
-Notifications are never sent to the person who acted, nor to people who are no longer members.
+Notifications are never sent to the person who acted, nor to people who are no longer members. Those about a wiki the person is no longer a member of are left out of the list, the unread counts and the badges.
 
 - Publishing (version 2 and later, restores included): `published` to followers.
 - A comment: `commented` to followers, and `mentioned` instead to the people it mentions.
