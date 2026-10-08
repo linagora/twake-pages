@@ -131,7 +131,7 @@ export function registerPages(
         params.data.pageId,
         body.data
       )
-      if (!result.ok) return refuse(reply, result.error)
+      if (!result.ok) return refuse(reply, result.error, result.details)
       return reply.code(201).send(result.value)
     }
   )

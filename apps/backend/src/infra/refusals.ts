@@ -1,4 +1,5 @@
 import type { FastifyReply } from 'fastify'
+import type { VersionSummary } from '../modules/pages/store.ts'
 import { inTenant, type Db, type Tx } from './db.ts'
 
 // The refusals of the API contract (docs/api.md), with their status.
@@ -24,15 +25,25 @@ const REFUSAL_STATUS = {
 
 export type Refusal = keyof typeof REFUSAL_STATUS
 
-export type Result<T> = { ok: true; value: T } | { ok: false; error: Refusal }
+// What a refusal says besides its name: the current version of an edit
+// conflict, which the editor shows. Twake Tasks' refusals carry their name
+// alone, its stale description among them.
+interface Details {
+  current?: VersionSummary
+}
+
+export type Result<T> =
+  { ok: true; value: T } | { ok: false; error: Refusal; details?: Details }
 
 // Thrown, not returned, so the transaction rolls back whatever ran before it.
 export class Refused extends Error {
   readonly refusal: Refusal
+  readonly details: Details
 
-  constructor(refusal: Refusal) {
+  constructor(refusal: Refusal, details: Details = {}) {
     super(refusal)
     this.refusal = refusal
+    this.details = details
   }
 }
 
@@ -44,11 +55,17 @@ export async function writeOrRefuse<T>(
   try {
     return { ok: true, value: await inTenant(db, identity, work) }
   } catch (error) {
-    if (error instanceof Refused) return { ok: false, error: error.refusal }
+    if (error instanceof Refused) {
+      return { ok: false, error: error.refusal, details: error.details }
+    }
     throw error
   }
 }
 
-export function refuse(reply: FastifyReply, error: Refusal) {
-  return reply.code(REFUSAL_STATUS[error]).send({ error })
+export function refuse(
+  reply: FastifyReply,
+  error: Refusal,
+  details: Details = {}
+) {
+  return reply.code(REFUSAL_STATUS[error]).send({ error, ...details })
 }

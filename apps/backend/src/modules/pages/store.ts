@@ -22,13 +22,15 @@ const KEPT_VISITS = 100
 
 // Versions keep their author's email and name, which stay when the author
 // leaves the wiki.
+const versionAuthor = {
+  id: pageVersions.authorId,
+  email: pageVersions.authorEmail,
+  name: pageVersions.authorName
+}
+
 async function authorOf(tx: Tx, pageId: string, number: number) {
   const [author] = await tx
-    .select({
-      id: pageVersions.authorId,
-      email: pageVersions.authorEmail,
-      name: pageVersions.authorName
-    })
+    .select(versionAuthor)
     .from(pageVersions)
     .where(
       and(eq(pageVersions.pageId, pageId), eq(pageVersions.number, number))
@@ -38,6 +40,28 @@ async function authorOf(tx: Tx, pageId: string, number: number) {
   }
   return author
 }
+
+/** The contract's VersionSummary, as an edit conflict names it. */
+async function summaryOf(tx: Tx, pageId: string, number: number) {
+  const [version] = await tx
+    .select({
+      number: pageVersions.number,
+      title: pageVersions.title,
+      author: versionAuthor,
+      createdAt: pageVersions.createdAt,
+      restoredFrom: pageVersions.restoredFrom
+    })
+    .from(pageVersions)
+    .where(
+      and(eq(pageVersions.pageId, pageId), eq(pageVersions.number, number))
+    )
+  if (!version) {
+    throw new Error(`page ${pageId} has no version ${String(number)}`)
+  }
+  return version
+}
+
+export type VersionSummary = Awaited<ReturnType<typeof summaryOf>>
 
 async function labelsOf(tx: Tx, pageId: string) {
   const rows = await tx
@@ -347,6 +371,11 @@ export function createPageStore(db: Db, gristOrigins: readonly string[]) {
         // Blocks fit a page of blocks only: a database page's version takes
         // its Grist address instead (api.md).
         if (page.kind !== 'document') throw new Refused('invalid_request')
+        if (page.version !== input.baseVersion) {
+          throw new Refused('edit_conflict', {
+            current: await summaryOf(tx, pageId, page.version)
+          })
+        }
         const number = page.version + 1
         await writeVersion(tx, identity, {
           pageId,

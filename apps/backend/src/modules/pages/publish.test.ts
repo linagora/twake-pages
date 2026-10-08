@@ -148,6 +148,38 @@ describe('POST /pages/:pageId/versions', () => {
     expect(await versionOf(api, alice, wiki.id)).toBeGreaterThan(before)
   })
 
+  it('answers edit_conflict with the current version, for a draft started from an older one', async () => {
+    const alice = aUser()
+    const bob = aUser({ organizationId: alice.organizationId, name: 'Bob' })
+    const { wiki, page } = await aPageOf(alice)
+    await joinWiki(db, alice, wiki.id, bob, 'editor')
+    const bobs = await publish(api, bob, page.id, {
+      baseVersion: 1,
+      title: 'Welcome',
+      content: []
+    })
+    const before = await versionOf(api, alice, wiki.id)
+
+    const response = await publish(api, alice, page.id, {
+      baseVersion: 1,
+      title: 'Onboarding',
+      content: [paragraph('Ask for a laptop')]
+    })
+
+    expect(response.statusCode).toBe(409)
+    expect(response.json()).toEqual({
+      error: 'edit_conflict',
+      current: {
+        number: 2,
+        title: 'Welcome',
+        author: personOf(bob),
+        createdAt: bobs.json<Page>().updatedAt,
+        restoredFrom: null
+      }
+    })
+    expect(await versionOf(api, alice, wiki.id)).toBe(before)
+  })
+
   it('answers in_trash for a page in the trash', async () => {
     const alice = aUser()
     const wiki = await aWikiOf(api, alice)
