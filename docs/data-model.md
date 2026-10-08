@@ -47,7 +47,7 @@ Same columns, keys and policies as `project_members` and `project_invites` of Tw
 | text | text not null default '' | plain text of the blocks, for search and previews |
 | search | tsvector | generated: `setweight(to_tsvector('simple', title), 'A') \|\| setweight(to_tsvector('simple', text), 'B')`, GIN index |
 | version | integer not null default 1 | number of the current version |
-| position | sortKey | among siblings |
+| position | sortKey null | among siblings; null for the home page, which is outside the tree |
 | created_by, created_at | | |
 | updated_by, updated_at | | author and time of the current version |
 | deleted_at | timestamptz | in the trash |
@@ -58,7 +58,7 @@ Same columns, keys and policies as `project_members` and `project_invites` of Tw
 - `pages_one_home_per_wiki`: unique `(wiki_id) where home`
 - `pages_position`: unique `(wiki_id, parent_id, position) nulls not distinct where deleted_at is null`
 - index `(wiki_id, parent_id)`, GIN on `search`
-- checks: `not home or (parent_id is null and kind = 'document')`; `(kind = 'database') = (grist_url is not null)`; `(deleted_at is null) = (trash_root_id is null)`; `not (home and deleted_at is not null)`
+- checks: `not home or (parent_id is null and kind = 'document')`; `home = (position is null)`; `(kind = 'database') = (grist_url is not null)`; `(deleted_at is null) = (trash_root_id is null)`; `not (home and deleted_at is not null)`
 - policy: tenant, B2C scope `exists (select 1 from wikis where wikis.id = pages.wiki_id)`
 
 A page whose wiki is deleted stays in the table until the purge, and is out of reach through the wiki's policy-checked lookup in the access function.
