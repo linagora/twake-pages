@@ -65,6 +65,15 @@ async function personalWikiOf(user: TestUser) {
 
 describe.each([
   {
+    kind: 'B2B, matched by email',
+    routingKey: 'domain.user.deleted',
+    makeUser: () => aUser(),
+    body: (user: TestUser) => ({
+      organizationId: user.organizationId,
+      internalEmail: user.email
+    })
+  },
+  {
     kind: 'B2B, matched by uuid',
     routingKey: 'domain.user.deleted',
     makeUser: () => aUser(),
@@ -78,6 +87,12 @@ describe.each([
     routingKey: 'user.deleted',
     makeUser: () => aB2cUser(),
     body: (user: TestUser) => ({ uuid: user.userId })
+  },
+  {
+    kind: 'B2C, matched by email',
+    routingKey: 'user.deleted',
+    makeUser: () => aB2cUser(),
+    body: (user: TestUser) => ({ internalEmail: user.email })
   }
 ])('a deleted account ($kind)', ({ routingKey, makeUser, body }) => {
   it('leaves every wiki, and loses its personal wiki', async () => {
@@ -103,17 +118,17 @@ describe.each([
 describe('deleted accounts that cannot be applied', () => {
   it('rejects a B2B deletion without an organization', async () => {
     await expect(
-      deliver('domain.user.deleted', { uuid: randomUUID() })
+      deliver('domain.user.deleted', { internalEmail: 'a@example.com' })
     ).rejects.toThrow(RejectedEventError)
   })
 
-  it('rejects a B2B deletion without a uuid', async () => {
+  it('rejects a B2B deletion without a uuid or an email', async () => {
     await expect(
       deliver('domain.user.deleted', { organizationId: randomUUID() })
     ).rejects.toThrow(RejectedEventError)
   })
 
-  it('rejects a B2C deletion without a uuid', async () => {
+  it('rejects a B2C deletion without a uuid or an email', async () => {
     await expect(deliver('user.deleted', { userId: 'alice' })).rejects.toThrow(
       RejectedEventError
     )
