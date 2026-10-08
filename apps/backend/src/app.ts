@@ -29,7 +29,7 @@ export async function buildApp(deps: {
         store: postgresAuthStore(deps.db)
       })
       const streamVersions = versionStreams(api)
-      registerWikis(api, { requireIdentity })
+      registerWikis(api, { db: deps.db, requireIdentity })
       registerSettings(api, {
         db: deps.db,
         requireIdentity,
