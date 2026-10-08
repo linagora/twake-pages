@@ -123,9 +123,10 @@ async function writingsIn(wiki: WikiSummary, reader: TestUser) {
   }
 }
 
-describe.each([
+const deletions = [
   {
-    kind: 'B2B, matched by email',
+    tenant: 'B2B',
+    matchedBy: 'email',
     routingKey: 'domain.user.deleted',
     makeUser: () => aUser(),
     body: (user: TestUser) => ({
@@ -134,7 +135,8 @@ describe.each([
     })
   },
   {
-    kind: 'B2B, matched by uuid',
+    tenant: 'B2B',
+    matchedBy: 'uuid',
     routingKey: 'domain.user.deleted',
     makeUser: () => aUser(),
     body: (user: TestUser) => ({
@@ -143,167 +145,174 @@ describe.each([
     })
   },
   {
-    kind: 'B2C, matched by uuid',
+    tenant: 'B2C',
+    matchedBy: 'uuid',
     routingKey: 'user.deleted',
     makeUser: () => aB2cUser(),
     body: (user: TestUser) => ({ uuid: user.userId })
   },
   {
-    kind: 'B2C, matched by email',
+    tenant: 'B2C',
+    matchedBy: 'email',
     routingKey: 'user.deleted',
     makeUser: () => aB2cUser(),
     body: (user: TestUser) => ({ internalEmail: user.email })
   }
-])('a deleted account ($kind)', ({ routingKey, makeUser, body }) => {
-  it('leaves its wikis, hands them on or deletes them, and loses its personal wiki', async () => {
-    const gone = makeUser()
-    const firstEditor = aPeerOf(gone)
-    const laterEditor = aPeerOf(gone)
-    const viewer = aPeerOf(gone)
-    const personal = await personalWikiOf(gone)
-    const handedOn = await aWiki(gone, 'Handbook', [
-      [firstEditor, 'editor'],
-      [laterEditor, 'editor']
-    ])
-    await aWiki(gone, 'Solo', [[viewer, 'viewer']])
+]
 
-    await deliver(routingKey, body(gone))
+describe.each(deletions)(
+  'a deleted account ($tenant, matched by $matchedBy)',
+  ({ routingKey, makeUser, body }) => {
+    it('leaves its wikis, hands them on or deletes them, and loses its personal wiki', async () => {
+      const gone = makeUser()
+      const firstEditor = aPeerOf(gone)
+      const laterEditor = aPeerOf(gone)
+      const viewer = aPeerOf(gone)
+      const personal = await personalWikiOf(gone)
+      const handedOn = await aWiki(gone, 'Handbook', [
+        [firstEditor, 'editor'],
+        [laterEditor, 'editor']
+      ])
+      await aWiki(gone, 'Solo', [[viewer, 'viewer']])
 
-    expect(await sharedWikisOf(firstEditor)).toEqual([
-      expect.objectContaining({ name: 'Handbook', role: 'admin' })
-    ])
-    expect(await sharedWikisOf(laterEditor)).toEqual([
-      expect.objectContaining({ name: 'Handbook', role: 'editor' })
-    ])
-    expect(await sharedWikisOf(viewer)).toEqual([])
-    expect((await api.as(gone).get(`/wikis/${handedOn.id}`)).statusCode).toBe(
-      404
-    )
-    expect(await wikiRowsOf(db, gone, personal.id)).toEqual([])
-  })
+      await deliver(routingKey, body(gone))
 
-  it('moves the version of each wiki it leaves', async () => {
-    const gone = makeUser()
-    const admin = aPeerOf(gone)
-    const editor = aPeerOf(gone)
-    const left = await aWiki(admin, 'Roadmap', [[gone, 'viewer']])
-    const handedOn = await aWiki(gone, 'Handbook', [[editor, 'editor']])
-    const leftBefore = await versionOf(api, admin, left.id)
-    const handedOnBefore = await versionOf(api, editor, handedOn.id)
-
-    await deliver(routingKey, body(gone))
-
-    expect(await versionOf(api, admin, left.id)).toBeGreaterThan(leftBefore)
-    expect(await versionOf(api, editor, handedOn.id)).toBeGreaterThan(
-      handedOnBefore
-    )
-  })
-
-  it('leaves a wiki its admin deleted to its purge', async () => {
-    const gone = makeUser()
-    const admin = aPeerOf(gone)
-    const deleted = await aWiki(admin, 'Minutes', [[gone, 'viewer']])
-    await api.as(admin).delete(`/wikis/${deleted.id}`)
-    const job = await purgeJobOf(db, deleted.id)
-
-    await deliver(routingKey, body(gone))
-
-    expect(await purgeJobOf(db, deleted.id)).toEqual(job)
-  })
-
-  it('leaves a wiki it deleted to its purge, with an editor or none', async () => {
-    const gone = makeUser()
-    const editor = aPeerOf(gone)
-    const edited = await aWiki(gone, 'Minutes', [[editor, 'editor']])
-    const alone = await aWiki(gone, 'Ideas', [])
-    await api.as(gone).delete(`/wikis/${edited.id}`)
-    await api.as(gone).delete(`/wikis/${alone.id}`)
-    const aloneBefore = await wikiRowsOf(db, gone, alone.id)
-
-    await deliver(routingKey, body(gone))
-
-    expect({
-      edited: await membersOf(editor, edited.id),
-      alone: await wikiRowsOf(db, gone, alone.id)
-    }).toEqual({
-      edited: [{ userId: editor.userId, role: 'editor' }],
-      alone: [{ id: alone.id, version: aloneBefore[0]?.version }]
+      expect(await sharedWikisOf(firstEditor)).toEqual([
+        expect.objectContaining({ name: 'Handbook', role: 'admin' })
+      ])
+      expect(await sharedWikisOf(laterEditor)).toEqual([
+        expect.objectContaining({ name: 'Handbook', role: 'editor' })
+      ])
+      expect(await sharedWikisOf(viewer)).toEqual([])
+      expect((await api.as(gone).get(`/wikis/${handedOn.id}`)).statusCode).toBe(
+        404
+      )
+      expect(await wikiRowsOf(db, gone, personal.id)).toEqual([])
     })
-  })
 
-  it('leaves the pages, versions and comments it wrote', async () => {
-    const gone = makeUser()
-    const editor = aPeerOf(gone)
-    const handedOn = await aWiki(gone, 'Handbook', [[editor, 'editor']])
-    await aPageIn(db, gone, handedOn.id, {
-      title: 'Onboarding',
-      position: 'a0'
+    it('moves the version of each wiki it leaves', async () => {
+      const gone = makeUser()
+      const admin = aPeerOf(gone)
+      const editor = aPeerOf(gone)
+      const left = await aWiki(admin, 'Roadmap', [[gone, 'viewer']])
+      const handedOn = await aWiki(gone, 'Handbook', [[editor, 'editor']])
+      const leftBefore = await versionOf(api, admin, left.id)
+      const handedOnBefore = await versionOf(api, editor, handedOn.id)
+
+      await deliver(routingKey, body(gone))
+
+      expect(await versionOf(api, admin, left.id)).toBeGreaterThan(leftBefore)
+      expect(await versionOf(api, editor, handedOn.id)).toBeGreaterThan(
+        handedOnBefore
+      )
     })
-    await inTenant(db, gone, tx =>
-      tx.insert(comments).values({
+
+    it('leaves a wiki its admin deleted to its purge', async () => {
+      const gone = makeUser()
+      const admin = aPeerOf(gone)
+      const deleted = await aWiki(admin, 'Minutes', [[gone, 'viewer']])
+      await api.as(admin).delete(`/wikis/${deleted.id}`)
+      const job = await purgeJobOf(db, deleted.id)
+
+      await deliver(routingKey, body(gone))
+
+      expect(await purgeJobOf(db, deleted.id)).toEqual(job)
+    })
+
+    it('leaves a wiki it deleted to its purge, with an editor or none', async () => {
+      const gone = makeUser()
+      const editor = aPeerOf(gone)
+      const edited = await aWiki(gone, 'Minutes', [[editor, 'editor']])
+      const alone = await aWiki(gone, 'Ideas', [])
+      await api.as(gone).delete(`/wikis/${edited.id}`)
+      await api.as(gone).delete(`/wikis/${alone.id}`)
+      const aloneBefore = await wikiRowsOf(db, gone, alone.id)
+
+      await deliver(routingKey, body(gone))
+
+      expect({
+        edited: await membersOf(editor, edited.id),
+        alone: await wikiRowsOf(db, gone, alone.id)
+      }).toEqual({
+        edited: [{ userId: editor.userId, role: 'editor' }],
+        alone: [{ id: alone.id, version: aloneBefore[0]?.version }]
+      })
+    })
+
+    it('leaves the pages, versions and comments it wrote', async () => {
+      const gone = makeUser()
+      const editor = aPeerOf(gone)
+      const handedOn = await aWiki(gone, 'Handbook', [[editor, 'editor']])
+      await aPageIn(db, gone, handedOn.id, {
+        title: 'Onboarding',
+        position: 'a0'
+      })
+      await inTenant(db, gone, tx =>
+        tx.insert(comments).values({
+          pageId: handedOn.homePageId,
+          organizationId: gone.organizationId,
+          authorId: gone.userId,
+          authorEmail: gone.email,
+          body: 'Welcome aboard'
+        })
+      )
+
+      await deliver(routingKey, body(gone))
+
+      expect(await writingsIn(handedOn, editor)).toEqual({
+        titles: ['Onboarding'],
+        versions: [{ number: 1, authorId: gone.userId }],
+        comments: [{ authorId: gone.userId, body: 'Welcome aboard' }]
+      })
+    })
+
+    it('loses its favorites and recent pages', async () => {
+      const gone = makeUser()
+      const editor = aPeerOf(gone)
+      // A wiki the person created, once handed on, still shows its pages to them
+      // in B2C, so what they kept on those pages can be read as them.
+      const handedOn = await aWiki(gone, 'Handbook', [[editor, 'editor']])
+      const kept = {
         pageId: handedOn.homePageId,
         organizationId: gone.organizationId,
-        authorId: gone.userId,
-        authorEmail: gone.email,
-        body: 'Welcome aboard'
+        userId: gone.userId
+      }
+      await inTenant(db, gone, async tx => {
+        await tx.insert(pageFavorites).values(kept)
+        await tx.insert(pageVisits).values(kept)
       })
-    )
 
-    await deliver(routingKey, body(gone))
+      await deliver(routingKey, body(gone))
 
-    expect(await writingsIn(handedOn, editor)).toEqual({
-      titles: ['Onboarding'],
-      versions: [{ number: 1, authorId: gone.userId }],
-      comments: [{ authorId: gone.userId, body: 'Welcome aboard' }]
-    })
-  })
-
-  it('loses its favorites and recent pages', async () => {
-    const gone = makeUser()
-    const editor = aPeerOf(gone)
-    // A wiki the person created, once handed on, still shows its pages to them
-    // in B2C, so what they kept on those pages can be read as them.
-    const handedOn = await aWiki(gone, 'Handbook', [[editor, 'editor']])
-    const kept = {
-      pageId: handedOn.homePageId,
-      organizationId: gone.organizationId,
-      userId: gone.userId
-    }
-    await inTenant(db, gone, async tx => {
-      await tx.insert(pageFavorites).values(kept)
-      await tx.insert(pageVisits).values(kept)
-    })
-
-    await deliver(routingKey, body(gone))
-
-    expect(await favoritesAndRecentOf(gone)).toEqual({
-      favorites: [],
-      recent: []
-    })
-  })
-
-  it('loses its Twake Workplace settings', async () => {
-    const gone = makeUser()
-    await wikisOf(api, gone)
-    await db.transaction(tx =>
-      keepSettings(tx, 1, {
-        email: gone.email.toLowerCase(),
-        display_name: 'Gone'
+      expect(await favoritesAndRecentOf(gone)).toEqual({
+        favorites: [],
+        recent: []
       })
-    )
-
-    await deliver(routingKey, body(gone))
-
-    expect((await api.as(gone).get('/settings')).json()).toEqual({
-      version: -1,
-      language: null,
-      timezone: null,
-      theme: 'auto',
-      avatar: null,
-      name: null
     })
-  })
-})
+
+    it('loses its Twake Workplace settings', async () => {
+      const gone = makeUser()
+      await wikisOf(api, gone)
+      await db.transaction(tx =>
+        keepSettings(tx, 1, {
+          email: gone.email.toLowerCase(),
+          display_name: 'Gone'
+        })
+      )
+
+      await deliver(routingKey, body(gone))
+
+      expect((await api.as(gone).get('/settings')).json()).toEqual({
+        version: -1,
+        language: null,
+        timezone: null,
+        theme: 'auto',
+        avatar: null,
+        name: null
+      })
+    })
+  }
+)
 
 describe('a deleted account in a space wiki', () => {
   it('leaves the wiki to its space, even as its only admin', async () => {
