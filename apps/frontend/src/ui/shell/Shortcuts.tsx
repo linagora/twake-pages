@@ -7,9 +7,9 @@ import {
   Typography
 } from '@linagora/twake-mui'
 import {
-  useEffect,
   useEffectEvent,
   useId,
+  useLayoutEffect,
   useRef,
   type ReactElement
 } from 'react'
@@ -52,7 +52,9 @@ export function useShortcuts(actions: { help: () => void }): void {
     action()
   })
 
-  useEffect(() => {
+  // A layout effect, so the shell listens as soon as it shows: a passive one
+  // may run a turn later and miss the keys pressed in between.
+  useLayoutEffect(() => {
     document.addEventListener('keydown', onKey)
     return () => {
       document.removeEventListener('keydown', onKey)
