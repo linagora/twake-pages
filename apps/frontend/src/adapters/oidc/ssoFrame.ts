@@ -59,6 +59,13 @@ function callbackFrom(source: () => Window | null, timeoutMs?: number) {
   })
 }
 
+/**
+ * Whether the SSO answered that nobody is signed in to it, which a silent
+ * sign-in (`prompt=none`) may not ask for: `signInAt` throws its error code.
+ */
+export const isLoginRequired = (error: unknown): boolean =>
+  error instanceof Error && error.message === 'login_required'
+
 export async function signInAt(
   config: AuthConfig,
   open: (url: URL) => () => Window | null,

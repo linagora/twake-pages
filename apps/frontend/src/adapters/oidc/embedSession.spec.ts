@@ -62,6 +62,9 @@ const ALICE = {
   idToken: 'id-token'
 }
 
+// Stands for TwakeSpace, told when the SSO wants the person to sign in
+const onLoginRequired = vi.fn()
+
 const silentFrame = () =>
   document.querySelector<HTMLIFrameElement>(`iframe[name="${SILENT_NAME}"]`)
 
@@ -104,7 +107,7 @@ afterEach(() => {
 
 describe('embedSession', () => {
   it('signs in without showing the SSO, in a hidden frame, staying on the page', async () => {
-    const starting = embedSession(config).start()
+    const starting = embedSession(config, onLoginRequired).start()
 
     const frame = await frameOpened()
     expect(frame.url.searchParams.get('prompt')).toBe('none')
@@ -123,7 +126,7 @@ describe('embedSession', () => {
   })
 
   it('fails when the SSO wants the user to sign in', async () => {
-    const starting = embedSession(config).start()
+    const starting = embedSession(config, onLoginRequired).start()
 
     relay((await frameOpened()).window, '?error=login_required&state=state')
 
@@ -133,7 +136,7 @@ describe('embedSession', () => {
 
   it('gives up when the SSO never answers, as when it refuses to be framed', async () => {
     vi.useFakeTimers()
-    const starting = embedSession(config).start()
+    const starting = embedSession(config, onLoginRequired).start()
     starting.catch(() => undefined)
 
     await vi.advanceTimersByTimeAsync(10_000)
@@ -143,7 +146,7 @@ describe('embedSession', () => {
   })
 
   it('takes the answer only from its own frame, on its own origin', async () => {
-    const starting = embedSession(config).start()
+    const starting = embedSession(config, onLoginRequired).start()
     const frame = await frameOpened()
 
     relay(frame.window, '?code=forged&state=state', 'https://evil.test')
@@ -166,7 +169,7 @@ describe('embedSession', () => {
     const open = vi.spyOn(window, 'open').mockReturnValue(popupWindow)
     const close = vi.spyOn(popupWindow, 'close').mockReturnValue()
 
-    const signingIn = embedSession(config).signIn()
+    const signingIn = embedSession(config, onLoginRequired).signIn()
 
     expect(open).toHaveBeenCalledWith('', POPUP_NAME, expect.any(String))
     await vi.waitFor(() => {
@@ -191,11 +194,46 @@ describe('embedSession', () => {
       headers: { Authorization: 'Bearer old' }
     })
 
-    const sending = embedSession(config).send(request)
+    const sending = embedSession(config, onLoginRequired).send(request)
     relay((await frameOpened()).window, '?code=c&state=state')
 
     expect(await (await sending).text()).toBe('ok')
     expect(fetch).toHaveBeenCalledTimes(2)
+  })
+
+  it('tells TwakeSpace to sign the person in again when the SSO wants them to sign in', async () => {
+    const starting = embedSession(config, onLoginRequired).start()
+
+    relay((await frameOpened()).window, '?error=login_required&state=state')
+
+    await expect(starting).rejects.toThrow('login_required')
+    expect(onLoginRequired).toHaveBeenCalledOnce()
+  })
+
+  it('tells TwakeSpace too when the SSO session ended while the wiki was open', async () => {
+    vi.spyOn(window, 'fetch').mockResolvedValueOnce(
+      new Response(null, { status: 401 })
+    )
+    const request = new Request('http://localhost:3000/api/wikis', {
+      headers: { Authorization: 'Bearer old' }
+    })
+
+    const sending = embedSession(config, onLoginRequired).send(request)
+    relay((await frameOpened()).window, '?error=login_required&state=state')
+
+    expect((await sending).status).toBe(401)
+    expect(onLoginRequired).toHaveBeenCalledOnce()
+  })
+
+  it('tells TwakeSpace nothing when the SSO never answers: signing in again would not show it', async () => {
+    vi.useFakeTimers()
+    const starting = embedSession(config, onLoginRequired).start()
+    starting.catch(() => undefined)
+
+    await vi.advanceTimersByTimeAsync(10_000)
+
+    await expect(starting).rejects.toThrow('no answer from the SSO')
+    expect(onLoginRequired).not.toHaveBeenCalled()
   })
 })
 

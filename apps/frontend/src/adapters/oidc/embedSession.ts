@@ -6,7 +6,12 @@ import {
   type AuthConfig
 } from '@linagora/twake-oidc'
 
-import { POPUP_NAME, signInAt, signInSilently } from '@/adapters/oidc/ssoFrame'
+import {
+  isLoginRequired,
+  POPUP_NAME,
+  signInAt,
+  signInSilently
+} from '@/adapters/oidc/ssoFrame'
 import type { SessionService } from '@/application/session'
 
 export type EmbedSession = SessionService & {
@@ -20,11 +25,26 @@ export const isEmbedded = (): boolean =>
 // The embed never leaves its page for the SSO: a browser shows an error page,
 // with no way back, in a frame the SSO refuses to be shown in. A popup goes
 // instead when the SSO needs to show its portal.
-export function embedSession(config: AuthConfig): EmbedSession {
+//
+// `onLoginRequired` tells TwakeSpace when the SSO wants the person to sign in.
+export function embedSession(
+  config: AuthConfig,
+  onLoginRequired: () => void
+): EmbedSession {
   configureAuth(config)
 
+  // Unlike Tasks, which only has its popup: when the SSO wants the person to
+  // sign in, TwakeSpace signs them in again at the top level and reloads its
+  // frames (ADR 010). An SSO that never answers is left to the popup, since
+  // signing in again would not let it show in the frame.
+  const signInSilentlyOrTellTwakeSpace = () =>
+    signInSilently(config).catch((error: unknown) => {
+      if (isLoginRequired(error)) onLoginRequired()
+      throw error
+    })
+
   return {
-    start: () => signInSilently(config),
+    start: signInSilentlyOrTellTwakeSpace,
     signIn() {
       // Opened before any await, while the click still allows a popup
       const popup = window.open('', POPUP_NAME, 'popup,width=480,height=640')
@@ -50,7 +70,7 @@ export function embedSession(config: AuthConfig): EmbedSession {
         return response
       }
       try {
-        await signInSilently(config)
+        await signInSilentlyOrTellTwakeSpace()
       } catch {
         return response
       }

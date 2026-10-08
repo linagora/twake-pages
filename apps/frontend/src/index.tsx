@@ -23,7 +23,9 @@ const config = readSsoConfig(window, apiUrl)
 
 if (!relayCallback()) {
   const space = connectTwakeSpace()
-  const embed = isEmbedded() ? embedSession(config) : null
+  const embed = isEmbedded()
+    ? embedSession(config, () => space?.notifyLoginRequired())
+    : null
   const session = embed ?? oidcSession(config)
   const pagesApi = httpPagesApi(apiUrl, embed?.send ?? sendSignedIn)
   // Framed by TwakeSpace, the dialogs and the side panel go onto its page:
