@@ -1,3 +1,9 @@
+export interface Person {
+  id: string
+  email: string
+  name: string | null
+}
+
 export function displayName(person: {
   email: string
   name: string | null
