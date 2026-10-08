@@ -8,6 +8,7 @@ import {
   type Authenticate,
   type IdentityProvider
 } from './modules/auth/index.ts'
+import { registerPages } from './modules/pages/routes.ts'
 import { registerSettings } from './modules/settings/routes.ts'
 import { registerLive } from './modules/wikis/live.ts'
 import { registerWikis } from './modules/wikis/routes.ts'
@@ -32,6 +33,7 @@ export async function buildApp(deps: {
       })
       const streamVersions = versionStreams(api)
       registerWikis(api, { db: deps.db, requireIdentity })
+      registerPages(api, { db: deps.db, requireIdentity })
       registerLive(api, {
         db: deps.db,
         requireIdentity,

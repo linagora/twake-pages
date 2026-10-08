@@ -7,7 +7,7 @@ import { listenToChanges } from '../infra/changes.ts'
 import { createDb, inTenant, type Db } from '../infra/db.ts'
 import type { Identity } from '../modules/auth/index.ts'
 import { anIdentity } from '../modules/auth/testing.ts'
-import { pages } from '../modules/pages/schema.ts'
+import { pages, pageVersions } from '../modules/pages/schema.ts'
 import { SETTINGS_CHANNEL } from '../modules/settings/routes.ts'
 import type { Role } from '../modules/wikis/access.ts'
 import { WIKI_CHANNEL } from '../modules/wikis/live.ts'
@@ -96,7 +96,7 @@ export async function aSpaceWiki(
 
 /**
  * A page written straight into the wiki, as the pages routes will write it,
- * in the trash on its own when `deleted`.
+ * with its first version, in the trash on its own when `deleted`.
  */
 export async function aPageIn(
   db: Db,
@@ -119,6 +119,15 @@ export async function aPageIn(
       })
       .returning({ id: pages.id })
     if (!written) throw new Error('no page')
+    await tx.insert(pageVersions).values({
+      pageId: written.id,
+      organizationId: author.organizationId,
+      number: 1,
+      title: page.title,
+      authorId: author.userId,
+      authorEmail: author.email,
+      authorName: author.name ?? null
+    })
     if (page.deleted) {
       await tx
         .update(pages)
@@ -249,4 +258,14 @@ export async function startApp() {
       await sql.end()
     }
   }
+}
+
+/** A shared wiki, made through the API by its admin. */
+export async function aWikiOf(
+  app: Awaited<ReturnType<typeof startApp>>,
+  admin: TestUser,
+  name = 'Handbook'
+) {
+  const response = await app.as(admin).post('/wikis', { name })
+  return response.json<{ id: string; homePageId: string; version: number }>()
 }
