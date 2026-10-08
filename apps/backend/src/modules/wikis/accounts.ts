@@ -51,7 +51,9 @@ async function userIdByEmail(tx: Tx, email: string) {
 }
 
 // A wiki whose only admin leaves goes to its oldest editor, or is deleted.
-// A space wiki's members come from its space, so it is left alone.
+// A space wiki's members come from its space, so it is left alone. Unlike
+// Twake Tasks, which hands on or deletes a deleted project as any other, a
+// wiki already deleted is left to its purge, 30 days after its deletion.
 async function handOnWikis(tx: Tx, userId: string) {
   const otherAdmin = alias(wikiMembers, 'other_admin')
   const orphaned = await tx
@@ -63,6 +65,7 @@ async function handOnWikis(tx: Tx, userId: string) {
         eq(wikiMembers.userId, userId),
         eq(wikiMembers.role, 'admin'),
         eq(wikis.kind, 'shared'),
+        isNull(wikis.deletedAt),
         notExists(
           tx
             .select()

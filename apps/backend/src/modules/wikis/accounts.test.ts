@@ -24,7 +24,7 @@ import { pageFavorites, pageVersions, pageVisits } from '../pages/schema.ts'
 import { keepSettings } from '../settings/events.ts'
 import type { Role } from './access.ts'
 import { accountRoutes } from './accounts.ts'
-import { wikis } from './schema.ts'
+import { wikiMembers, wikis } from './schema.ts'
 
 let api: Awaited<ReturnType<typeof startApp>>
 const { sql, db } = createDb(inject('databaseUrl'))
@@ -75,6 +75,15 @@ async function personalWikiOf(user: TestUser) {
   if (!personal) throw new Error('no personal wiki')
   return personal
 }
+
+/** The members of the wiki, deleted or not, which no route lists yet. */
+const membersOf = (reader: TestUser, wikiId: string) =>
+  inTenant(db, reader, tx =>
+    tx
+      .select({ userId: wikiMembers.userId, role: wikiMembers.role })
+      .from(wikiMembers)
+      .where(eq(wikiMembers.wikiId, wikiId))
+  )
 
 /**
  * The pages the person keeps as favorites and recent pages, which no route
@@ -200,6 +209,26 @@ describe.each([
     await deliver(routingKey, body(gone))
 
     expect(await purgeJobOf(db, deleted.id)).toEqual(job)
+  })
+
+  it('leaves a wiki it deleted to its purge, with an editor or none', async () => {
+    const gone = makeUser()
+    const editor = aPeerOf(gone)
+    const edited = await aWiki(gone, 'Minutes', [[editor, 'editor']])
+    const alone = await aWiki(gone, 'Ideas', [])
+    await api.as(gone).delete(`/wikis/${edited.id}`)
+    await api.as(gone).delete(`/wikis/${alone.id}`)
+    const aloneBefore = await wikiRowsOf(db, gone, alone.id)
+
+    await deliver(routingKey, body(gone))
+
+    expect({
+      edited: await membersOf(editor, edited.id),
+      alone: await wikiRowsOf(db, gone, alone.id)
+    }).toEqual({
+      edited: [{ userId: editor.userId, role: 'editor' }],
+      alone: [{ id: alone.id, version: aloneBefore[0]?.version }]
+    })
   })
 
   it('leaves the pages, versions and comments it wrote', async () => {
