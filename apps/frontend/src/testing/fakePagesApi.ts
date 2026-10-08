@@ -4,6 +4,7 @@ import { vi, type Mock } from 'vitest'
 import {
   ApiError,
   EditConflict,
+  type Move,
   type PagesApi,
   type Refusal,
   type UserSettings
@@ -529,6 +530,21 @@ function signedIn(world: World, person: Person): FakePagesApi {
     return line
   }
 
+  const placementFor = (wikiId: string, move: Move, moving?: StoredPage) => {
+    const parent = parentFor(wikiId, move.parentId)
+    if (moving && parent && lineOf(parent).includes(moving)) {
+      throw refuse('invalid_parent')
+    }
+    // The client names the neighbours it sees once the page is lifted out.
+    const siblings = siblingsOf(wikiId, move.parentId).filter(
+      sibling => sibling !== moving
+    )
+    return {
+      parentId: move.parentId,
+      position: positionBetween(siblings, move.afterId, move.beforeId)
+    }
+  }
+
   const ancestorsOf = (page: StoredPage) =>
     lineOf(page)
       .slice(1)
@@ -894,22 +910,16 @@ function signedIn(world: World, person: Person): FakePagesApi {
       answer(() => {
         const { wiki } = access(wikiId, 'editor')
         const title = checkText(input.title, 200)
-        parentFor(wikiId, input.parentId)
-        const position = positionBetween(
-          siblingsOf(wikiId, input.parentId),
-          input.afterId,
-          input.beforeId
-        )
+        const placement = placementFor(wikiId, input)
         const body =
           input.kind === 'database'
             ? { content: [], gristUrl: checkGristUrl(input.gristUrl) }
             : { content: input.content ?? [], gristUrl: null }
         const page = makePage(wiki, {
           ...body,
+          ...placement,
           title,
-          kind: input.kind,
-          parentId: input.parentId,
-          position
+          kind: input.kind
         })
         return pageFor(page)
       })
@@ -967,18 +977,11 @@ function signedIn(world: World, person: Person): FakePagesApi {
       answer(() => {
         const { page, wiki } = liveAccess(pageId)
         if (page.home) throw refuse('home_page')
-        const parent = parentFor(page.wikiId, move.parentId)
-        if (parent && lineOf(parent).includes(page)) {
-          throw refuse('invalid_parent')
-        }
-        // The client names the neighbours it sees once the page is lifted out.
-        const siblings = siblingsOf(page.wikiId, move.parentId).filter(
-          sibling => sibling !== page
-        )
-        page.position = positionBetween(siblings, move.afterId, move.beforeId)
-        page.parentId = move.parentId
+        const placement = placementFor(page.wikiId, move, page)
+        page.parentId = placement.parentId
+        page.position = placement.position
         bump(wiki)
-        return { parentId: page.parentId, position: page.position }
+        return placement
       })
     ),
     deletePage: vi.fn<PagesApi['deletePage']>(pageId =>

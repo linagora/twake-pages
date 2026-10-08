@@ -54,14 +54,17 @@ export interface PersonMatch {
   name: string | null
 }
 
-export interface NewPage {
+/** Where a page goes: last under `parentId`, unless next to a sibling. */
+export interface Move {
+  parentId: string | null
+  afterId?: string
+  beforeId?: string
+}
+
+export interface NewPage extends Move {
   /** 1 to 200 characters, trimmed. */
   title: string
   kind: PageKind
-  parentId: string | null
-  /** The sibling to place it after; it goes last otherwise. */
-  afterId?: string
-  beforeId?: string
   /** A document's blocks, from its template; none by default. */
   content?: Block[]
   /** Required for a database. */
@@ -72,13 +75,6 @@ export interface NewPage {
 export type NewVersion = { baseVersion: number; title: string } & (
   { content: Block[] } | { gristUrl: string }
 )
-
-/** Where a page goes: last under `parentId`, unless next to a sibling. */
-export interface Move {
-  parentId: string | null
-  afterId?: string
-  beforeId?: string
-}
 
 /** A page's place in the tree. */
 export interface Placement {
