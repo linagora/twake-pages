@@ -1,4 +1,4 @@
-import { act, fireEvent, screen } from '@testing-library/react'
+import { act, fireEvent, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
 import type { NewPage } from '@/application/pages'
@@ -8,6 +8,7 @@ import {
   paragraph,
   type FakePagesApi
 } from '@/testing/fakePagesApi'
+import { pathToThePage } from '@/testing/pagePath'
 import { renderRoute } from '@/testing/renderWithProviders'
 
 const BOB = 'bob@example.com'
@@ -231,4 +232,27 @@ describe('a wiki open in two places', () => {
       ).toBeVisible()
     }
   )
+
+  it('shows the open page in its new place once moved elsewhere, in the tree and in its path', async () => {
+    const { pagesApi, bob, wiki, onboarding } = sharedHandbook()
+    const firstDay = pagesApi.withPage(wiki.id, {
+      title: 'First day',
+      parentId: onboarding.id
+    })
+    renderRoute(`/wikis/${wiki.id}/pages/${firstDay.id}`, { pagesApi })
+    expect(
+      await screen.findByRole('treeitem', { name: 'First day' })
+    ).toHaveAttribute('aria-level', '2')
+
+    await act(() => bob.movePage(firstDay.id, { parentId: null }))
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('treeitem', { name: 'First day' })
+      ).toHaveAttribute('aria-level', '1')
+    })
+    await waitFor(() => {
+      expect(pathToThePage()).toEqual(['Handbook'])
+    })
+  })
 })
