@@ -5,6 +5,7 @@ import { Refused, writeOrRefuse } from '../../infra/refusals.ts'
 import type { Identity } from '../auth/index.ts'
 import { checkRole } from '../wikis/access.ts'
 import { bumpWiki } from '../wikis/live.ts'
+import { queuePageEvent } from './events.ts'
 import { pages } from './schema.ts'
 import {
   ancestorsOf,
@@ -18,6 +19,9 @@ async function pageAt(tx: Tx, pageId: string) {
     .select({
       id: pages.id,
       wikiId: pages.wikiId,
+      organizationId: pages.organizationId,
+      parentId: pages.parentId,
+      title: pages.title,
       home: pages.home,
       deletedAt: pages.deletedAt
     })
@@ -58,6 +62,13 @@ export function createMoveStore(db: Db) {
           .update(pages)
           .set({ parentId: move.parentId, position })
           .where(eq(pages.id, page.id))
+        // As Twake Tasks tells of a task moved to another section only.
+        if (page.parentId !== move.parentId) {
+          await queuePageEvent(tx, identity, 'moved', page, {
+            from: page.parentId,
+            to: move.parentId
+          })
+        }
         return { parentId: move.parentId, position }
       })
     }

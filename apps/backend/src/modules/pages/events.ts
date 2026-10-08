@@ -25,7 +25,7 @@ export interface PageInWiki {
 export async function queuePageEvent(
   tx: Tx,
   identity: Identity,
-  action: 'created',
+  action: 'created' | 'moved',
   page: PageInWiki,
   details: Record<string, unknown>
 ) {

@@ -5,10 +5,13 @@ import { createDb } from '../../infra/db.ts'
 import {
   aB2cUser,
   aBlock,
+  aPage,
   aSpaceWiki,
   aUser,
   aWikiOf,
   createPage,
+  joinWiki,
+  movePage,
   personalWikiOf,
   startApp,
   styled,
@@ -137,5 +140,77 @@ describe('com.twake.pages.page.created.v1', () => {
     const wiki = await aWikiOf(api, alice)
 
     expect(await eventsOf(wiki.homePageId)).toEqual([])
+  })
+})
+
+describe('com.twake.pages.page.moved.v1', () => {
+  const created = expect.objectContaining({
+    type: 'com.twake.pages.page.created.v1'
+  }) as Record<string, unknown>
+
+  it('goes out through the outbox when an editor moves a page to the top of the tree', async () => {
+    const alice = aUser()
+    const bob = aUser({ organizationId: alice.organizationId })
+    const wiki = await aWikiOf(api, alice)
+    await joinWiki(db, alice, wiki.id, bob, 'editor')
+    const onboarding = await aPage(api, alice, wiki.id, { title: 'Onboarding' })
+    const laptop = await aPage(api, alice, wiki.id, {
+      title: 'Laptop setup',
+      parentId: onboarding
+    })
+
+    await movePage(api, bob, laptop, { parentId: null })
+
+    expect(await eventsOf(laptop)).toEqual([
+      created,
+      {
+        specversion: '1.0',
+        id: expect.stringMatching(UUID_V7) as string,
+        source: 'twake://pages',
+        type: 'com.twake.pages.page.moved.v1',
+        time: expect.stringMatching(TIME) as string,
+        twakeorg: alice.organizationId,
+        twakeactorid: bob.userId,
+        twakeactor: bob.email,
+        data: {
+          object: {
+            type: 'page',
+            id: laptop,
+            title: 'Laptop setup',
+            container: { kind: 'wiki', id: wiki.id }
+          },
+          from: onboarding,
+          to: null
+        }
+      }
+    ])
+  })
+
+  it('names the top of the tree a page leaves null', async () => {
+    const alice = aUser()
+    const wiki = await aWikiOf(api, alice)
+    const onboarding = await aPage(api, alice, wiki.id, { title: 'Onboarding' })
+    const laptop = await aPage(api, alice, wiki.id, { title: 'Laptop setup' })
+
+    await movePage(api, alice, laptop, { parentId: onboarding })
+
+    const [, moved] = await eventsOf(laptop)
+    expect(moved?.data).toEqual(
+      expect.objectContaining({ from: null, to: onboarding })
+    )
+  })
+
+  // As Twake Tasks tells of a task moved to another section only: among the
+  // same siblings, the page stays where its readers look for it.
+  it('goes out for no move among the same siblings', async () => {
+    const alice = aUser()
+    const wiki = await aWikiOf(api, alice)
+    const plans = await aPage(api, alice, wiki.id, { title: 'Plans' })
+    await aPage(api, alice, wiki.id, { title: 'Goals' })
+
+    const response = await movePage(api, alice, plans, { parentId: null })
+
+    expect(response.statusCode).toBe(200)
+    expect(await eventsOf(plans)).toEqual([created])
   })
 })

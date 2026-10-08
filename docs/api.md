@@ -285,7 +285,7 @@ Published on the `activity` exchange through the outbox, as `com.twake.pages.pag
 }
 ```
 
-- `created` (with `data.preview`), `moved` (`data.from` and `data.to` parent ids, null at the top), `deleted` and `restored` (`data.descendants`).
+- `created` (with `data.preview`), `moved` (`data.from` and `data.to` parent ids, null at the top), `deleted` and `restored` (`data.descendants`). `moved` goes out when a page changes parent, not when it changes place among the same siblings, as Twake Tasks tells only of a task moved to another section.
 - `published` for every version after the first, with `data.version` and `data.preview`.
 - `commented` with `data.commentId`, `data.preview` (the comment), and `data.recipients` for the people mentioned: `{ uuid, email, reason: 'mentioned' }`.
 - The space integration publishes `com.twake.pages.space.provisioned.v1` with `data: { space_id, resource: { kind: 'wiki', id } }`.
