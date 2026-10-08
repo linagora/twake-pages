@@ -42,6 +42,35 @@ describe('a page', () => {
     ).toBeVisible()
   })
 
+  it('shows its blocks, read only', async () => {
+    const pagesApi = fakePagesApi()
+    const wiki = pagesApi.withWiki()
+    const checklist = pagesApi.withPage(wiki.id, {
+      title: 'Release checklist',
+      content: [
+        { type: 'heading', content: 'Before the release' },
+        { type: 'paragraph', content: 'Freeze the branch on Thursdays.' }
+      ]
+    })
+    renderRoute(`/wikis/${wiki.id}/pages/${checklist.id}`, { pagesApi })
+
+    expect(
+      await screen.findByText('Freeze the branch on Thursdays.')
+    ).toBeVisible()
+    const main = screen.getByRole('main')
+    expect(
+      within(main).getByRole('heading', { name: 'Before the release' })
+    ).toBeVisible()
+    expect(within(main).queryByRole('textbox')).not.toBeInTheDocument()
+  })
+
+  it('says when it holds nothing yet', async () => {
+    const { pagesApi, wiki, checklist } = handbook()
+    renderRoute(`/wikis/${wiki.id}/pages/${checklist.id}`, { pagesApi })
+
+    expect(await screen.findByText('This page is empty.')).toBeVisible()
+  })
+
   it.each(['/wikis', '/embed/wikis'])(
     'leads from %s/<wiki>/pages/<page> to the pages above it, from the home page down',
     async base => {

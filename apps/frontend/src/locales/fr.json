@@ -51,6 +51,7 @@
     "path": "Chemin vers cette page",
     "notFound": "Cette page n'existe pas, ou vous ne pouvez pas l'ouvrir.",
     "loadFailed": "La page n'a pas pu être chargée.",
+    "empty": "Cette page est vide.",
     "edit": "Modifier la page",
     "history": "Historique de la page"
   },

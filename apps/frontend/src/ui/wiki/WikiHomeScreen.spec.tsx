@@ -31,4 +31,25 @@ describe('WikiHomeScreen', () => {
       await screen.findByRole('heading', { level: 1, name: 'Personnel' })
     ).toBeVisible()
   })
+
+  it('shows the blocks of its home page', async () => {
+    const pagesApi = fakePagesApi()
+    const wiki = pagesApi.withWiki({ name: 'Handbook' })
+    await pagesApi.publish(wiki.homePageId, {
+      baseVersion: 1,
+      title: 'Handbook',
+      content: [{ type: 'paragraph', content: 'Start with the onboarding.' }]
+    })
+    renderRoute(`/wikis/${wiki.id}`, { pagesApi })
+
+    expect(await screen.findByText('Start with the onboarding.')).toBeVisible()
+  })
+
+  it('says when its home page holds nothing yet', async () => {
+    const pagesApi = fakePagesApi()
+    const wiki = pagesApi.withWiki({ name: 'Handbook' })
+    renderRoute(`/wikis/${wiki.id}`, { pagesApi })
+
+    expect(await screen.findByText('This page is empty.')).toBeVisible()
+  })
 })

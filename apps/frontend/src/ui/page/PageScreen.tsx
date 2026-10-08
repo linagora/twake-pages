@@ -8,6 +8,7 @@ import { EmptyState, ListSkeleton } from '@/ds/EmptyState'
 import { PageHeader } from '@/ds/PageHeader'
 import type { Page } from '@/domain/page'
 import { useI18n } from '@/ui/i18n/useI18n'
+import { PageContent } from '@/ui/page/PageContent'
 import { useDocumentTitle } from '@/ui/useDocumentTitle'
 import { usePage, useWiki } from '@/ui/wiki/queries'
 import { useWikiName } from '@/ui/wiki/useWikiName'
@@ -51,6 +52,7 @@ export function PageScreen(): ReactElement {
           </Typography>
         }
       />
+      <PageContent page={page.data} />
     </main>
   )
 }

@@ -51,6 +51,7 @@
     "path": "Path to this page",
     "notFound": "This page doesn't exist, or you can't open it.",
     "loadFailed": "The page could not be loaded.",
+    "empty": "This page is empty.",
     "edit": "Edit page",
     "history": "Page history"
   },
