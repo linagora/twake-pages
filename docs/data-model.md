@@ -107,7 +107,7 @@ Copied from Twake Tasks with the names it uses: `spaces` (space id, organization
 
 ## The access function
 
-`access(tx, identity, wikiId)` returns the person's role on the wiki, or nothing when the wiki is deleted, invisible, or the person is no member. Every route goes through it, as `access.ts` does in Twake Tasks. The owner of a personal wiki is its admin.
+`roleOn(tx, identity, wikiId)` returns the person's role on the wiki, or nothing when the wiki is deleted, invisible, or the person is no member. Every route goes through it, as `access.ts` does in Twake Tasks. A person is the admin of their personal wiki.
 
 ## Purge
 
