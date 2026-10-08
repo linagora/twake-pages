@@ -75,6 +75,60 @@ async function recordVisit(
   await tx.execute(sql`select app_trim_visits(${KEPT_VISITS})`)
 }
 
+/** A page of a wiki the person is a member of, in the trash or not. */
+async function rowOf(tx: Tx, identity: Identity, pageId: string) {
+  const [row] = await tx
+    .select({
+      page: pages,
+      following: sql<boolean>`${pageFollowers.userId} is not null`,
+      favorite: sql<boolean>`${pageFavorites.userId} is not null`
+    })
+    .from(pages)
+    .leftJoin(
+      pageFollowers,
+      and(
+        eq(pageFollowers.pageId, pages.id),
+        eq(pageFollowers.userId, identity.userId)
+      )
+    )
+    .leftJoin(
+      pageFavorites,
+      and(
+        eq(pageFavorites.pageId, pages.id),
+        eq(pageFavorites.userId, identity.userId)
+      )
+    )
+    .where(eq(pages.id, pageId))
+  if (!row || !(await roleOn(tx, identity, row.page.wikiId))) return null
+  return row
+}
+
+async function pageOf(
+  tx: Tx,
+  { page, following, favorite }: NonNullable<Awaited<ReturnType<typeof rowOf>>>
+) {
+  return {
+    id: page.id,
+    wikiId: page.wikiId,
+    parentId: page.parentId,
+    home: page.home,
+    kind: page.kind,
+    title: page.title,
+    content: page.content,
+    gristUrl: page.gristUrl,
+    version: page.version,
+    createdAt: page.createdAt,
+    createdBy: await authorOf(tx, page.id, 1),
+    updatedAt: page.updatedAt,
+    updatedBy: await authorOf(tx, page.id, page.version),
+    labels: await labelsOf(tx, page.id),
+    ancestors: await ancestorsOf(tx, page.parentId),
+    following,
+    favorite,
+    deletedAt: page.deletedAt
+  }
+}
+
 export function createPageStore(db: Db) {
   return {
     /**
@@ -83,51 +137,10 @@ export function createPageStore(db: Db) {
      */
     page(identity: Identity, pageId: string) {
       return inTenant(db, identity, async tx => {
-        const [row] = await tx
-          .select({
-            page: pages,
-            following: sql<boolean>`${pageFollowers.userId} is not null`,
-            favorite: sql<boolean>`${pageFavorites.userId} is not null`
-          })
-          .from(pages)
-          .leftJoin(
-            pageFollowers,
-            and(
-              eq(pageFollowers.pageId, pages.id),
-              eq(pageFollowers.userId, identity.userId)
-            )
-          )
-          .leftJoin(
-            pageFavorites,
-            and(
-              eq(pageFavorites.pageId, pages.id),
-              eq(pageFavorites.userId, identity.userId)
-            )
-          )
-          .where(eq(pages.id, pageId))
-        if (!row || !(await roleOn(tx, identity, row.page.wikiId))) return null
-        const { page } = row
-        await recordVisit(tx, identity.userId, page)
-        return {
-          id: page.id,
-          wikiId: page.wikiId,
-          parentId: page.parentId,
-          home: page.home,
-          kind: page.kind,
-          title: page.title,
-          content: page.content,
-          gristUrl: page.gristUrl,
-          version: page.version,
-          createdAt: page.createdAt,
-          createdBy: await authorOf(tx, page.id, 1),
-          updatedAt: page.updatedAt,
-          updatedBy: await authorOf(tx, page.id, page.version),
-          labels: await labelsOf(tx, page.id),
-          ancestors: await ancestorsOf(tx, page.parentId),
-          following: row.following,
-          favorite: row.favorite,
-          deletedAt: page.deletedAt
-        }
+        const row = await rowOf(tx, identity, pageId)
+        if (!row) return null
+        await recordVisit(tx, identity.userId, row.page)
+        return pageOf(tx, row)
       })
     }
   }
