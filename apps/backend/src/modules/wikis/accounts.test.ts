@@ -78,6 +78,10 @@ async function personalWikiOf(user: TestUser) {
   return personal
 }
 
+/** What `GET /wikis/:wikiId` answers the person: 404 for a wiki they left. */
+const openingStatus = async (user: TestUser, wikiId: string) =>
+  (await api.as(user).get(`/wikis/${wikiId}`)).statusCode
+
 /** The members of the wiki, deleted or not, which no route lists yet. */
 const membersOf = (reader: TestUser, wikiId: string) =>
   inTenant(db, reader, tx =>
@@ -208,15 +212,17 @@ describe.each(deletions)(
   ({ routingKey, makeUser, body }) => {
     it('leaves its wikis, hands them on or deletes them, and loses its personal wiki', async () => {
       const gone = makeUser()
+      const admin = aPeerOf(gone)
       const firstEditor = aPeerOf(gone)
       const laterEditor = aPeerOf(gone)
       const viewer = aPeerOf(gone)
       const personal = await personalWikiOf(gone)
+      const left = await aWiki(admin, 'Roadmap', [[gone, 'editor']])
       const handedOn = await aWiki(gone, 'Handbook', [
         [firstEditor, 'editor'],
         [laterEditor, 'editor']
       ])
-      await aWiki(gone, 'Solo', [[viewer, 'viewer']])
+      const deleted = await aWiki(gone, 'Solo', [[viewer, 'viewer']])
 
       await deliver(routingKey, body(gone))
 
@@ -227,9 +233,11 @@ describe.each(deletions)(
         expect.objectContaining({ name: 'Handbook', role: 'editor' })
       ])
       expect(await sharedWikisOf(viewer)).toEqual([])
-      expect((await api.as(gone).get(`/wikis/${handedOn.id}`)).statusCode).toBe(
-        404
-      )
+      expect({
+        left: await openingStatus(gone, left.id),
+        handedOn: await openingStatus(gone, handedOn.id),
+        deleted: await openingStatus(gone, deleted.id)
+      }).toEqual({ left: 404, handedOn: 404, deleted: 404 })
       expect(await wikiRowsOf(db, gone, personal.id)).toEqual([])
     })
 
@@ -411,7 +419,7 @@ describe('a deleted account in a space wiki', () => {
   it('leaves the wiki to its space, even as its only admin', async () => {
     const gone = aUser()
     const viewer = aUser({ organizationId: gone.organizationId })
-    await aSpaceWiki(db, [
+    const wikiId = await aSpaceWiki(db, [
       [gone, 'admin'],
       [viewer, 'viewer']
     ])
@@ -426,6 +434,7 @@ describe('a deleted account in a space wiki', () => {
         expect.objectContaining({ name: 'Marketing', role: 'viewer' })
       ])
     )
+    expect(await openingStatus(gone, wikiId)).toBe(404)
   })
 })
 
