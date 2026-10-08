@@ -137,7 +137,7 @@ export async function aSpaceWiki(
   })
 }
 
-/** A version of the page by its author, as publishing will write it. */
+/** A version of the page by its author, as publishing writes it. */
 export async function addVersion(
   tx: Tx,
   author: TestUser,

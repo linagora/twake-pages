@@ -6,7 +6,6 @@ import { createDb, inTenant } from '../../infra/db.ts'
 import {
   aB2cUser,
   aBlock,
-  addVersion,
   aPageIn,
   aUser,
   aWikiOf,
@@ -17,6 +16,7 @@ import {
   neighbourPagesIn,
   pageOf,
   personOf,
+  publish,
   removeFromWiki,
   STALE_NEIGHBOURS,
   startApp,
@@ -29,7 +29,7 @@ import {
 } from '../../testing/app.ts'
 import { pageFollowers } from '../notifications/schema.ts'
 import { MAX_BLOCKS_BYTES } from './blocks.ts'
-import { labels, pageLabels, pages, pageVisits } from './schema.ts'
+import { labels, pageLabels, pageVisits } from './schema.ts'
 
 let api: Awaited<ReturnType<typeof startApp>>
 const { sql, db } = createDb(inject('databaseUrl'))
@@ -43,23 +43,7 @@ afterAll(async () => {
   await sql.end()
 })
 
-// Publishing is not served yet, so versions are written as it will write them.
-const publish = (editor: TestUser, pageId: string, number: number) =>
-  inTenant(db, editor, async tx => {
-    const title = `Version ${String(number)}`
-    await addVersion(tx, editor, { pageId, number, title })
-    await tx
-      .update(pages)
-      .set({
-        title,
-        version: number,
-        updatedBy: editor.userId,
-        updatedAt: new Date()
-      })
-      .where(eq(pages.id, pageId))
-  })
-
-// Nor is labelling.
+// Labelling is not served yet, so labels are written as it will write them.
 const label = (
   editor: TestUser,
   wikiId: string,
@@ -173,7 +157,11 @@ describe('GET /pages/:pageId', () => {
     const bob = aUser({ organizationId: alice.organizationId, name: null })
     const wiki = await aWikiOf(api, alice)
     await joinWiki(db, alice, wiki.id, bob, 'editor')
-    await publish(bob, wiki.homePageId, 2)
+    await publish(api, bob, wiki.homePageId, {
+      baseVersion: 1,
+      title: 'Handbook',
+      content: []
+    })
 
     const page = await pageOf(api, alice, wiki.homePageId)
 
