@@ -5,9 +5,16 @@ import type { PlatformEvent } from '../../events/envelope.ts'
 import { MalformedEventError } from '../../events/router.ts'
 import { outbox } from '../../events/schema.ts'
 import { createDb, inTenant } from '../../infra/db.ts'
-import { jobs } from '../../scheduler/schema.ts'
-import { aPageIn, aUser, startApp, type TestUser } from '../../testing/app.ts'
-import { wikiMembers, wikis } from '../wikis/schema.ts'
+import {
+  aPageIn,
+  aUser,
+  purgeJobOf,
+  startApp,
+  wikiRowsOf,
+  type TestUser,
+  type WikiSummary
+} from '../../testing/app.ts'
+import { wikiMembers } from '../wikis/schema.ts'
 import { purgeWiki } from '../wikis/store.ts'
 import { knowsAnySpace, spaceRoutes } from './events.ts'
 
@@ -45,16 +52,6 @@ const member = (user: TestUser, role: string) => ({
   role
 })
 
-interface WikiSummary {
-  id: string
-  name: string
-  description: string
-  kind: 'personal' | 'shared' | 'space'
-  role: 'viewer' | 'editor' | 'admin'
-  homePageId: string
-  unread: number
-}
-
 async function spaceWikis(user: TestUser) {
   return (await api.as(user).get('/wikis'))
     .json<{ wikis: WikiSummary[] }>()
@@ -83,25 +80,6 @@ async function provisionedEvents(spaceId: string) {
     .orderBy(outbox.id)
   return queued.map(row => row.event)
 }
-
-async function purgeJobOf(wikiId: string) {
-  const [job] = await db
-    .select()
-    .from(jobs)
-    .where(eq(jobs.key, `purge-wiki:${wikiId}`))
-  if (!job) throw new Error(`no purge job for wiki ${wikiId}`)
-  return job
-}
-
-// Anyone in the organization sees its wikis' rows, deleted or not, until
-// they are purged.
-const wikiRowsOf = (someone: TestUser, wikiId: string) =>
-  inTenant(db, someone, tx =>
-    tx
-      .select({ id: wikis.id, version: wikis.version })
-      .from(wikis)
-      .where(eq(wikis.id, wikiId))
-  )
 
 /** A space of the person's organization, with them as its admin. */
 async function aSpaceOf(admin: TestUser, editors: TestUser[] = []) {
@@ -301,9 +279,9 @@ describe('twake.space.deleted', () => {
 
     expect(await spaceWikis(admin)).toEqual([])
     expect((await api.as(admin).get(`/wikis/${wiki.id}`)).statusCode).toBe(404)
-    const [row] = await wikiRowsOf(admin, wiki.id)
+    const [row] = await wikiRowsOf(db, admin, wiki.id)
     expect(row?.version).toBeGreaterThan(before)
-    const job = await purgeJobOf(wiki.id)
+    const job = await purgeJobOf(db, wiki.id)
     const days = (job.runAt.getTime() - Date.now()) / 86_400_000
     expect(Math.round(days)).toBe(30)
   })
@@ -314,11 +292,11 @@ describe('twake.space.deleted', () => {
     const wiki = await spaceWikiOf(admin)
     await aPageIn(db, admin, wiki.id, { title: 'Runbook', position: 'a0' })
     await deliver('twake.space.deleted', space)
-    const job = await purgeJobOf(wiki.id)
+    const job = await purgeJobOf(db, wiki.id)
 
     await db.transaction(tx => purgeWiki(job.payload, tx))
 
-    expect(await wikiRowsOf(admin, wiki.id)).toEqual([])
+    expect(await wikiRowsOf(db, admin, wiki.id)).toEqual([])
   })
 
   it('deletes the wiki even when the deletion is older than the last event of the space', async () => {
@@ -667,7 +645,7 @@ describe('twake.space.sync.completed', () => {
     })
 
     expect(await spaceWikis(goneAdmin)).toEqual([])
-    await expect(purgeJobOf(gone.id)).resolves.toEqual(
+    await expect(purgeJobOf(db, gone.id)).resolves.toEqual(
       expect.objectContaining({ kind: 'purge-wiki' })
     )
     expect(await spaceWikis(listedAdmin)).toHaveLength(1)

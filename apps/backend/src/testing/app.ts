@@ -13,6 +13,7 @@ import type { Role } from '../modules/wikis/access.ts'
 import { WIKI_CHANNEL } from '../modules/wikis/live.ts'
 import { wikiMembers, wikis } from '../modules/wikis/schema.ts'
 import { addHomePage } from '../modules/wikis/store.ts'
+import { jobs } from '../scheduler/schema.ts'
 
 export interface TestUser {
   userId: string
@@ -130,6 +131,40 @@ export async function aPageIn(
     }
     return written.id
   })
+}
+
+/** A wiki as `GET /wikis` lists it. */
+export interface WikiSummary {
+  id: string
+  name: string
+  description: string
+  kind: 'personal' | 'shared' | 'space'
+  role: 'viewer' | 'editor' | 'admin'
+  homePageId: string
+  unread: number
+}
+
+/** The job planned to purge the deleted wiki. */
+export async function purgeJobOf(db: Db, wikiId: string) {
+  const [job] = await db
+    .select()
+    .from(jobs)
+    .where(eq(jobs.key, `purge-wiki:${wikiId}`))
+  if (!job) throw new Error(`no purge job for wiki ${wikiId}`)
+  return job
+}
+
+/**
+ * The wiki's row, deleted or not, until it is purged. The wikis policy shows
+ * it to anyone of its organization, and in B2C to its creator.
+ */
+export function wikiRowsOf(db: Db, someone: TestUser, wikiId: string) {
+  return inTenant(db, someone, tx =>
+    tx
+      .select({ id: wikis.id, version: wikis.version })
+      .from(wikis)
+      .where(eq(wikis.id, wikiId))
+  )
 }
 
 export async function startApp() {

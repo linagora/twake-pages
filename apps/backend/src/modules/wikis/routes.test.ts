@@ -1,18 +1,19 @@
-import { eq } from 'drizzle-orm'
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest'
 import { createDb, inTenant } from '../../infra/db.ts'
-import { jobs } from '../../scheduler/schema.ts'
 import {
   aB2cUser,
   aPageIn,
   aSpaceWiki,
   aUser,
   joinWiki,
+  purgeJobOf,
   startApp,
-  type TestUser
+  wikiRowsOf,
+  type TestUser,
+  type WikiSummary
 } from '../../testing/app.ts'
 import { notifications } from '../notifications/schema.ts'
-import { wikiInvites, wikis } from './schema.ts'
+import { wikiInvites } from './schema.ts'
 import { purgeWiki } from './store.ts'
 
 let api: Awaited<ReturnType<typeof startApp>>
@@ -28,16 +29,6 @@ afterAll(async () => {
   await api.close()
   await sql.end()
 })
-
-interface WikiSummary {
-  id: string
-  name: string
-  description: string
-  kind: 'personal' | 'shared' | 'space'
-  role: 'viewer' | 'editor' | 'admin'
-  homePageId: string
-  unread: number
-}
 
 interface Wiki extends WikiSummary {
   version: number
@@ -85,15 +76,6 @@ const notify = (
     })
   )
 
-const purgeJobOf = async (wikiId: string) => {
-  const [job] = await db
-    .select()
-    .from(jobs)
-    .where(eq(jobs.key, `purge-wiki:${wikiId}`))
-  if (!job) throw new Error(`no purge job for wiki ${wikiId}`)
-  return job
-}
-
 // No policy shows the pages of a wiki that is gone: this counts them with the
 // policies lifted, in a transaction that puts them back before it commits.
 const pagesLeftIn = (wikiId: string) =>
@@ -104,12 +86,6 @@ const pagesLeftIn = (wikiId: string) =>
     await tx`alter table pages force row level security`
     return left?.count
   })
-
-// Its creator always sees a wiki, deleted or not, until it is purged.
-const wikiRowsOf = (creator: TestUser, wikiId: string) =>
-  inTenant(db, creator, tx =>
-    tx.select({ id: wikis.id }).from(wikis).where(eq(wikis.id, wikiId))
-  )
 
 describe('GET /wikis', () => {
   it('counts the person’s unread notifications about each wiki', async () => {
@@ -408,7 +384,7 @@ describe('DELETE /wikis/:wikiId', () => {
     expect((await wikisOf(alice)).map(listed => listed.name)).toEqual([
       'Personal'
     ])
-    const job = await purgeJobOf(wiki.id)
+    const job = await purgeJobOf(db, wiki.id)
     const days = (job.runAt.getTime() - Date.now()) / 86_400_000
     expect(Math.round(days)).toBe(30)
   })
@@ -426,13 +402,13 @@ describe('DELETE /wikis/:wikiId', () => {
       parentId: plans
     })
     await api.as(alice).delete(`/wikis/${wiki.id}`)
-    const job = await purgeJobOf(wiki.id)
+    const job = await purgeJobOf(db, wiki.id)
     expect(await pagesLeftIn(wiki.id)).toBe(3)
 
     await db.transaction(tx => purgeWiki(job.payload, tx))
 
     expect(await pagesLeftIn(wiki.id)).toBe(0)
-    expect(await wikiRowsOf(alice, wiki.id)).toEqual([])
+    expect(await wikiRowsOf(db, alice, wiki.id)).toEqual([])
   })
 
   it.each([
