@@ -468,6 +468,12 @@ function signedIn(world: World, person: Person): FakePagesApi {
   const unreadNotifications = () =>
     myNotifications().filter(({ stored }) => stored.readAt === null)
 
+  const wikiRefOf = (wiki: StoredWiki) => ({
+    id: wiki.id,
+    name: wiki.name,
+    kind: wiki.kind
+  })
+
   const notificationFor = ({
     stored,
     page,
@@ -476,7 +482,7 @@ function signedIn(world: World, person: Person): FakePagesApi {
     id: stored.id,
     reason: stored.reason,
     page: { id: page.id, title: currentOf(page).title },
-    wiki: { id: wiki.id, name: wiki.name },
+    wiki: wikiRefOf(wiki),
     actor: stored.actor,
     version: stored.version,
     commentId: stored.commentId,
@@ -576,7 +582,7 @@ function signedIn(world: World, person: Person): FakePagesApi {
   }): PageRef => ({
     id: page.id,
     title: currentOf(page).title,
-    wiki: { id: wiki.id, name: wiki.name }
+    wiki: wikiRefOf(wiki)
   })
 
   const pageFor = (page: StoredPage): Page => {

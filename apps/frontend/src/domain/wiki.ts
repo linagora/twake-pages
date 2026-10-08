@@ -5,6 +5,13 @@ export type Role = (typeof ROLES)[number]
 
 export type WikiKind = 'personal' | 'shared' | 'space'
 
+/** The wiki a page or a notification belongs to. */
+export interface WikiRef {
+  id: string
+  name: string
+  kind: WikiKind
+}
+
 export interface WikiSummary {
   id: string
   name: string

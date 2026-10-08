@@ -1,4 +1,5 @@
 import type { Person } from '@/domain/person'
+import type { WikiRef } from '@/domain/wiki'
 
 export type PageKind = 'document' | 'database'
 
@@ -59,7 +60,7 @@ export interface Version extends VersionSummary {
 export interface PageRef {
   id: string
   title: string
-  wiki: { id: string; name: string }
+  wiki: WikiRef
 }
 
 /** The root of a deleted branch. */

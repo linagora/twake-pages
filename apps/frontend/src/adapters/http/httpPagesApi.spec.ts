@@ -156,7 +156,7 @@ const notification: Notification = {
   id: 'n1',
   reason: 'mentioned',
   page: { id: 'p1', title: 'Onboarding' },
-  wiki: { id: 'w1', name: 'Handbook' },
+  wiki: { id: 'w1', name: 'Handbook', kind: 'shared' },
   actor: alice,
   version: null,
   commentId: 'c1',
@@ -166,7 +166,7 @@ const notification: Notification = {
 const pageRef: PageRef = {
   id: 'p1',
   title: 'Onboarding',
-  wiki: { id: 'w1', name: 'Handbook' }
+  wiki: { id: 'w1', name: 'Handbook', kind: 'shared' }
 }
 const recentPage = { ...pageRef, visitedAt: '2026-10-08T07:55:00.000Z' }
 const searchResult: SearchResult = {

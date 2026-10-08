@@ -959,7 +959,7 @@ describe('fakePagesApi', () => {
           {
             reason: 'published',
             page: { id: page.id, title: 'Onboarding' },
-            wiki: { id: wiki.id, name: 'Handbook' },
+            wiki: { id: wiki.id, name: 'Handbook', kind: 'shared' },
             actor: { email: 'bob@example.com', name: 'Bob Stone' },
             version: 2,
             commentId: null,
@@ -1107,12 +1107,12 @@ describe('fakePagesApi', () => {
         {
           id: setup.id,
           title: 'Setup',
-          wiki: { id: wiki.id, name: 'Handbook' }
+          wiki: { id: wiki.id, name: 'Handbook', kind: 'shared' }
         },
         {
           id: onboarding.id,
           title: 'Onboarding',
-          wiki: { id: wiki.id, name: 'Handbook' }
+          wiki: { id: wiki.id, name: 'Handbook', kind: 'shared' }
         }
       ])
       await expect(
@@ -1138,12 +1138,12 @@ describe('fakePagesApi', () => {
         {
           id: onboarding.id,
           title: 'Onboarding',
-          wiki: { id: wiki.id, name: 'Handbook' }
+          wiki: { id: wiki.id, name: 'Handbook', kind: 'shared' }
         },
         {
           id: setup.id,
           title: 'Setup',
-          wiki: { id: wiki.id, name: 'Handbook' }
+          wiki: { id: wiki.id, name: 'Handbook', kind: 'shared' }
         }
       ])
       await expect(api.signedInAs('bob@example.com').recent()).resolves.toEqual(
@@ -1195,7 +1195,7 @@ describe('fakePagesApi', () => {
           page: {
             id: checklist.id,
             title: 'Release checklist',
-            wiki: { id: wiki.id, name: 'Handbook' }
+            wiki: { id: wiki.id, name: 'Handbook', kind: 'shared' }
           },
           updatedAt: checklist.updatedAt
         }

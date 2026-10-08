@@ -33,6 +33,8 @@ type Block = Record<string, unknown> // a BlockNote block, stored as sent
 
 interface Person { id: string; email: string; name: string | null }
 
+interface WikiRef { id: string; name: string; kind: WikiKind }
+
 interface WikiSummary {
   id: string
   name: string
@@ -107,7 +109,7 @@ interface Notification {
   id: string
   reason: NotificationReason
   page: { id: string; title: string }
-  wiki: { id: string; name: string }
+  wiki: WikiRef
   actor: Person
   version: number | null // for published
   commentId: string | null // for commented and mentioned
@@ -115,7 +117,7 @@ interface Notification {
   readAt: string | null
 }
 
-interface PageRef { id: string; title: string; wiki: { id: string; name: string } }
+interface PageRef { id: string; title: string; wiki: WikiRef }
 
 interface SearchResult {
   page: PageRef
