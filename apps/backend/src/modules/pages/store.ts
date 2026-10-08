@@ -1,8 +1,11 @@
-import { and, asc, eq, sql } from 'drizzle-orm'
+import { and, asc, eq, isNull, sql } from 'drizzle-orm'
 import { inTenant, type Db, type Tx } from '../../infra/db.ts'
+import { positionBetween } from '../../infra/order.ts'
+import { Refused, writeOrRefuse } from '../../infra/refusals.ts'
 import type { Identity } from '../auth/index.ts'
 import { pageFollowers } from '../notifications/schema.ts'
-import { roleOn } from '../wikis/access.ts'
+import { checkRole, roleOn } from '../wikis/access.ts'
+import { bumpWiki } from '../wikis/live.ts'
 import {
   labels,
   pageFavorites,
@@ -129,6 +132,91 @@ async function pageOf(
   }
 }
 
+// For a change the person just made, so the page is in their reach.
+async function changedPage(tx: Tx, identity: Identity, pageId: string) {
+  const row = await rowOf(tx, identity, pageId)
+  if (!row) throw new Error(`page ${pageId} is out of reach`)
+  return pageOf(tx, row)
+}
+
+// The home page is outside the tree, so it takes no child page.
+async function checkParent(tx: Tx, wikiId: string, parentId: string) {
+  const [parent] = await tx
+    .select({ id: pages.id })
+    .from(pages)
+    .where(
+      and(
+        eq(pages.id, parentId),
+        eq(pages.wikiId, wikiId),
+        eq(pages.home, false),
+        isNull(pages.deletedAt)
+      )
+    )
+  if (!parent) throw new Refused('invalid_parent')
+}
+
+/** Who writes a version: a person, or a space writing its wiki's home page. */
+export type Author = Pick<Identity, 'userId' | 'email' | 'name'>
+
+/**
+ * Writes a page of blocks in its wiki's tenant, with its version 1 by its
+ * author. The follower is the author, as the creator of any page follows it,
+ * unless told otherwise.
+ */
+export async function addPage(
+  tx: Tx,
+  author: Author,
+  page: {
+    wikiId: string
+    organizationId: string | null
+    title: string
+    home?: true
+    parentId?: string | null
+    position?: string
+  },
+  follower: string | null = author.userId
+) {
+  const [added] = await tx
+    .insert(pages)
+    .values({
+      ...page,
+      kind: 'document',
+      createdBy: author.userId,
+      updatedBy: author.userId
+    })
+    .returning({
+      id: pages.id,
+      wikiId: pages.wikiId,
+      organizationId: pages.organizationId,
+      title: pages.title
+    })
+  if (!added) throw new Error('page insert returned nothing')
+  await tx.insert(pageVersions).values({
+    pageId: added.id,
+    organizationId: added.organizationId,
+    number: 1,
+    title: added.title,
+    authorId: author.userId,
+    authorEmail: author.email,
+    authorName: author.name
+  })
+  if (follower !== null) {
+    await tx.insert(pageFollowers).values({
+      pageId: added.id,
+      organizationId: added.organizationId,
+      userId: follower
+    })
+  }
+  return added
+}
+
+export interface NewPage {
+  title: string
+  parentId: string | null
+  afterId?: string | undefined
+  beforeId?: string | undefined
+}
+
 export function createPageStore(db: Db) {
   return {
     /**
@@ -141,6 +229,43 @@ export function createPageStore(db: Db) {
         if (!row) return null
         await recordVisit(tx, identity.userId, row.page)
         return pageOf(tx, row)
+      })
+    },
+
+    /** A page of blocks, version 1 by its creator, who follows it. */
+    createPage(identity: Identity, wikiId: string, input: NewPage) {
+      return writeOrRefuse(db, identity, async tx => {
+        await checkRole(tx, identity, wikiId, 'editor')
+        const wiki = await bumpWiki(tx, wikiId)
+        if (input.parentId !== null) {
+          await checkParent(tx, wikiId, input.parentId)
+        }
+        const siblings = await tx
+          .select({
+            id: pages.id,
+            // A check gives every page but the home page a position.
+            position: sql<string>`${pages.position}`
+          })
+          .from(pages)
+          .where(
+            and(
+              eq(pages.wikiId, wikiId),
+              input.parentId === null
+                ? isNull(pages.parentId)
+                : eq(pages.parentId, input.parentId),
+              eq(pages.home, false),
+              isNull(pages.deletedAt)
+            )
+          )
+          .orderBy(asc(pages.position))
+        const page = await addPage(tx, identity, {
+          wikiId,
+          organizationId: wiki.organizationId,
+          title: input.title,
+          parentId: input.parentId,
+          position: positionBetween(siblings, input.afterId, input.beforeId)
+        })
+        return changedPage(tx, identity, page.id)
       })
     }
   }

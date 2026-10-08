@@ -12,7 +12,7 @@ A refusal answers `{ error: <Refusal> }` with its status:
 | `forbidden` | 403 | the person's role does not allow it |
 | `managed` | 409 | members or name of a space's wiki, or sharing a personal wiki |
 | `home_page` | 409 | moving or deleting the home page |
-| `invalid_parent` | 400 | the parent is not a live page of the same wiki, or is the page itself or one of its descendants |
+| `invalid_parent` | 400 | the parent is not a live page of the same wiki, is its home page, or is the page itself or one of its descendants |
 | `stale_neighbours` | 409 | `afterId` or `beforeId` is not a live sibling under the given parent |
 | `edit_conflict` | 409 | publishing from a version older than the current one (body below) |
 | `invalid_content` | 400 | blocks too large (over 2 MiB of JSON), a link that is not `http:`, `https:` or `mailto:`, or a Grist address outside `GRIST_ORIGINS` |

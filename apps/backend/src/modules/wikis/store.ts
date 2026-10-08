@@ -4,8 +4,9 @@ import { asTenant, inTenant, type Db, type Tx } from '../../infra/db.ts'
 import { Refused, writeOrRefuse, type Result } from '../../infra/refusals.ts'
 import { schedule, type Handler } from '../../scheduler/scheduler.ts'
 import type { Identity } from '../auth/index.ts'
-import { notifications, pageFollowers } from '../notifications/schema.ts'
-import { pages, pageVersions } from '../pages/schema.ts'
+import { notifications } from '../notifications/schema.ts'
+import { pages } from '../pages/schema.ts'
+import { addPage, type Author } from '../pages/store.ts'
 import { accessibleWikis, checkRole, type Role } from './access.ts'
 import { bumpWiki } from './live.ts'
 import { wikiMembers, wikis } from './schema.ts'
@@ -85,8 +86,6 @@ export async function putOutOfReach(tx: Tx, wikiId: string) {
   return bumped
 }
 
-type Author = Pick<Identity, 'userId' | 'email' | 'name'>
-
 /**
  * The follower is the author, as the creator of any page follows it, unless
  * the author is no person: a space that writes its own wiki's home page.
@@ -97,34 +96,17 @@ export async function addHomePage(
   wiki: { id: string; organizationId: string | null; name: string },
   follower: string | null = author.userId
 ): Promise<void> {
-  const [home] = await tx
-    .insert(pages)
-    .values({
+  await addPage(
+    tx,
+    author,
+    {
       wikiId: wiki.id,
       organizationId: wiki.organizationId,
-      home: true,
-      kind: 'document',
       title: wiki.name,
-      createdBy: author.userId,
-      updatedBy: author.userId
-    })
-    .returning({ id: pages.id })
-  if (!home) throw new Error('no home page')
-  await tx.insert(pageVersions).values({
-    pageId: home.id,
-    organizationId: wiki.organizationId,
-    number: 1,
-    title: wiki.name,
-    authorId: author.userId,
-    authorEmail: author.email,
-    authorName: author.name
-  })
-  if (follower === null) return
-  await tx.insert(pageFollowers).values({
-    pageId: home.id,
-    organizationId: wiki.organizationId,
-    userId: follower
-  })
+      home: true
+    },
+    follower
+  )
 }
 
 async function ensurePersonalWiki(tx: Tx, identity: Identity) {

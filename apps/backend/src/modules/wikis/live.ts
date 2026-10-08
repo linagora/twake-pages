@@ -21,7 +21,7 @@ export async function bumpWiki(tx: Tx, wikiId: string) {
     .update(wikis)
     .set({ version: sql`${wikis.version} + 1` })
     .where(and(eq(wikis.id, wikiId), isNull(wikis.deletedAt)))
-    .returning({ kind: wikis.kind })
+    .returning({ kind: wikis.kind, organizationId: wikis.organizationId })
   if (!wiki) throw new Refused('not_found')
   return wiki
 }

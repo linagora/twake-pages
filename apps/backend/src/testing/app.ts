@@ -301,3 +301,25 @@ export async function aWikiOf(
   const response = await app.as(admin).post('/wikis', { name })
   return response.json<Wiki>()
 }
+
+/** What `createPage` sends, at the top of the tree unless it names a parent. */
+export interface PageToCreate {
+  title: string
+  parentId?: string | null
+  afterId?: string
+  beforeId?: string
+}
+
+/** `POST /wikis/:wikiId/pages` by the person, for a page of blocks. */
+export function createPage(
+  app: Awaited<ReturnType<typeof startApp>>,
+  user: TestUser,
+  wikiId: string,
+  page: PageToCreate
+) {
+  return app.as(user).post(`/wikis/${wikiId}/pages`, {
+    kind: 'document',
+    parentId: null,
+    ...page
+  })
+}

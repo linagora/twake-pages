@@ -9,9 +9,11 @@ import {
   aPageIn,
   aUser,
   aWikiOf,
+  createPage,
   joinWiki,
   removeFromWiki,
   startApp,
+  versionOf,
   type TestUser
 } from '../../testing/app.ts'
 import { pageFollowers } from '../notifications/schema.ts'
@@ -43,6 +45,7 @@ interface Person {
 
 interface Page {
   id: string
+  parentId: string | null
   version: number
   createdBy: Person
   updatedBy: Person
@@ -409,5 +412,319 @@ describe('GET /pages/:pageId', () => {
       count: visits.length,
       left: visits.includes(left.homePageId)
     }).toEqual({ count: 100, left: false })
+  })
+})
+
+describe('POST /wikis/:wikiId/pages', () => {
+  /** The titles of the parent's children, in their order in the tree. */
+  const titlesUnder = async (
+    user: TestUser,
+    wikiId: string,
+    parentId: string | null
+  ) => {
+    const tree = (await api.as(user).get(`/wikis/${wikiId}/tree`)).json<{
+      pages: { parentId: string | null; title: string }[]
+    }>()
+    return tree.pages
+      .filter(page => page.parentId === parentId)
+      .map(page => page.title)
+  }
+
+  it.each([
+    ['in an organization', () => aUser({ name: 'Alice Martin' })],
+    ['in B2C', aB2cUser]
+  ])(
+    'creates a page by its creator, who follows it, %s',
+    async (_case, someone) => {
+      const alice = someone()
+      const wiki = await aWikiOf(api, alice)
+
+      const response = await createPage(api, alice, wiki.id, {
+        title: ' Onboarding '
+      })
+
+      expect(response.statusCode).toBe(201)
+      expect(response.json()).toEqual({
+        id: expect.any(String) as string,
+        wikiId: wiki.id,
+        parentId: null,
+        home: false,
+        kind: 'document',
+        title: 'Onboarding',
+        content: [],
+        gristUrl: null,
+        version: 1,
+        createdAt: expect.any(String) as string,
+        createdBy: personOf(alice),
+        updatedAt: expect.any(String) as string,
+        updatedBy: personOf(alice),
+        labels: [],
+        ancestors: [],
+        following: true,
+        favorite: false,
+        deletedAt: null
+      })
+    }
+  )
+
+  it('moves the wiki’s version, so every open tree shows the page', async () => {
+    const alice = aUser()
+    const wiki = await aWikiOf(api, alice)
+    const before = await versionOf(api, alice, wiki.id)
+
+    await createPage(api, alice, wiki.id, { title: 'Onboarding' })
+
+    expect(await versionOf(api, alice, wiki.id)).toBeGreaterThan(before)
+  })
+
+  type Neighbours = (siblings: { plans: string; goals: string }) => {
+    afterId?: string
+    beforeId?: string
+  }
+
+  it.each<[string, Neighbours, string[]]>([
+    ['last by default', () => ({}), ['Plans', 'Goals', 'Onboarding']],
+    [
+      'right after a sibling',
+      ({ plans }) => ({ afterId: plans }),
+      ['Plans', 'Onboarding', 'Goals']
+    ],
+    [
+      'right before a sibling',
+      ({ plans }) => ({ beforeId: plans }),
+      ['Onboarding', 'Plans', 'Goals']
+    ],
+    [
+      'between two siblings',
+      ({ plans, goals }) => ({ afterId: plans, beforeId: goals }),
+      ['Plans', 'Onboarding', 'Goals']
+    ]
+  ])('places a page %s', async (_case, neighbours, titles) => {
+    const alice = aUser()
+    const wiki = await aWikiOf(api, alice)
+    const plans = await createPage(api, alice, wiki.id, { title: 'Plans' })
+    const goals = await createPage(api, alice, wiki.id, { title: 'Goals' })
+
+    await createPage(api, alice, wiki.id, {
+      title: 'Onboarding',
+      ...neighbours({
+        plans: plans.json<Page>().id,
+        goals: goals.json<Page>().id
+      })
+    })
+
+    expect(await titlesUnder(alice, wiki.id, null)).toEqual(titles)
+  })
+
+  it('places a child page under its parent, last among its children', async () => {
+    const alice = aUser()
+    const wiki = await aWikiOf(api, alice)
+    const onboarding = (
+      await createPage(api, alice, wiki.id, { title: 'Onboarding' })
+    ).json<Page>()
+    await createPage(api, alice, wiki.id, {
+      title: 'Accounts',
+      parentId: onboarding.id
+    })
+
+    const response = await createPage(api, alice, wiki.id, {
+      title: 'Laptop setup',
+      parentId: onboarding.id
+    })
+
+    const child = response.json<Page>()
+    expect({ parentId: child.parentId, ancestors: child.ancestors }).toEqual({
+      parentId: onboarding.id,
+      ancestors: [{ id: onboarding.id, title: 'Onboarding' }]
+    })
+    expect(await titlesUnder(alice, wiki.id, onboarding.id)).toEqual([
+      'Accounts',
+      'Laptop setup'
+    ])
+    expect(await titlesUnder(alice, wiki.id, null)).toEqual(['Onboarding'])
+  })
+
+  type ParentOf = (
+    alice: TestUser,
+    wiki: { id: string; homePageId: string }
+  ) => Promise<string>
+
+  it.each<[string, ParentOf]>([
+    [
+      'a page of another wiki',
+      async alice => {
+        const other = await aWikiOf(api, alice, 'Other')
+        const page = await createPage(api, alice, other.id, {
+          title: 'Elsewhere'
+        })
+        return page.json<Page>().id
+      }
+    ],
+    [
+      'a page in the trash',
+      (alice, wiki) =>
+        aPageIn(db, alice, wiki.id, {
+          title: 'Drafts',
+          position: 'a0',
+          deleted: true
+        })
+    ],
+    [
+      'the home page, which is outside the tree',
+      (_alice, wiki) => Promise.resolve(wiki.homePageId)
+    ],
+    ['an unknown page', () => Promise.resolve(randomUUID())]
+  ])('answers invalid_parent for %s', async (_case, parentOf) => {
+    const alice = aUser()
+    const wiki = await aWikiOf(api, alice)
+    const parentId = await parentOf(alice, wiki)
+    const before = await versionOf(api, alice, wiki.id)
+
+    const response = await createPage(api, alice, wiki.id, {
+      title: 'Laptop setup',
+      parentId
+    })
+
+    expect(response.statusCode).toBe(400)
+    expect(response.json()).toEqual({ error: 'invalid_parent' })
+    expect(await versionOf(api, alice, wiki.id)).toBe(before)
+  })
+
+  type StaleNeighbours = (pages: {
+    plans: string
+    goals: string
+    child: string
+    drafts: string
+  }) => { afterId?: string; beforeId?: string }
+
+  it.each<[string, StaleNeighbours]>([
+    ['a page under another parent', ({ child }) => ({ afterId: child })],
+    ['a page in the trash', ({ drafts }) => ({ beforeId: drafts })],
+    [
+      'two siblings that are not next to each other',
+      ({ plans, goals }) => ({ afterId: goals, beforeId: plans })
+    ],
+    ['an unknown page', () => ({ afterId: randomUUID() })]
+  ])('answers stale_neighbours for %s', async (_case, neighbours) => {
+    const alice = aUser()
+    const wiki = await aWikiOf(api, alice)
+    const drafts = await aPageIn(db, alice, wiki.id, {
+      title: 'Drafts',
+      position: 'a0',
+      deleted: true
+    })
+    const plans = (
+      await createPage(api, alice, wiki.id, { title: 'Plans' })
+    ).json<Page>()
+    const goals = (
+      await createPage(api, alice, wiki.id, { title: 'Goals' })
+    ).json<Page>()
+    const child = await createPage(api, alice, wiki.id, {
+      title: 'Q1',
+      parentId: plans.id
+    })
+    const before = await versionOf(api, alice, wiki.id)
+
+    const response = await createPage(api, alice, wiki.id, {
+      title: 'Onboarding',
+      ...neighbours({
+        plans: plans.id,
+        goals: goals.id,
+        child: child.json<Page>().id,
+        drafts
+      })
+    })
+
+    expect(response.statusCode).toBe(409)
+    expect(response.json()).toEqual({ error: 'stale_neighbours' })
+    expect(await versionOf(api, alice, wiki.id)).toBe(before)
+  })
+
+  it('lets an editor of the wiki create a page', async () => {
+    const alice = aUser()
+    const bob = aUser({ organizationId: alice.organizationId })
+    const wiki = await aWikiOf(api, alice)
+    await joinWiki(db, alice, wiki.id, bob, 'editor')
+
+    const response = await createPage(api, bob, wiki.id, {
+      title: 'Onboarding'
+    })
+
+    expect(response.statusCode).toBe(201)
+    expect(response.json<Page>().createdBy).toEqual(personOf(bob))
+  })
+
+  it('answers forbidden to a viewer of the wiki', async () => {
+    const alice = aUser()
+    const bob = aUser({ organizationId: alice.organizationId })
+    const wiki = await aWikiOf(api, alice)
+    await joinWiki(db, alice, wiki.id, bob, 'viewer')
+
+    const response = await createPage(api, bob, wiki.id, {
+      title: 'Onboarding'
+    })
+
+    expect(response.statusCode).toBe(403)
+    expect(response.json()).toEqual({ error: 'forbidden' })
+  })
+
+  it('answers not_found to someone who is no member', async () => {
+    const alice = aUser()
+    const outsider = aUser({ organizationId: alice.organizationId })
+    const wiki = await aWikiOf(api, alice)
+
+    const response = await createPage(api, outsider, wiki.id, {
+      title: 'Onboarding'
+    })
+
+    expect(response.statusCode).toBe(404)
+    expect(response.json()).toEqual({ error: 'not_found' })
+  })
+
+  it('answers not_found once the wiki is deleted', async () => {
+    const alice = aUser()
+    const wiki = await aWikiOf(api, alice)
+    await api.as(alice).delete(`/wikis/${wiki.id}`)
+
+    const response = await createPage(api, alice, wiki.id, {
+      title: 'Onboarding'
+    })
+
+    expect(response.statusCode).toBe(404)
+    expect(response.json()).toEqual({ error: 'not_found' })
+  })
+
+  it.each([
+    ['a malformed id', 'not-an-id'],
+    ['an unknown id', randomUUID()]
+  ])('answers not_found for a wiki with %s', async (_case, wikiId) => {
+    const response = await createPage(api, aUser(), wikiId, {
+      title: 'Onboarding'
+    })
+
+    expect(response.statusCode).toBe(404)
+    expect(response.json()).toEqual({ error: 'not_found' })
+  })
+
+  it.each([
+    ['no title', { kind: 'document', parentId: null }],
+    ['a blank title', { title: ' ', kind: 'document', parentId: null }],
+    [
+      'a title over 200 characters',
+      { title: 'a'.repeat(201), kind: 'document', parentId: null }
+    ],
+    ['no parent', { title: 'Onboarding', kind: 'document' }],
+    [
+      'a malformed neighbour',
+      { title: 'Onboarding', kind: 'document', parentId: null, afterId: 'a0' }
+    ]
+  ])('answers invalid_request for %s', async (_case, body) => {
+    const alice = aUser()
+    const wiki = await aWikiOf(api, alice)
+
+    const response = await api.as(alice).post(`/wikis/${wiki.id}/pages`, body)
+
+    expect(response.statusCode).toBe(400)
+    expect(response.json()).toEqual({ error: 'invalid_request' })
   })
 })
