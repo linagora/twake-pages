@@ -1,4 +1,4 @@
-import { and, asc, eq, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, notInArray, sql } from 'drizzle-orm'
 import { inTenant, type Db, type Tx } from '../../infra/db.ts'
 import type { Identity } from '../auth/index.ts'
 import { pageFollowers } from '../notifications/schema.ts'
@@ -8,8 +8,12 @@ import {
   pageFavorites,
   pageLabels,
   pages,
-  pageVersions
+  pageVersions,
+  pageVisits
 } from './schema.ts'
+
+// Recent shows only the last pages a person opened, so older visits go.
+const KEPT_VISITS = 100
 
 // Versions keep their author's email and name, which stay when the author
 // leaves the wiki.
@@ -54,9 +58,37 @@ async function ancestorsOf(tx: Tx, parentId: string | null) {
   return line.map(({ id, title }) => ({ id, title }))
 }
 
+async function recordVisit(
+  tx: Tx,
+  userId: string,
+  page: { id: string; organizationId: string | null }
+) {
+  await tx
+    .insert(pageVisits)
+    .values({ pageId: page.id, organizationId: page.organizationId, userId })
+    .onConflictDoUpdate({
+      target: [pageVisits.userId, pageVisits.pageId],
+      set: { visitedAt: sql`now()` }
+    })
+  const kept = tx
+    .select({ pageId: pageVisits.pageId })
+    .from(pageVisits)
+    .where(eq(pageVisits.userId, userId))
+    .orderBy(desc(pageVisits.visitedAt))
+    .limit(KEPT_VISITS)
+  await tx
+    .delete(pageVisits)
+    .where(
+      and(eq(pageVisits.userId, userId), notInArray(pageVisits.pageId, kept))
+    )
+}
+
 export function createPageStore(db: Db) {
   return {
-    /** A page of a wiki the person is a member of, in the trash or not. */
+    /**
+     * A page of a wiki the person is a member of, in the trash or not. Each
+     * answer is a visit, for Recent.
+     */
     page(identity: Identity, pageId: string) {
       return inTenant(db, identity, async tx => {
         const [row] = await tx
@@ -83,6 +115,7 @@ export function createPageStore(db: Db) {
           .where(eq(pages.id, pageId))
         if (!row || !(await roleOn(tx, identity, row.page.wikiId))) return null
         const { page } = row
+        await recordVisit(tx, identity.userId, page)
         return {
           id: page.id,
           wikiId: page.wikiId,

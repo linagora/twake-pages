@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
-import { eq } from 'drizzle-orm'
+import { desc, eq } from 'drizzle-orm'
+import { generateNKeysBetween } from 'fractional-indexing'
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest'
 import { createDb, inTenant } from '../../infra/db.ts'
 import {
@@ -17,7 +18,8 @@ import {
   pageFavorites,
   pageLabels,
   pages,
-  pageVersions
+  pageVersions,
+  pageVisits
 } from './schema.ts'
 
 let api: Awaited<ReturnType<typeof startApp>>
@@ -128,6 +130,41 @@ const keepAsFavorite = (user: TestUser, pageId: string) =>
       userId: user.userId
     })
   )
+
+// Nor is Recent, so visits are read from their table, the last one first.
+const visitsOf = async (user: TestUser) => {
+  const visits = await inTenant(db, user, tx =>
+    tx
+      .select({ pageId: pageVisits.pageId })
+      .from(pageVisits)
+      .where(eq(pageVisits.userId, user.userId))
+      .orderBy(desc(pageVisits.visitedAt))
+  )
+  return visits.map(visit => visit.pageId)
+}
+
+/** Pages of the wiki the person visited one after the other, long ago. */
+const visitedLongAgo = async (
+  user: TestUser,
+  wikiId: string,
+  count: number
+) => {
+  const visited: string[] = []
+  for (const position of generateNKeysBetween(null, null, count)) {
+    visited.push(await aPageIn(db, user, wikiId, { title: position, position }))
+  }
+  await inTenant(db, user, tx =>
+    tx.insert(pageVisits).values(
+      visited.map((pageId, minutes) => ({
+        pageId,
+        organizationId: user.organizationId,
+        userId: user.userId,
+        visitedAt: new Date(2026, 0, 1, 0, minutes)
+      }))
+    )
+  )
+  return visited
+}
 
 describe('GET /pages/:pageId', () => {
   it('answers the home page of a new wiki to its admin', async () => {
@@ -314,5 +351,35 @@ describe('GET /pages/:pageId', () => {
 
     expect(response.statusCode).toBe(404)
     expect(response.json()).toEqual({ error: 'not_found' })
+  })
+
+  it('records each visit for Recent, the last one first', async () => {
+    const alice = aUser()
+    const wiki = await aWikiOf(api, alice)
+    const plans = await aPageIn(db, alice, wiki.id, {
+      title: 'Plans',
+      position: 'a0'
+    })
+
+    await pageOf(alice, wiki.homePageId)
+    await pageOf(alice, plans)
+    await pageOf(alice, wiki.homePageId)
+
+    expect(await visitsOf(alice)).toEqual([wiki.homePageId, plans])
+  })
+
+  it('keeps the person’s 100 most recent visits', async () => {
+    const alice = aUser()
+    const wiki = await aWikiOf(api, alice)
+    const visited = await visitedLongAgo(alice, wiki.id, 100)
+
+    await pageOf(alice, wiki.homePageId)
+
+    const visits = await visitsOf(alice)
+    expect({
+      count: visits.length,
+      last: visits[0],
+      oldest: visits.at(-1)
+    }).toEqual({ count: 100, last: wiki.homePageId, oldest: visited[1] })
   })
 })
