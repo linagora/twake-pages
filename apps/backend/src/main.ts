@@ -15,6 +15,7 @@ import { connectIdentityProvider } from './modules/auth/index.ts'
 import { settingsRoutes } from './modules/settings/events.ts'
 import { SETTINGS_CHANNEL } from './modules/settings/routes.ts'
 import { knowsAnySpace, spaceRoutes } from './modules/spaces/events.ts'
+import { accountRoutes } from './modules/wikis/accounts.ts'
 import { WIKI_CHANNEL } from './modules/wikis/live.ts'
 import { PURGE_WIKI_JOB, purgeWiki } from './modules/wikis/store.ts'
 import { createScheduler } from './scheduler/scheduler.ts'
@@ -67,7 +68,11 @@ const consumer = await startConsumer(
   // The queue stays bound to space events either way, since its first binding
   // fixes its dead letter key; without the integration they find no route.
   createMessageHandler({
-    routes: new Map([...(spaces ? spaceRoutes() : []), ...settingsRoutes]),
+    routes: new Map([
+      ...(spaces ? spaceRoutes() : []),
+      ...accountRoutes,
+      ...settingsRoutes
+    ]),
     dedupe: postgresDeduplicator(db, 'twake-pages'),
     logger
   })
