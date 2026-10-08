@@ -14,13 +14,16 @@ export interface TreeEntry<Entry> {
 }
 
 /**
- * What the element drawing an entry takes, to be one item of the tree. Its
- * level and place are given, not owned: `aria-owns` would add the names of the
- * entries under it to its own.
+ * What the element drawing an entry takes, to be one item of the tree. It
+ * owns the group of the entries under it, so its label, its `children`, names
+ * it: the titles in that group stay out of its name. Its level and place are
+ * given, not left to be counted through `aria-owns`.
  */
 export interface TreeItemProps {
   id: string
   role: 'treeitem'
+  'aria-labelledby': string
+  'aria-owns'?: string
   'aria-level': number
   'aria-setsize': number
   'aria-posinset': number
@@ -29,6 +32,7 @@ export interface TreeItemProps {
   tabIndex: number
   onFocus: () => void
   onKeyDown: (event: KeyboardEvent<HTMLElement>) => void
+  children: ReactElement
 }
 
 interface Shown<Entry> {
@@ -40,8 +44,9 @@ const LIST = { m: 0, p: 0, listStyle: 'none' } as const
 
 /**
  * The navigation tree of the ARIA Authoring Practices: `item` draws each entry
- * as a link, and the entries under it show once it is expanded. The tree is
- * one stop of the tab order, and the arrows move through the entries shown.
+ * as a link around its `label`, and the entries under it show once it is
+ * expanded. The tree is one stop of the tab order, and the arrows move through
+ * the entries shown.
  */
 export function Tree<Entry extends TreeEntry<Entry>>({
   labelledBy,
@@ -49,6 +54,7 @@ export function Tree<Entry extends TreeEntry<Entry>>({
   current,
   expanded,
   onExpand,
+  label,
   item
 }: {
   labelledBy: string
@@ -56,10 +62,13 @@ export function Tree<Entry extends TreeEntry<Entry>>({
   current: string | null
   expanded: ReadonlySet<string>
   onExpand: (id: string, expanded: boolean) => void
+  label: (entry: Entry) => string
   item: (entry: Entry, props: TreeItemProps) => ReactElement
 }): ReactElement {
   const base = useId()
   const itemId = (id: string) => `${base}item-${id}`
+  const labelId = (id: string) => `${base}label-${id}`
+  const groupId = (id: string) => `${base}group-${id}`
   const [focused, setFocused] = useState<string | null>(null)
 
   const shown = shownOf(entries, expanded)
@@ -130,6 +139,8 @@ export function Tree<Entry extends TreeEntry<Entry>>({
             {item(entry, {
               id: itemId(entry.id),
               role: 'treeitem',
+              'aria-labelledby': labelId(entry.id),
+              ...(open && { 'aria-owns': groupId(entry.id) }),
               'aria-level': level,
               'aria-setsize': siblings.length,
               'aria-posinset': index + 1,
@@ -141,14 +152,16 @@ export function Tree<Entry extends TreeEntry<Entry>>({
               },
               onKeyDown: event => {
                 onKeyDown(entry, open, event)
-              }
+              },
+              children: <span id={labelId(entry.id)}>{label(entry)}</span>
             })}
           </Row>
           {open && (
             <Box
               component="ul"
+              id={groupId(entry.id)}
               role="group"
-              aria-labelledby={itemId(entry.id)}
+              aria-labelledby={labelId(entry.id)}
               sx={LIST}
             >
               {branch(entry.children, level + 1)}

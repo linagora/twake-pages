@@ -56,10 +56,9 @@ export function PageTree({ wikiId }: { wikiId: string }): ReactElement {
               return next
             })
           }}
+          label={page => page.title}
           item={(page, props) => (
-            <RouterLink {...props} to={`pages/${page.id}`}>
-              {page.title}
-            </RouterLink>
+            <RouterLink {...props} to={`pages/${page.id}`} />
           )}
         />
       )}

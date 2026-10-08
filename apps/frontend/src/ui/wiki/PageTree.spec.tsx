@@ -72,6 +72,36 @@ describe('the tree of a wiki', () => {
     ).not.toBeInTheDocument()
   })
 
+  // Named from its content, an item would take in the titles of the group it
+  // owns, as the web platform tests have it, though jsdom leaves them out.
+  it('has each page own the group of its child pages, named by its title alone', async () => {
+    const { pagesApi, wiki } = handbook()
+    renderRoute(`/wikis/${wiki.id}`, { pagesApi })
+    await screen.findByRole('tree', { name: 'Pages' })
+
+    fireEvent.click(chevronOf(item('Onboarding')))
+
+    const onboarding = item('Onboarding')
+    const label = onboarding.getAttribute('aria-labelledby') ?? ''
+    const group = screen.getByRole('group', { name: 'Onboarding' })
+    expect({
+      owns: onboarding.getAttribute('aria-owns'),
+      label: document.getElementById(label)?.textContent
+    }).toEqual({ owns: group.id, label: 'Onboarding' })
+    expect(
+      within(group)
+        .getAllByRole('treeitem')
+        .map(child => [
+          child.getAttribute('aria-level'),
+          child.getAttribute('aria-posinset'),
+          child.getAttribute('aria-setsize')
+        ])
+    ).toEqual([
+      ['2', '1', '2'],
+      ['2', '2', '2']
+    ])
+  })
+
   it('expands the path to the open page', async () => {
     const { pagesApi, wiki, checklist } = handbook()
     renderRoute(`/wikis/${wiki.id}/pages/${checklist.id}`, { pagesApi })
