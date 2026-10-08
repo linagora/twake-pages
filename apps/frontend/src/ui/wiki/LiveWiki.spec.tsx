@@ -47,6 +47,30 @@ function streamDown(pagesApi: FakePagesApi) {
   }
 }
 
+/** Holds the next reads of the wiki and of its tree until the test lets them go. */
+function holdWikiReads(pagesApi: FakePagesApi) {
+  const getWiki = pagesApi.getWiki.getMockImplementation()
+  const getTree = pagesApi.getTree.getMockImplementation()
+  if (!getWiki || !getTree) throw new Error('No reads to hold')
+  let release: () => void = () => undefined
+  const held = new Promise<void>(resolve => {
+    release = resolve
+  })
+  pagesApi.getWiki.mockImplementationOnce(async wikiId => {
+    await held
+    return getWiki(wikiId)
+  })
+  pagesApi.getTree.mockImplementationOnce(async wikiId => {
+    await held
+    return getTree(wikiId)
+  })
+  return {
+    release: () => {
+      release()
+    }
+  }
+}
+
 describe('a wiki open in two places', () => {
   it('shows the new version of the open page, published elsewhere', async () => {
     const { pagesApi, bob, wiki, onboarding } = sharedHandbook()
@@ -140,6 +164,38 @@ describe('a wiki open in two places', () => {
 
     expect(
       await screen.findByRole('treeitem', { name: 'Offboarding' })
+    ).toBeVisible()
+  })
+
+  // The page carries no version: read before a change that the wiki and the
+  // tree, read after it, show, it is behind them.
+  it('reloads the open page changed again while the wiki and the tree were read', async () => {
+    const { pagesApi, bob, wiki, onboarding } = sharedHandbook()
+    const stream = streamDown(pagesApi)
+    renderRoute(`/wikis/${wiki.id}/pages/${onboarding.id}`, { pagesApi })
+    await screen.findByRole('heading', { level: 1, name: 'Onboarding' })
+    const reads = holdWikiReads(pagesApi)
+
+    await bob.publish(onboarding.id, {
+      baseVersion: 1,
+      title: 'Welcome',
+      content: []
+    })
+    stream.reconnect((await bob.getWiki(wiki.id)).version)
+    await screen.findByRole('heading', { level: 1, name: 'Welcome' })
+    await bob.publish(onboarding.id, {
+      baseVersion: 2,
+      title: 'Hello',
+      content: []
+    })
+    await act(async () => {
+      reads.release()
+      await screen.findByRole('treeitem', { name: 'Hello' })
+    })
+    stream.reconnect((await bob.getWiki(wiki.id)).version)
+
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Hello' })
     ).toBeVisible()
   })
 

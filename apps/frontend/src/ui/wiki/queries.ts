@@ -17,6 +17,17 @@ export const wikisKey = ['wikis']
 // What is shown of a wiki sits below its key, to reload it all at once.
 const wikiKey = (wikiId: string) => ['wikis', wikiId] as const
 const treeKey = (wikiId: string) => [...wikiKey(wikiId), 'tree'] as const
+const pagesKey = (wikiId: string) => [...wikiKey(wikiId), 'pages'] as const
+
+/**
+ * A page carries no version of its wiki, so it keeps the one known as its
+ * read began: never newer than the page, so a change the read missed still
+ * reloads it.
+ */
+interface ReadPage {
+  page: Page
+  version: number | undefined
+}
 
 export function useWikis(): UseQueryResult<WikiSummary[]> {
   const api = usePagesApi()
@@ -90,11 +101,17 @@ export function useLiveWiki(wikiId: string, watching: boolean): void {
   useEffect(() => {
     if (!watching) return
     return api.watchWiki(wikiId, version => {
-      // The wiki and its tree are read apart, each at its own version: the
-      // older one tells what may be missing.
+      // The wiki, its tree and its open pages are read apart, each at its own
+      // version: the oldest tells what may be missing.
       const shown = [
         queryClient.getQueryData<Wiki>(wikiKey(wikiId))?.version,
-        queryClient.getQueryData<Tree>(treeKey(wikiId))?.version
+        queryClient.getQueryData<Tree>(treeKey(wikiId))?.version,
+        ...queryClient
+          .getQueriesData<ReadPage>({
+            queryKey: pagesKey(wikiId),
+            type: 'active'
+          })
+          .map(([, read]) => read?.version)
       ].filter(read => read !== undefined)
       if (shown.length > 0 && version > Math.min(...shown)) {
         void queryClient.invalidateQueries({ queryKey: wikiKey(wikiId) })
@@ -114,8 +131,13 @@ export function useTree(wikiId: string): UseQueryResult<Tree> {
 /** A page as shown below a wiki, which may not be its own. */
 export function usePage(wikiId: string, pageId: string): UseQueryResult<Page> {
   const api = usePagesApi()
+  const queryClient = useQueryClient()
   return useQuery({
-    queryKey: [...wikiKey(wikiId), 'pages', pageId],
-    queryFn: () => api.getPage(pageId)
+    queryKey: [...pagesKey(wikiId), pageId],
+    queryFn: async (): Promise<ReadPage> => {
+      const version = queryClient.getQueryData<Wiki>(wikiKey(wikiId))?.version
+      return { page: await api.getPage(pageId), version }
+    },
+    select: read => read.page
   })
 }
