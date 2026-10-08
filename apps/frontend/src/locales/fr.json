@@ -104,6 +104,11 @@
     "create": "Créer",
     "failed": "La page n'a pas pu être créée."
   },
+  "movePage": {
+    "failed": "La page n'a pas pu être déplacée.",
+    "under": "Page %{title} déplacée sous %{parent}, position %{position} sur %{count}.",
+    "toTop": "Page %{title} déplacée en haut de l'arborescence, position %{position} sur %{count}."
+  },
   "templates": {
     "blank": {
       "name": "Page vierge"

@@ -9,6 +9,7 @@ import type { TreePage } from '@/domain/page'
 import { ancestorsOf, buildTree } from '@/domain/tree'
 import { useI18n } from '@/ui/i18n/useI18n'
 import { NewPageDialog } from '@/ui/page/NewPageDialog'
+import { MoveStatus, useMoveTo } from '@/ui/page/useMoveTo'
 import { useTree, useWiki } from '@/ui/wiki/queries'
 
 export function PageTree({ wikiId }: { wikiId: string }): ReactElement {
@@ -18,11 +19,13 @@ export function PageTree({ wikiId }: { wikiId: string }): ReactElement {
   const { pageId = null } = useParams()
   const wiki = useWiki(wikiId)
   const tree = useTree(wikiId)
+  const { move, moveTo } = useMoveTo(wikiId)
   const pages = tree.data?.pages ?? []
   const path =
     pageId === null ? [] : ancestorsOf(pages, pageId).map(page => page.id)
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set())
   const [parent, setParent] = useState<TreePage | null>(null)
+  const [said, setSaid] = useState('')
   const editable = wiki.data !== undefined && wiki.data.role !== 'viewer'
 
   // The pages above the open one expand each time it changes place: when
@@ -75,8 +78,23 @@ export function PageTree({ wikiId }: { wikiId: string }): ReactElement {
                 }
               : undefined
           }
+          onMove={
+            editable
+              ? async (page, to) => {
+                  const { shown, said } = await moveTo(page, to)
+                  setSaid(said)
+                  return shown
+                }
+              : undefined
+          }
         />
       )}
+      {move.isError && (
+        <Typography role="alert" className="u-ph-1">
+          {t('movePage.failed')}
+        </Typography>
+      )}
+      <MoveStatus said={said} />
       {parent && (
         <NewPageDialog
           wikiId={wikiId}

@@ -9,6 +9,7 @@ import {
 import { useEffect } from 'react'
 
 import type {
+  Move,
   NewPage,
   NewWiki,
   RecentPage,
@@ -169,6 +170,31 @@ export function useCreatePage(
     mutationFn: (page: NewPage) => api.createPage(wikiId, page),
     onSettled: () =>
       queryClient.invalidateQueries({ queryKey: treeKey(wikiId) })
+  })
+}
+
+/**
+ * The wiki is read again before the move ends: the tree, and the path of an
+ * open page, which moves with its ancestors. The move answers whether the
+ * tree shows it, which it does not when the tree could not be read again.
+ * Unlike Twake Tasks, which moves a task on its board before the answer, the
+ * page waits for its place, whose key the backend makes.
+ */
+export function useMovePage(
+  wikiId: string
+): UseMutationResult<boolean, Error, { pageId: string; move: Move }> {
+  const api = usePagesApi()
+  const queryClient = useQueryClient()
+  const reload = () =>
+    queryClient.invalidateQueries({ queryKey: wikiKey(wikiId) })
+  return useMutation({
+    mutationFn: async ({ pageId, move }: { pageId: string; move: Move }) => {
+      await api.movePage(pageId, move)
+      await reload()
+      return queryClient.getQueryState(treeKey(wikiId))?.status !== 'error'
+    },
+    // A refused move may come from a tree behind the wiki.
+    onError: reload
   })
 }
 

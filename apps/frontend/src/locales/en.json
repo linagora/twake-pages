@@ -104,6 +104,11 @@
     "create": "Create",
     "failed": "The page could not be created."
   },
+  "movePage": {
+    "failed": "The page could not be moved.",
+    "under": "%{title} moved under %{parent}, position %{position} of %{count}.",
+    "toTop": "%{title} moved to the top of the tree, position %{position} of %{count}."
+  },
   "templates": {
     "blank": {
       "name": "Blank"
