@@ -1,4 +1,5 @@
-import { and, eq, sql } from 'drizzle-orm'
+import { and, asc, eq, ne, notExists, sql } from 'drizzle-orm'
+import { alias } from 'drizzle-orm/pg-core'
 import { z } from 'zod'
 import type { PlatformEvent } from '../../events/envelope.ts'
 import {
@@ -41,6 +42,58 @@ async function userIdByEmail(tx: Tx, email: string) {
   return member?.userId
 }
 
+// A wiki whose only admin leaves goes to its oldest editor, or is deleted.
+// A space wiki's members come from its space, so it is left alone.
+async function handOnWikis(tx: Tx, userId: string) {
+  const otherAdmin = alias(wikiMembers, 'other_admin')
+  const orphaned = await tx
+    .select({ wikiId: wikiMembers.wikiId })
+    .from(wikiMembers)
+    .innerJoin(wikis, eq(wikis.id, wikiMembers.wikiId))
+    .where(
+      and(
+        eq(wikiMembers.userId, userId),
+        eq(wikiMembers.role, 'admin'),
+        eq(wikis.kind, 'shared'),
+        notExists(
+          tx
+            .select()
+            .from(otherAdmin)
+            .where(
+              and(
+                eq(otherAdmin.wikiId, wikiMembers.wikiId),
+                eq(otherAdmin.role, 'admin'),
+                ne(otherAdmin.userId, userId)
+              )
+            )
+        )
+      )
+    )
+  for (const { wikiId } of orphaned) {
+    const [editor] = await tx
+      .select({ userId: wikiMembers.userId })
+      .from(wikiMembers)
+      .where(
+        and(eq(wikiMembers.wikiId, wikiId), eq(wikiMembers.role, 'editor'))
+      )
+      .orderBy(asc(wikiMembers.joinedAt))
+      .limit(1)
+    if (editor) {
+      await tx
+        .update(wikiMembers)
+        .set({ role: 'admin' })
+        .where(
+          and(
+            eq(wikiMembers.wikiId, wikiId),
+            eq(wikiMembers.userId, editor.userId)
+          )
+        )
+    } else {
+      await tx.delete(wikis).where(eq(wikis.id, wikiId))
+    }
+  }
+}
+
 // Runs as the person, so a B2C tenant shows the wikis they belong to; their
 // memberships go last, since they are what makes those wikis visible. The
 // wikis it deletes go for good, as Twake Tasks deletes the projects of a
@@ -50,6 +103,7 @@ async function forget(tx: Tx, organizationId: string | null, userId: string) {
   await tx
     .delete(wikis)
     .where(and(eq(wikis.createdBy, userId), eq(wikis.kind, 'personal')))
+  await handOnWikis(tx, userId)
   await tx.delete(wikiMembers).where(eq(wikiMembers.userId, userId))
 }
 

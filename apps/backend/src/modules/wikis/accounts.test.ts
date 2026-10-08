@@ -5,6 +5,7 @@ import { RejectedEventError } from '../../events/router.ts'
 import { createDb } from '../../infra/db.ts'
 import {
   aB2cUser,
+  aSpaceWiki,
   aUser,
   joinWiki,
   startApp,
@@ -36,6 +37,9 @@ function deliver(routingKey: string, body: object) {
 
 const wikisOf = async (user: TestUser) =>
   (await api.as(user).get('/wikis')).json<{ wikis: WikiSummary[] }>().wikis
+
+const sharedWikisOf = async (user: TestUser) =>
+  (await wikisOf(user)).filter(wiki => wiki.kind !== 'personal')
 
 /** Someone of the person's tenant: their organization, or B2C. */
 const aPeerOf = (user: TestUser): TestUser =>
@@ -95,23 +99,53 @@ describe.each([
     body: (user: TestUser) => ({ internalEmail: user.email })
   }
 ])('a deleted account ($kind)', ({ routingKey, makeUser, body }) => {
-  it('leaves every wiki, and loses its personal wiki', async () => {
+  it('leaves its wikis, hands them on or deletes them, and loses its personal wiki', async () => {
     const gone = makeUser()
-    const admin = aPeerOf(gone)
+    const firstEditor = aPeerOf(gone)
+    const laterEditor = aPeerOf(gone)
+    const viewer = aPeerOf(gone)
     const personal = await personalWikiOf(gone)
-    const handbook = await aWiki(admin, 'Handbook', [[gone, 'editor']])
+    const handedOn = await aWiki(gone, 'Handbook', [
+      [firstEditor, 'editor'],
+      [laterEditor, 'editor']
+    ])
+    await aWiki(gone, 'Solo', [[viewer, 'viewer']])
 
     await deliver(routingKey, body(gone))
 
-    expect((await api.as(gone).get(`/wikis/${handbook.id}`)).statusCode).toBe(
+    expect(await sharedWikisOf(firstEditor)).toEqual([
+      expect.objectContaining({ name: 'Handbook', role: 'admin' })
+    ])
+    expect(await sharedWikisOf(laterEditor)).toEqual([
+      expect.objectContaining({ name: 'Handbook', role: 'editor' })
+    ])
+    expect(await sharedWikisOf(viewer)).toEqual([])
+    expect((await api.as(gone).get(`/wikis/${handedOn.id}`)).statusCode).toBe(
       404
     )
-    expect(await wikisOf(admin)).toEqual(
+    expect(await wikiRowsOf(db, gone, personal.id)).toEqual([])
+  })
+})
+
+describe('a deleted account in a space wiki', () => {
+  it('leaves the wiki to its space, even as its only admin', async () => {
+    const gone = aUser()
+    const viewer = aUser({ organizationId: gone.organizationId })
+    await aSpaceWiki(db, [
+      [gone, 'admin'],
+      [viewer, 'viewer']
+    ])
+
+    await deliver('domain.user.deleted', {
+      organizationId: gone.organizationId,
+      uuid: gone.userId
+    })
+
+    expect(await wikisOf(viewer)).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ name: 'Handbook', role: 'admin' })
+        expect.objectContaining({ name: 'Marketing', role: 'viewer' })
       ])
     )
-    expect(await wikiRowsOf(db, gone, personal.id)).toEqual([])
   })
 })
 
