@@ -56,6 +56,28 @@ const syncCompleted = z.looseObject({
 })
 
 type SpaceRef = Pick<z.infer<typeof spaceEvent>, 'organizationId' | 'id'>
+type TimedSpace = SpaceRef & { timestamp: string }
+
+// A late or redelivered event must not undo a newer one; equal timestamps
+// apply in the order they arrive.
+async function isStale(tx: Tx, space: TimedSpace): Promise<boolean> {
+  const [row] = await tx
+    .select({
+      stale: sql<boolean>`${spaces.lastEventAt} > ${space.timestamp}::timestamptz`
+    })
+    .from(spaces)
+    .where(eq(spaces.id, space.id))
+  return row?.stale === true
+}
+
+async function applied(tx: Tx, space: TimedSpace) {
+  await tx
+    .update(spaces)
+    .set({
+      lastEventAt: sql`greatest(${spaces.lastEventAt}, ${space.timestamp}::timestamptz)`
+    })
+    .where(eq(spaces.id, space.id))
+}
 
 /** Whether any organization has a space, deleted or not. */
 export async function knowsAnySpace(db: Db): Promise<boolean> {
@@ -130,24 +152,6 @@ async function upsertMembers(
   if (changed.length > 0) await touch(tx, wikiId)
 }
 
-/**
- * Takes the wiki from these people. What they wrote stays, and the
- * notifications about it stop reaching them with their membership.
- */
-async function removeMembers(
-  tx: Tx,
-  space: SpaceRef,
-  which: SQL | undefined
-): Promise<void> {
-  const wikiId = await wikiOf(tx, space)
-  if (!wikiId) return
-  const removed = await tx
-    .delete(wikiMembers)
-    .where(and(eq(wikiMembers.wikiId, wikiId), which))
-    .returning({ userId: wikiMembers.userId })
-  if (removed.length > 0) await touch(tx, wikiId)
-}
-
 async function provisioned(tx: Tx, space: SpaceRef): Promise<OutgoingEvent> {
   const wikiId = await wikiOf(tx, space)
   if (!wikiId) throw new Error(`space ${space.id} has no wiki`)
@@ -208,6 +212,24 @@ async function renameSpace(tx: Tx, space: SpaceRef, name: string) {
   if (renamed.length > 0) await touch(tx, wikiId)
 }
 
+/**
+ * Takes the wiki from these people. What they wrote stays, and the
+ * notifications about it stop reaching them with their membership.
+ */
+async function removeMembers(
+  tx: Tx,
+  space: SpaceRef,
+  which: SQL | undefined
+): Promise<void> {
+  const wikiId = await wikiOf(tx, space)
+  if (!wikiId) return
+  const removed = await tx
+    .delete(wikiMembers)
+    .where(and(eq(wikiMembers.wikiId, wikiId), which))
+    .returning({ userId: wikiMembers.userId })
+  if (removed.length > 0) await touch(tx, wikiId)
+}
+
 /** Puts the space's wiki out of reach now, for the wiki purge job to take. */
 async function deleteSpace(tx: Tx, space: SpaceRef): Promise<void> {
   const wikiId = await wikiOf(tx, space)
@@ -262,29 +284,6 @@ async function matchSpace(
   )
 }
 
-type TimedSpace = SpaceRef & { timestamp: string }
-
-// A late or redelivered event must not undo a newer one; equal timestamps
-// apply in the order they arrive.
-async function isStale(tx: Tx, space: TimedSpace): Promise<boolean> {
-  const [row] = await tx
-    .select({
-      stale: sql<boolean>`${spaces.lastEventAt} > ${space.timestamp}::timestamptz`
-    })
-    .from(spaces)
-    .where(eq(spaces.id, space.id))
-  return row?.stale === true
-}
-
-async function applied(tx: Tx, space: TimedSpace) {
-  await tx
-    .update(spaces)
-    .set({
-      lastEventAt: sql`greatest(${spaces.lastEventAt}, ${space.timestamp}::timestamptz)`
-    })
-    .where(eq(spaces.id, space.id))
-}
-
 function inOrder<S extends z.ZodType<TimedSpace>>(
   schema: S,
   apply: (tx: Tx, space: z.output<S>) => Promise<void>
@@ -330,13 +329,13 @@ export function spaceRoutes(): ReadonlyMap<string, Handler<PlatformEvent>> {
     )
   })
 
+  const onSynced = inOrder(spaceCreated, matchSpace)
+
   const onDeleted: Handler<PlatformEvent> = async (event, tx) => {
     const space = parseOrDrop(spaceEvent, event.body, event.routingKey)
     await asOrganization(tx, space.organizationId)
     await deleteSpace(tx, space)
   }
-
-  const onSynced = inOrder(spaceCreated, matchSpace)
 
   // A space with an event newer than the snapshot may be missing from it.
   const onSyncCompleted: Handler<PlatformEvent> = async (event, tx) => {
