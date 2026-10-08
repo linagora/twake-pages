@@ -15,7 +15,7 @@ import type { WikiSummary } from '@/domain/wiki'
 
 export type Send = (request: Request) => Promise<Response>
 
-async function refusal(response: Response): Promise<ApiError> {
+async function errorOf(response: Response): Promise<ApiError> {
   let body: unknown = null
   try {
     body = await response.json()
@@ -72,7 +72,7 @@ export function httpPagesApi(baseUrl: string, send: Send): PagesApi {
         })
       })
     )
-    if (!response.ok) throw await refusal(response)
+    if (!response.ok) throw await errorOf(response)
     return (response.status === 204 ? undefined : await response.json()) as T
   }
 
