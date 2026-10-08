@@ -13,7 +13,7 @@ import {
   type TestUser,
   type WikiSummary
 } from '../../testing/app.ts'
-import { notifications } from '../notifications/schema.ts'
+import { notify } from '../notifications/testing.ts'
 import { wikiInvites } from './schema.ts'
 import { purgeWiki } from './store.ts'
 
@@ -53,27 +53,6 @@ const invite = (admin: TestUser, wikiId: string, email: string) =>
     })
   )
 
-// Nor are notifications: this one tells of a version the actor published.
-const notify = (
-  actor: TestUser,
-  wiki: Wiki,
-  user: TestUser,
-  readAt: Date | null = null
-) =>
-  inTenant(db, actor, tx =>
-    tx.insert(notifications).values({
-      pageId: wiki.homePageId,
-      wikiId: wiki.id,
-      organizationId: actor.organizationId,
-      userId: user.userId,
-      reason: 'published',
-      actorId: actor.userId,
-      actorEmail: actor.email,
-      version: 2,
-      readAt
-    })
-  )
-
 // No policy shows the pages of a wiki that is gone: this counts them with the
 // policies lifted, in a transaction that puts them back before it commits.
 const pagesLeftIn = (wikiId: string) =>
@@ -93,10 +72,10 @@ describe('GET /wikis', () => {
     const wiki = await aWikiOf(alice)
     await joinWiki(db, alice, wiki.id, bob, 'editor')
     await joinWiki(db, alice, wiki.id, carol, 'editor')
-    await notify(alice, wiki, bob)
-    await notify(alice, wiki, bob)
-    await notify(alice, wiki, bob, new Date())
-    await notify(alice, wiki, carol)
+    await notify(db, alice, wiki, bob)
+    await notify(db, alice, wiki, bob)
+    await notify(db, alice, wiki, bob, new Date())
+    await notify(db, alice, wiki, carol)
 
     const unread = (await wikisOf(api, bob)).map(listed => [
       listed.name,
