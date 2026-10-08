@@ -6,7 +6,7 @@ import { EmptyState, ListSkeleton } from '@/ds/EmptyState'
 import { Tile, TileGrid } from '@/ds/TileGrid'
 import { useI18n } from '@/ui/i18n/useI18n'
 import { useDocumentTitle } from '@/ui/useDocumentTitle'
-import { useWikis } from '@/ui/wikis/queries'
+import { useWikis } from '@/ui/wiki/queries'
 
 export function HomeScreen(): ReactElement {
   const { t } = useI18n()

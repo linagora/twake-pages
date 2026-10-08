@@ -1,9 +1,34 @@
 import type { RouteObject } from 'react-router'
 
-import { EmbedLayout, EmbedWikiScreen } from '@/ui/embed/Embed'
+import { EmbedLayout } from '@/ui/embed/Embed'
+import { HomeScreen } from '@/ui/home/HomeScreen'
+import { LabelScreen } from '@/ui/labels/LabelScreen'
+import { NotificationsScreen } from '@/ui/notifications/NotificationsScreen'
+import { EditPageScreen } from '@/ui/page/EditPageScreen'
+import { HistoryScreen } from '@/ui/page/HistoryScreen'
+import { PageScreen } from '@/ui/page/PageScreen'
+import { SearchScreen } from '@/ui/search/SearchScreen'
 import { AppShell } from '@/ui/shell/AppShell'
 import { CrashScreen, NotFoundScreen } from '@/ui/shell/Problems'
-import { HomeScreen } from '@/ui/wikis/HomeScreen'
+import { TrashScreen } from '@/ui/trash/TrashScreen'
+import { WikiHomeScreen } from '@/ui/wiki/WikiHomeScreen'
+import { WikiLayout } from '@/ui/wiki/WikiLayout'
+
+// The screens of a wiki, the same in the app and in the frame of TwakeSpace.
+const wikiRoutes = (): RouteObject[] => [
+  {
+    element: <WikiLayout />,
+    children: [
+      { index: true, element: <WikiHomeScreen /> },
+      { path: 'pages/:pageId', element: <PageScreen /> },
+      { path: 'pages/:pageId/edit', element: <EditPageScreen /> },
+      { path: 'pages/:pageId/history', element: <HistoryScreen /> },
+      { path: 'labels/:name', element: <LabelScreen /> },
+      { path: 'search', element: <SearchScreen /> },
+      { path: 'trash', element: <TrashScreen /> }
+    ]
+  }
+]
 
 export const routes: RouteObject[] = [
   {
@@ -13,6 +38,9 @@ export const routes: RouteObject[] = [
         errorElement: <CrashScreen />,
         children: [
           { path: '/', element: <HomeScreen /> },
+          { path: '/search', element: <SearchScreen /> },
+          { path: '/notifications', element: <NotificationsScreen /> },
+          { path: '/wikis/:wikiId', children: wikiRoutes() },
           { path: '*', element: <NotFoundScreen /> }
         ]
       }
@@ -21,11 +49,6 @@ export const routes: RouteObject[] = [
   {
     path: '/embed/wikis/:wikiId',
     element: <EmbedLayout />,
-    children: [
-      {
-        errorElement: <CrashScreen />,
-        children: [{ index: true, element: <EmbedWikiScreen /> }]
-      }
-    ]
+    children: [{ errorElement: <CrashScreen />, children: wikiRoutes() }]
   }
 ]

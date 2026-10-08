@@ -36,8 +36,26 @@
     "emptyHint": "Les wikis partagés avec vous s'afficheront ici."
   },
   "wiki": {
-    "placeholder": "Ce wiki arrive bientôt",
-    "placeholderHint": "Ses pages s'afficheront ici."
+    "nav": "Wiki",
+    "home": "Page d'accueil"
+  },
+  "page": {
+    "title": "Page",
+    "edit": "Modifier la page",
+    "history": "Historique de la page"
+  },
+  "labels": {
+    "title": "Pages avec l'étiquette %{name}"
+  },
+  "search": {
+    "title": "Recherche",
+    "inWiki": "Rechercher dans ce wiki"
+  },
+  "trash": {
+    "title": "Corbeille"
+  },
+  "notifications": {
+    "title": "Notifications"
   },
   "shortcuts": {
     "title": "Raccourcis clavier",

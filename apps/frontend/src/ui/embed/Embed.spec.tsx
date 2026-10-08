@@ -9,12 +9,10 @@ import {
   type MockInstance
 } from 'vitest'
 
-import { findEmptyState } from '@/testing/emptyState'
 import { renderBrowserRoute, renderRoute } from '@/testing/renderWithProviders'
 import { connectTwakeSpace, disconnectTwakeSpace } from '@/ui/embed/twakeSpace'
 
 const SPACE = 'https://space.example.com'
-const PLACEHOLDER = 'This wiki is on its way'
 
 beforeEach(() => {
   window.TWAKE_SPACE_ORIGIN = `${SPACE} http://localhost:3000`
@@ -26,11 +24,16 @@ afterEach(() => {
 })
 
 describe('the embedded view', () => {
-  it("shows the wiki, without the app's navigation", async () => {
+  it("shows the wiki, without the app's bar and navigation", async () => {
     renderRoute('/embed/wikis/w1')
 
-    expect(await findEmptyState(PLACEHOLDER)).toBeInTheDocument()
-    expect(screen.queryByRole('navigation')).not.toBeInTheDocument()
+    expect(
+      await screen.findByRole('navigation', { name: 'Wiki' })
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('banner')).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('link', { name: 'Wikis' })
+    ).not.toBeInTheDocument()
   })
 })
 
@@ -60,7 +63,7 @@ describe('the history of the embedded view', () => {
     window.history.replaceState(null, '', path)
     connectTwakeSpace(space)
     const { router } = renderBrowserRoute()
-    await findEmptyState(PLACEHOLDER)
+    await screen.findByRole('heading', { level: 1 })
     return router
   }
 
@@ -80,14 +83,14 @@ describe('the history of the embedded view', () => {
   })
 
   it('reports the first path as a replace', async () => {
-    await renderEmbed('/embed/wikis/w1?page=p1')
+    await renderEmbed('/embed/wikis/w1/pages/p1')
 
     await waitFor(() => {
       expect(post).toHaveBeenCalledWith(
         {
           type: 'twake-embed:path',
           resourceId: 'w1',
-          path: '?page=p1',
+          path: '/pages/p1',
           replace: true
         },
         SPACE
@@ -104,14 +107,14 @@ describe('the history of the embedded view', () => {
     const length = window.history.length
     post.mockClear()
 
-    await act(() => router.navigate('/embed/wikis/w1?page=p2'))
+    await act(() => router.navigate('/embed/wikis/w1/pages/p2'))
 
-    expect(window.location.search).toBe('?page=p2')
+    expect(window.location.pathname).toBe('/embed/wikis/w1/pages/p2')
     expect(window.history.length).toBe(length)
     expect(pathMessages()).toContainEqual({
       type: 'twake-embed:path',
       resourceId: 'w1',
-      path: '?page=p2',
+      path: '/pages/p2',
       replace: false
     })
   })
@@ -135,13 +138,12 @@ describe('the history of the embedded view', () => {
     tell({
       type: 'twake-embed:navigate',
       resourceId: 'w1',
-      path: '?page=p3'
+      path: '/pages/p3'
     })
 
     await waitFor(() => {
-      expect(router.state.location.search).toBe('?page=p3')
+      expect(router.state.location.pathname).toBe('/embed/wikis/w1/pages/p3')
     })
-    expect(router.state.location.pathname).toBe('/embed/wikis/w1')
     expect(pathMessages()).toEqual([])
   })
 

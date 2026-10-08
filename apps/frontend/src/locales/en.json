@@ -36,8 +36,26 @@
     "emptyHint": "The wikis shared with you will show here."
   },
   "wiki": {
-    "placeholder": "This wiki is on its way",
-    "placeholderHint": "Its pages will show here."
+    "nav": "Wiki",
+    "home": "Home page"
+  },
+  "page": {
+    "title": "Page",
+    "edit": "Edit page",
+    "history": "Page history"
+  },
+  "labels": {
+    "title": "Pages labelled %{name}"
+  },
+  "search": {
+    "title": "Search",
+    "inWiki": "Search this wiki"
+  },
+  "trash": {
+    "title": "Trash"
+  },
+  "notifications": {
+    "title": "Notifications"
   },
   "shortcuts": {
     "title": "Keyboard shortcuts",
