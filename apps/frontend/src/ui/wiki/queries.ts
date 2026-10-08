@@ -18,6 +18,8 @@ export const wikisKey = ['wikis']
 const wikiKey = (wikiId: string) => ['wikis', wikiId] as const
 const treeKey = (wikiId: string) => [...wikiKey(wikiId), 'tree'] as const
 const pagesKey = (wikiId: string) => [...wikiKey(wikiId), 'pages'] as const
+const pageKey = (wikiId: string, pageId: string) =>
+  [...pagesKey(wikiId), pageId] as const
 
 /**
  * A page carries no version of its wiki, so it keeps the one known as its
@@ -157,11 +159,30 @@ export function usePage(wikiId: string, pageId: string): UseQueryResult<Page> {
   const api = usePagesApi()
   const queryClient = useQueryClient()
   return useQuery({
-    queryKey: [...pagesKey(wikiId), pageId],
+    queryKey: pageKey(wikiId, pageId),
     queryFn: async (): Promise<ReadPage> => {
       const version = queryClient.getQueryData<Wiki>(wikiKey(wikiId))?.version
       return { page: await api.getPage(pageId), version }
     },
     select: read => read.page
+  })
+}
+
+/**
+ * The page shown changes in place: reading it again would count as a visit.
+ */
+export function useSetFavorite(
+  page: Page
+): UseMutationResult<void, Error, boolean> {
+  const api = usePagesApi()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (favorite: boolean) => api.setFavorite(page.id, favorite),
+    onSuccess: (_answer, favorite) => {
+      queryClient.setQueryData<ReadPage>(
+        pageKey(page.wikiId, page.id),
+        read => read && { ...read, page: { ...read.page, favorite } }
+      )
+    }
   })
 }

@@ -82,6 +82,8 @@
     "loadFailed": "La page n'a pas pu être chargée.",
     "empty": "Cette page est vide.",
     "inTrash": "Cette page est dans la corbeille.",
+    "favorite": "Ajouter aux favoris",
+    "unfavorite": "Retirer des favoris",
     "edit": "Modifier la page",
     "history": "Historique de la page",
     "menu": "Options de la page",

@@ -6,6 +6,7 @@ import { ApiError } from '@/application/pages'
 import { PageHeader } from '@/ds/PageHeader'
 import type { Page } from '@/domain/page'
 import { useI18n } from '@/ui/i18n/useI18n'
+import { FavoriteButton } from '@/ui/page/FavoriteButton'
 import { PageContent } from '@/ui/page/PageContent'
 import { PageMenu } from '@/ui/page/PageMenu'
 import { UnavailableScreen } from '@/ui/shell/Problems'
@@ -44,7 +45,12 @@ export function PageScreen(): ReactElement {
             {page.data.title}
           </Typography>
         }
-        actions={<PageMenu page={page.data} />}
+        actions={
+          <>
+            <FavoriteButton page={page.data} />
+            <PageMenu page={page.data} />
+          </>
+        }
       />
       {/* As Twake Tasks tells of an archived board. The page stays readable,
           sent to the trash while open or opened from it. */}

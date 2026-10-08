@@ -239,3 +239,40 @@ describe('the admin of a wiki', () => {
     }
   )
 })
+
+describe('the home page as a favorite', () => {
+  it.each(['admin', 'editor', 'viewer'] as const)(
+    'is added by a member with the %s role, and taken out again',
+    async role => {
+      const pagesApi = fakePagesApi()
+      const wiki = pagesApi.withWiki({ name: 'Handbook', role })
+      renderRoute(`/wikis/${wiki.id}`, { pagesApi })
+
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'Add to favorites' })
+      )
+      const remove = await screen.findByRole('button', {
+        name: 'Remove from favorites'
+      })
+      const marked = await pagesApi.favorites()
+      fireEvent.click(remove)
+      await screen.findByRole('button', { name: 'Add to favorites' })
+
+      expect({
+        marked: marked.map(page => page.id),
+        left: await pagesApi.favorites()
+      }).toEqual({ marked: [wiki.homePageId], left: [] })
+    }
+  )
+
+  it('is read once for the page and its button, which counts one visit', async () => {
+    const pagesApi = fakePagesApi()
+    const wiki = pagesApi.withWiki({ name: 'Handbook' })
+    renderRoute(`/wikis/${wiki.id}`, { pagesApi })
+
+    await screen.findByRole('button', { name: 'Add to favorites' })
+    expect(await screen.findByText('This page is empty.')).toBeVisible()
+
+    expect(pagesApi.getPage).toHaveBeenCalledTimes(1)
+  })
+})

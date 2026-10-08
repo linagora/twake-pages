@@ -6,6 +6,7 @@ import { useNavigate, useParams } from 'react-router'
 import { ListSkeleton } from '@/ds/EmptyState'
 import { PageHeader } from '@/ds/PageHeader'
 import { useI18n } from '@/ui/i18n/useI18n'
+import { FavoriteButton } from '@/ui/page/FavoriteButton'
 import { NewPageDialog } from '@/ui/page/NewPageDialog'
 import { PageContent } from '@/ui/page/PageContent'
 import { useDocumentTitle } from '@/ui/useDocumentTitle'
@@ -41,19 +42,27 @@ export function WikiHomeScreen(): ReactElement {
               </>
             }
             actions={
-              wiki.data.role !== 'viewer' && (
-                <>
-                  <Button
-                    startIcon={<Icon icon={Plus} />}
-                    onClick={() => {
-                      setCreating(true)
-                    }}
-                  >
-                    {t('newPage.title')}
-                  </Button>
-                  {wiki.data.role === 'admin' && <WikiMenu wiki={wiki.data} />}
-                </>
-              )
+              <>
+                <HomePageFavorite
+                  wikiId={wikiId}
+                  pageId={wiki.data.homePageId}
+                />
+                {wiki.data.role !== 'viewer' && (
+                  <>
+                    <Button
+                      startIcon={<Icon icon={Plus} />}
+                      onClick={() => {
+                        setCreating(true)
+                      }}
+                    >
+                      {t('newPage.title')}
+                    </Button>
+                    {wiki.data.role === 'admin' && (
+                      <WikiMenu wiki={wiki.data} />
+                    )}
+                  </>
+                )}
+              </>
             }
           />
           <HomePage wikiId={wikiId} pageId={wiki.data.homePageId} />
@@ -89,4 +98,20 @@ function HomePage({
     return <Typography role="alert">{t('page.loadFailed')}</Typography>
   }
   return <ListSkeleton label={t('app.loading')} rows={2} />
+}
+
+/**
+ * Any member keeps favorites, viewers too, so the home page's button shows
+ * apart from the editors' actions. It reads the page through the query the
+ * page below reads, which fetches it once: one visit.
+ */
+function HomePageFavorite({
+  wikiId,
+  pageId
+}: {
+  wikiId: string
+  pageId: string
+}): ReactElement | null {
+  const page = usePage(wikiId, pageId)
+  return page.data ? <FavoriteButton page={page.data} /> : null
 }
