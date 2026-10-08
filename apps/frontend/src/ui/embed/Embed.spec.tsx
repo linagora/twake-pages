@@ -1,10 +1,12 @@
-import { act, fireEvent, screen, waitFor } from '@testing-library/react'
+import type { SpaceOverlay } from '@linagora/twake-mui'
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import {
   afterEach,
   beforeEach,
   describe,
   expect,
   it,
+  onTestFinished,
   vi,
   type MockInstance
 } from 'vitest'
@@ -24,6 +26,27 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
+/**
+ * The overlay page TwakeSpace frames over its whole page, on the app's
+ * origin, once found: its body is where the overlay draws.
+ */
+function overlayOfTwakeSpace(): { overlay: SpaceOverlay; body: HTMLElement } {
+  const frame = document.body.appendChild(document.createElement('iframe'))
+  onTestFinished(() => {
+    frame.remove()
+  })
+  const body = frame.contentDocument?.body
+  if (!body) throw new Error('The overlay has no body')
+  return {
+    overlay: {
+      getStatus: () => 'connected',
+      getBody: () => body,
+      subscribe: () => () => undefined
+    },
+    body
+  }
+}
+
 describe('the embedded view', () => {
   it("shows the wiki, without the app's bar and navigation", async () => {
     const pagesApi = fakePagesApi()
@@ -37,6 +60,22 @@ describe('the embedded view', () => {
     expect(
       screen.queryByRole('link', { name: 'Wikis' })
     ).not.toBeInTheDocument()
+  })
+
+  it("draws the wiki's dialogs on the overlay of TwakeSpace, and a menu beside its button in the frame", async () => {
+    const { overlay, body } = overlayOfTwakeSpace()
+    const pagesApi = fakePagesApi()
+    const wiki = pagesApi.withWiki({ kind: 'space' })
+    renderRoute(`/embed/wikis/${wiki.id}`, { pagesApi, overlay })
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Wiki options' }))
+    // The frame cannot tell where it sits on the page of TwakeSpace
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Edit' }))
+
+    expect(
+      within(body).getByRole('dialog', { name: 'Edit wiki' })
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 })
 

@@ -1,3 +1,4 @@
+import type { SpaceOverlay } from '@linagora/twake-mui'
 import { render, type RenderResult } from '@testing-library/react'
 import type { ReactElement } from 'react'
 import {
@@ -21,6 +22,8 @@ interface Options {
   lang?: SupportedLanguage
   session?: SessionService
   pagesApi?: PagesApi
+  /** The overlay of TwakeSpace, for a view framed there */
+  overlay?: SpaceOverlay | null
 }
 
 export function renderWithProviders(
@@ -28,11 +31,12 @@ export function renderWithProviders(
   {
     lang = 'en',
     session = fakeSession(),
-    pagesApi = fakePagesApi()
+    pagesApi = fakePagesApi(),
+    overlay = null
   }: Options = {}
 ): RenderResult {
   return render(
-    <AppProviders lang={lang} queryClient={makeQueryClient()}>
+    <AppProviders lang={lang} queryClient={makeQueryClient()} overlay={overlay}>
       <SessionGate session={session}>
         <PagesApiProvider api={pagesApi}>{ui}</PagesApiProvider>
       </SessionGate>
