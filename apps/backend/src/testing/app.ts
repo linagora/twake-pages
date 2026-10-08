@@ -72,6 +72,32 @@ export async function removeFromWiki(
   )
 }
 
+/** What a wiki's admin does that takes a member out of the wiki. */
+export type TakeOut = (
+  app: Awaited<ReturnType<typeof startApp>>,
+  db: Db,
+  admin: TestUser,
+  wikiId: string,
+  member: TestUser
+) => Promise<unknown>
+
+const removeMember: TakeOut = (_app, db, admin, wikiId, member) =>
+  removeFromWiki(db, admin, wikiId, member)
+
+/**
+ * The ways a member ends out of a wiki, with who the member is: removed by its
+ * admin, in an organization or in B2C, or out with the deleted wiki.
+ */
+export const waysOutOfAWiki: [string, () => TestUser, TakeOut][] = [
+  ['a wiki the person left', aUser, removeMember],
+  ['a wiki the person left, in B2C', aB2cUser, removeMember],
+  [
+    'a deleted wiki',
+    aUser,
+    (app, _db, admin, wikiId) => app.as(admin).delete(`/wikis/${wikiId}`)
+  ]
+]
+
 /** A space's wiki, whose name and members come from the space integration. */
 export async function aSpaceWiki(
   db: Db,

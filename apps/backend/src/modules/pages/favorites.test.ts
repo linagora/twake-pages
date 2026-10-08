@@ -2,15 +2,14 @@ import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest'
 import { createDb } from '../../infra/db.ts'
 import {
-  aB2cUser,
   aPageIn,
   aUser,
   aWikiOf,
   createPage,
   joinWiki,
   personalWikiOf,
-  removeFromWiki,
   startApp,
+  waysOutOfAWiki,
   type PageRef,
   type TestUser
 } from '../../testing/app.ts'
@@ -207,32 +206,24 @@ describe('GET /favorites', () => {
     expect(favorites).toEqual([])
   })
 
-  /** What carol, the wiki's admin, does that takes alice out of it. */
-  type Leave = (carol: TestUser, wikiId: string, alice: TestUser) => unknown
+  it.each(waysOutOfAWiki)(
+    'lists no page of %s',
+    async (_case, someone, takeOut) => {
+      const alice = someone()
+      const carol = aUser({ organizationId: alice.organizationId })
+      const personal = await personalWikiOf(api, alice)
+      const wiki = await aWikiOf(api, carol)
+      await joinWiki(db, carol, wiki.id, alice, 'viewer')
+      await mark(alice, wiki.homePageId)
+      await mark(alice, personal.homePageId)
+      expect(titlesOf(await favoritesOf(alice))).toEqual([
+        'Personal',
+        'Handbook'
+      ])
 
-  const removeAlice: Leave = (carol, wikiId, alice) =>
-    removeFromWiki(db, carol, wikiId, alice)
+      await takeOut(api, db, carol, wiki.id, alice)
 
-  it.each<[string, () => TestUser, Leave]>([
-    ['a wiki the person left', aUser, removeAlice],
-    ['a wiki the person left, in B2C', aB2cUser, removeAlice],
-    [
-      'a deleted wiki',
-      aUser,
-      (carol, wikiId) => api.as(carol).delete(`/wikis/${wikiId}`)
-    ]
-  ])('lists no page of %s', async (_case, someone, leave) => {
-    const alice = someone()
-    const carol = aUser({ organizationId: alice.organizationId })
-    const personal = await personalWikiOf(api, alice)
-    const wiki = await aWikiOf(api, carol)
-    await joinWiki(db, carol, wiki.id, alice, 'viewer')
-    await mark(alice, wiki.homePageId)
-    await mark(alice, personal.homePageId)
-    expect(titlesOf(await favoritesOf(alice))).toEqual(['Personal', 'Handbook'])
-
-    await leave(carol, wiki.id, alice)
-
-    expect(titlesOf(await favoritesOf(alice))).toEqual(['Personal'])
-  })
+      expect(titlesOf(await favoritesOf(alice))).toEqual(['Personal'])
+    }
+  )
 })
