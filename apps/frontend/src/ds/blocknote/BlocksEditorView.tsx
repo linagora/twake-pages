@@ -1,5 +1,10 @@
 import '@blocknote/mantine/style.css'
 
+import {
+  BlockNoteSchema,
+  defaultBlockSpecs,
+  type BlockSpecs
+} from '@blocknote/core'
 import { en, fr } from '@blocknote/core/locales'
 // Of the three UI packages of BlockNote, the one its docs recommend for new
 // projects (blocknotejs.org/docs/getting-started). The ShadCN one is for apps
@@ -10,9 +15,25 @@ import { useCreateBlockNote } from '@blocknote/react'
 import { useColorScheme } from '@linagora/twake-mui'
 import type { ReactElement } from 'react'
 
+import { EDITOR_BLOCKS } from '@/ds/editorBlocks'
+
 type Blocks = Record<string, unknown>[]
 
-/** BlockNote, the editor of the pages, writing blocks from `initial` on. */
+// Neither the block menu nor a paste makes a block the schema lacks. Its
+// blocks are given as any blocks, as BlockNote's heading fails BlockNote's
+// own constraint on them under exactOptionalPropertyTypes (its optional
+// isToggleable).
+const schema = BlockNoteSchema.create<BlockSpecs>({
+  // @ts-expect-error -- the heading, as above.
+  blockSpecs: Object.fromEntries(
+    EDITOR_BLOCKS.map(type => [type, defaultBlockSpecs[type]])
+  )
+})
+
+/**
+ * BlockNote, the editor of the pages, writing blocks from `initial` on,
+ * which hold only blocks it writes (see editableBlocks).
+ */
 export function BlocksEditorView({
   initial,
   label,
@@ -25,6 +46,7 @@ export function BlocksEditorView({
   onChange: (blocks: Blocks) => void
 }): ReactElement {
   const editor = useCreateBlockNote({
+    schema,
     dictionary: lang === 'fr' ? fr : en,
     ...(initial.length > 0 && { initialContent: initial }),
     domAttributes: {
@@ -36,10 +58,6 @@ export function BlocksEditorView({
 
   return (
     <BlockNoteView
-      // @ts-expect-error -- BlockNote's default schema fails its own
-      // constraint under exactOptionalPropertyTypes (an optional prop of the
-      // heading), so the view takes it for any schema, which the editor of the
-      // default one is not.
       editor={editor}
       theme={dark ? 'dark' : 'light'}
       onChange={() => {

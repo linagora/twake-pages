@@ -1,8 +1,12 @@
-import { fireEvent, screen } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
 import type { Block } from '@/domain/page'
-import { typeInBlocks } from '@/testing/blocks'
+import {
+  copiedFromBlockNote,
+  pasteInBlocks,
+  typeInBlocks
+} from '@/testing/blocks'
 import {
   fakePagesApi,
   paragraph,
@@ -10,6 +14,13 @@ import {
 } from '@/testing/fakePagesApi'
 import { typeIn } from '@/testing/forms'
 import { renderRoute } from '@/testing/renderWithProviders'
+
+/** The types of the blocks and of the blocks under them, in order. */
+const typesOf = (blocks: Block[]): unknown[] =>
+  blocks.flatMap(block => [
+    block.type,
+    ...(Array.isArray(block.children) ? typesOf(block.children as Block[]) : [])
+  ])
 
 describe('the editor of a page', () => {
   it('publishes the title and the blocks written, then shows the page at its new version', async () => {
@@ -147,6 +158,137 @@ describe('the editor of a page', () => {
     expect(
       screen.queryByRole('textbox', { name: 'Title' })
     ).not.toBeInTheDocument()
+  })
+
+  it('offers images and no video, audio or file block, which pages cannot show', async () => {
+    const pagesApi = fakePagesApi()
+    const wiki = pagesApi.withWiki()
+    const onboarding = pagesApi.withPage(wiki.id, { title: 'Onboarding' })
+    renderRoute(`/wikis/${wiki.id}/pages/${onboarding.id}/edit`, { pagesApi })
+
+    await typeInBlocks(
+      await screen.findByRole('textbox', { name: 'Content' }),
+      '/'
+    )
+
+    // Hidden, as jsdom gives the menu no room where BlockNote places it.
+    const offered = (
+      await screen.findAllByRole('option', { hidden: true })
+    ).map(option => option.textContent)
+    expect(offered).toContainEqual(expect.stringMatching(/^Image/))
+    expect(offered).not.toContainEqual(
+      expect.stringMatching(/^(Video|Audio|File)/)
+    )
+  })
+
+  it.each([
+    [
+      'a page of another site',
+      {
+        'text/html':
+          '<p>Watch the intro</p><video src="https://media.example.com/intro.mp4"></video><audio src="https://media.example.com/intro.mp3"></audio><embed src="https://media.example.com/intro.pdf">'
+      }
+    ],
+    [
+      'another BlockNote editor',
+      copiedFromBlockNote([
+        paragraph('Watch the intro'),
+        {
+          type: 'video',
+          props: { url: 'https://media.example.com/intro.mp4' }
+        },
+        {
+          type: 'audio',
+          props: { url: 'https://media.example.com/intro.mp3' }
+        },
+        { type: 'file', props: { url: 'https://media.example.com/intro.pdf' } }
+      ])
+    ]
+  ])(
+    'makes no video, audio or file block of what is pasted from %s',
+    async (_case, clipboard) => {
+      const pagesApi = fakePagesApi()
+      const wiki = pagesApi.withWiki()
+      const onboarding = pagesApi.withPage(wiki.id, { title: 'Onboarding' })
+      renderRoute(`/wikis/${wiki.id}/pages/${onboarding.id}/edit`, {
+        pagesApi
+      })
+
+      const content = await screen.findByRole('textbox', { name: 'Content' })
+      await pasteInBlocks(content, clipboard)
+      expect(content).toHaveTextContent('Watch the intro')
+      fireEvent.click(screen.getByRole('button', { name: 'Publish' }))
+
+      await waitFor(() => {
+        expect(pagesApi.publish).toHaveBeenCalledOnce()
+      })
+      const [, draft] = pagesApi.publish.mock.calls[0] ?? []
+      const published = draft && 'content' in draft ? draft.content : []
+      expect(
+        typesOf(published).filter(type =>
+          ['video', 'audio', 'file'].includes(String(type))
+        )
+      ).toEqual([])
+    }
+  )
+
+  it('opens a video the page holds as a link to it, which publishing keeps', async () => {
+    const pagesApi = fakePagesApi()
+    const wiki = pagesApi.withWiki()
+    const onboarding = pagesApi.withPage(wiki.id, {
+      title: 'Onboarding',
+      content: [
+        {
+          type: 'video',
+          props: { url: 'https://media.example.com/intro.mp4', name: 'Intro' },
+          children: []
+        }
+      ]
+    })
+    renderRoute(`/wikis/${wiki.id}/pages/${onboarding.id}/edit`, { pagesApi })
+
+    const content = await screen.findByRole('textbox', { name: 'Content' })
+    expect(
+      within(content).getByRole('link', { name: 'Intro' })
+    ).toHaveAttribute('href', 'https://media.example.com/intro.mp4')
+    fireEvent.click(screen.getByRole('button', { name: 'Publish' }))
+
+    await waitFor(() => {
+      expect(pagesApi.publish).toHaveBeenCalledWith(onboarding.id, {
+        baseVersion: 1,
+        title: 'Onboarding',
+        content: [
+          {
+            type: 'paragraph',
+            content: [
+              {
+                type: 'link',
+                href: 'https://media.example.com/intro.mp4',
+                content: [{ type: 'text', text: 'Intro', styles: {} }]
+              }
+            ],
+            children: []
+          }
+        ]
+      })
+    })
+  })
+
+  it('takes an image by its link, with no upload', async () => {
+    const pagesApi = fakePagesApi()
+    const wiki = pagesApi.withWiki()
+    const onboarding = pagesApi.withPage(wiki.id, { title: 'Onboarding' })
+    renderRoute(`/wikis/${wiki.id}/pages/${onboarding.id}/edit`, { pagesApi })
+
+    await typeInBlocks(
+      await screen.findByRole('textbox', { name: 'Content' }),
+      '/'
+    )
+    // By their text: hidden, the option and the tabs have no name.
+    fireEvent.click(await screen.findByText('Image'))
+
+    expect(await screen.findByText('Embed')).toBeInTheDocument()
+    expect(screen.queryByText('Upload')).not.toBeInTheDocument()
   })
 
   it('publishes no page without a title', async () => {

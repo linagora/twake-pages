@@ -1,4 +1,7 @@
+import { BlockNoteEditor } from '@blocknote/core'
 import { act, fireEvent } from '@testing-library/react'
+
+import type { Block } from '@/domain/page'
 
 /**
  * Types `text` in the last paragraph of a BlockNote editor, as Twake Tasks
@@ -16,4 +19,29 @@ export async function typeInBlocks(
   await act(async () => {
     await Promise.resolve()
   })
+}
+
+/** Pastes in a BlockNote editor what the clipboard holds, by its type. */
+export async function pasteInBlocks(
+  editor: HTMLElement,
+  clipboard: Record<string, string>
+): Promise<void> {
+  fireEvent.paste(editor, {
+    clipboardData: {
+      types: Object.keys(clipboard),
+      getData: (type: string) => clipboard[type] ?? ''
+    }
+  })
+  await act(async () => {
+    await Promise.resolve()
+  })
+}
+
+/**
+ * The clipboard of `blocks` copied from another BlockNote editor, such as
+ * Docs, which knows every block of BlockNote.
+ */
+export function copiedFromBlockNote(blocks: Block[]): Record<string, string> {
+  const editor = BlockNoteEditor.create({ initialContent: blocks })
+  return { 'blocknote/html': editor.blocksToFullHTML(editor.document) }
 }

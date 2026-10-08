@@ -9,6 +9,7 @@ import {
 } from 'react-router'
 
 import { BlocksEditor } from '@/ds/BlocksEditor'
+import { editableBlocks } from '@/ds/editorBlocks'
 import { PageHeader } from '@/ds/PageHeader'
 import type { Page } from '@/domain/page'
 import { useI18n } from '@/ui/i18n/useI18n'
@@ -60,7 +61,10 @@ function PageEditor({
   useDocumentTitle(t('page.edit'))
   const navigate = useNavigate()
   const publish = usePublish(wikiId, page.id)
-  const [start] = useState(page)
+  const [start] = useState(() => ({
+    ...page,
+    content: editableBlocks(page.content)
+  }))
   const [title, setTitle] = useState(start.title)
   const [blocks, setBlocks] = useState(start.content)
   const path = pathOf(start)
