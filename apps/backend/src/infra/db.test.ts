@@ -314,15 +314,16 @@ describe('the tenant policies', () => {
 })
 
 describe('the invites policy', () => {
+  const ROW_LEVEL_SECURITY_VIOLATION = '42501'
   const inviteTo = (wikiId: string, by: TestUser, email: string) =>
     inTenant(db, by, tx =>
       tx.execute(
         statement`insert into wiki_invites (wiki_id, org_id, email, role, invited_by)
-          values (${wikiId}, ${by.organizationId}, ${email}, 'editor', ${by.userId})`
+          values (${wikiId}, ${by.organizationId}, ${email}, 'viewer', ${by.userId})`
       )
     )
 
-  it('lets B2C users claim the invites to their email', async () => {
+  it('lets B2C users claim an invite to a wiki they cannot see yet', async () => {
     const alice = aB2cUser()
     const bob = aB2cUser()
     const { wikiId } = await aWikiOf(alice)
@@ -340,7 +341,24 @@ describe('the invites policy', () => {
     const mallory = aB2cUser()
     const { wikiId } = await aWikiOf(alice)
 
-    await expect(inviteTo(wikiId, mallory, mallory.email)).rejects.toThrow()
+    await expect(
+      inviteTo(wikiId, mallory, mallory.email)
+    ).rejects.toHaveProperty('cause.code', ROW_LEVEL_SECURITY_VIOLATION)
+  })
+
+  it('keeps B2C users from raising the role of an invite to them', async () => {
+    const alice = aB2cUser()
+    const bob = aB2cUser()
+    const { wikiId } = await aWikiOf(alice)
+    await inviteTo(wikiId, alice, bob.email)
+
+    await expect(
+      inTenant(db, bob, tx =>
+        tx.execute(
+          statement`update wiki_invites set role = 'admin' where wiki_id = ${wikiId}`
+        )
+      )
+    ).rejects.toHaveProperty('cause.code', ROW_LEVEL_SECURITY_VIOLATION)
   })
 })
 
