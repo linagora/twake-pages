@@ -71,6 +71,17 @@ describe('a page', () => {
     expect(await screen.findByText('This page is empty.')).toBeVisible()
   })
 
+  it('shows a page in the trash under a notice', async () => {
+    const { pagesApi, wiki, checklist } = handbook()
+    await pagesApi.deletePage(checklist.id)
+    renderRoute(`/wikis/${wiki.id}/pages/${checklist.id}`, { pagesApi })
+
+    expect(await screen.findByText('This page is in the trash.')).toBeVisible()
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Release checklist' })
+    ).toBeVisible()
+  })
+
   it.each(['/wikis', '/embed/wikis'])(
     'leads from %s/<wiki>/pages/<page> to the pages above it, from the home page down',
     async base => {

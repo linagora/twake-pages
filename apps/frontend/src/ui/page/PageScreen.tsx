@@ -1,5 +1,5 @@
 import { Compass } from '@linagora/twake-icons'
-import { Breadcrumbs, Link, Typography } from '@linagora/twake-mui'
+import { Alert, Breadcrumbs, Link, Typography } from '@linagora/twake-mui'
 import type { ReactElement } from 'react'
 import { Link as RouterLink, useParams } from 'react-router'
 
@@ -52,6 +52,13 @@ export function PageScreen(): ReactElement {
           </Typography>
         }
       />
+      {/* As Twake Tasks tells of an archived board. The page stays readable,
+          sent to the trash while open or opened from it. */}
+      {page.data.deletedAt !== null && (
+        <Alert severity="info" className="u-mb-1">
+          {t('page.inTrash')}
+        </Alert>
+      )}
       <PageContent page={page.data} />
     </main>
   )

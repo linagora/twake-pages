@@ -82,6 +82,30 @@ describe('a wiki open in two places', () => {
     expect(screen.getByText('How we work')).toBeVisible()
   })
 
+  it('keeps the open page under a notice once sent to the trash elsewhere', async () => {
+    const { pagesApi, bob, wiki, onboarding } = sharedHandbook()
+    renderRoute(`/wikis/${wiki.id}/pages/${onboarding.id}`, { pagesApi })
+    await screen.findByRole('heading', { level: 1, name: 'Onboarding' })
+
+    await act(() => bob.deletePage(onboarding.id))
+
+    expect(await screen.findByText('This page is in the trash.')).toBeVisible()
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Onboarding' })
+    ).toBeVisible()
+  })
+
+  it('says the wiki of the open page is not found once the person is removed from it', async () => {
+    const { pagesApi, bob, wiki, onboarding } = sharedHandbook()
+    renderRoute(`/wikis/${wiki.id}/pages/${onboarding.id}`, { pagesApi })
+    await screen.findByRole('heading', { level: 1, name: 'Onboarding' })
+
+    await act(() => bob.removeMember(wiki.id, pagesApi.person.id))
+
+    expect(await findEmptyState(WIKI_NOT_FOUND)).toBeInTheDocument()
+    expect(screen.queryByText('Onboarding')).not.toBeInTheDocument()
+  })
+
   it('says the open page is not found once deleted for good elsewhere', async () => {
     const { pagesApi, bob, wiki, onboarding } = sharedHandbook()
     renderRoute(`/wikis/${wiki.id}/pages/${onboarding.id}`, { pagesApi })
