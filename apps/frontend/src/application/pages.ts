@@ -1,4 +1,11 @@
-import type { TreePage } from '@/domain/page'
+import type {
+  Block,
+  Page,
+  PageKind,
+  TreePage,
+  Version,
+  VersionSummary
+} from '@/domain/page'
 import type { Invite, Member, Role, Wiki, WikiSummary } from '@/domain/wiki'
 
 /** The person's Twake Workplace settings; null where they never chose. */
@@ -41,6 +48,25 @@ export interface PersonMatch {
   email: string
   name: string | null
 }
+
+export interface NewPage {
+  /** 1 to 200 characters, trimmed. */
+  title: string
+  kind: PageKind
+  parentId: string | null
+  /** The sibling to place it after; it goes last otherwise. */
+  afterId?: string
+  beforeId?: string
+  /** A document's blocks, from its template; none by default. */
+  content?: Block[]
+  /** Required for a database. */
+  gristUrl?: string
+}
+
+/** A draft to publish, with the version it started from. */
+export type NewVersion = { baseVersion: number; title: string } & (
+  { content: Block[] } | { gristUrl: string }
+)
 
 /** Why the backend refused a request: the `error` of its answer. */
 export type Refusal =
@@ -93,6 +119,18 @@ export interface PagesApi {
   removeMember: (wikiId: string, userId: string) => Promise<void>
   /** People of the person's organization, at most 10. */
   searchPeople: (query: string) => Promise<PersonMatch[]>
+
+  /** Editor; version 1, followed by the person. */
+  createPage: (wikiId: string, page: NewPage) => Promise<Page>
+  /** Records the visit for the person's recent pages. */
+  getPage: (pageId: string) => Promise<Page>
+  /** Editor; rejects with an EditConflict when the page moved past `baseVersion`. */
+  publish: (pageId: string, version: NewVersion) => Promise<Page>
+  /** Newest first. */
+  listVersions: (pageId: string) => Promise<VersionSummary[]>
+  getVersion: (pageId: string, number: number) => Promise<Version>
+  /** Editor; publishes that version's title and content again. */
+  restoreVersion: (pageId: string, number: number) => Promise<Page>
 }
 
 export class ApiError extends Error {
@@ -103,5 +141,15 @@ export class ApiError extends Error {
     super(`API answered ${String(status)}${code ? ` ${code}` : ''}`)
     this.status = status
     this.code = code
+  }
+}
+
+/** Publishing a draft started from a version older than the current one. */
+export class EditConflict extends ApiError {
+  readonly current: VersionSummary
+
+  constructor(current: VersionSummary) {
+    super(409, 'edit_conflict')
+    this.current = current
   }
 }

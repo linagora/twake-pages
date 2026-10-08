@@ -2,11 +2,19 @@ import { vi, type Mock } from 'vitest'
 
 import {
   ApiError,
+  EditConflict,
   type PagesApi,
   type Refusal,
   type UserSettings
 } from '@/application/pages'
-import type { Block, Page, PageKind, TreePage, Version } from '@/domain/page'
+import type {
+  Block,
+  Page,
+  PageKind,
+  TreePage,
+  Version,
+  VersionSummary
+} from '@/domain/page'
 import type { Person } from '@/domain/person'
 import type {
   Invite,
@@ -60,6 +68,16 @@ export const NO_SETTINGS: UserSettings = {
   avatar: null,
   name: null
 }
+
+/** The fake backend's GRIST_ORIGINS: database pages frame documents from it. */
+export const GRIST_ORIGIN = 'https://grist.example.com'
+
+/** A paragraph, as BlockNote stores it. */
+export const paragraph = (text: string): Block => ({
+  type: 'paragraph',
+  content: [{ type: 'text', text, styles: {} }],
+  children: []
+})
 
 let counter = 0
 const nextId = () => {
@@ -127,6 +145,8 @@ interface StoredPage {
   createdBy: Person
   /** Oldest first: the last one is the page's current version. */
   versions: Version[]
+  /** By person id. */
+  followers: Set<string>
 }
 
 interface World {
@@ -137,8 +157,17 @@ interface World {
   apis: Map<string, FakePagesApi>
 }
 
+interface Content {
+  title: string
+  content: Block[]
+  gristUrl: string | null
+}
+
 const byPosition = (a: { position: string }, b: { position: string }) =>
   a.position < b.position ? -1 : a.position > b.position ? 1 : 0
+
+const byEmail = (a: { email: string }, b: { email: string }) =>
+  a.email.localeCompare(b.email)
 
 // Answers like the network would: later, and with copies.
 const answer = <T>(work: () => T): Promise<T> =>
@@ -155,6 +184,63 @@ function description(value = '') {
   if (trimmed.length > 500) throw refuse('invalid_request')
   return trimmed
 }
+
+function gristAddress(value: string | undefined) {
+  if (value === undefined) throw refuse('invalid_request')
+  const url = URL.parse(value)
+  if (!url) throw refuse('invalid_request')
+  if (url.origin !== GRIST_ORIGIN) throw refuse('invalid_grist_url')
+  return value
+}
+
+// As the backend does: the neighbours must still be next to each other.
+function positionBetween(
+  siblings: StoredPage[],
+  afterId?: string,
+  beforeId?: string
+) {
+  const after = afterId ? siblings.findIndex(page => page.id === afterId) : -1
+  const before = beforeId
+    ? siblings.findIndex(page => page.id === beforeId)
+    : -1
+  if ((afterId && after < 0) || (beforeId && before < 0)) {
+    throw refuse('stale_neighbours')
+  }
+  if (afterId && beforeId && before !== after + 1) {
+    throw refuse('stale_neighbours')
+  }
+  const lower = afterId
+    ? siblings[after]
+    : beforeId
+      ? siblings[before - 1]
+      : siblings.at(-1)
+  const upper = afterId
+    ? siblings[after + 1]
+    : beforeId
+      ? siblings[before]
+      : undefined
+  return keyBetween(lower?.position ?? null, upper?.position ?? null)
+}
+
+const currentOf = (page: StoredPage) => {
+  const version = page.versions.at(-1)
+  if (!version) throw new Error(`Page ${page.id} has no version`)
+  return version
+}
+
+const summaryOfVersion = ({
+  number,
+  title,
+  author,
+  createdAt,
+  restoredFrom
+}: Version): VersionSummary => ({
+  number,
+  title,
+  author,
+  createdAt,
+  restoredFrom
+})
 
 /** The fake backend, signed in as Alice Martin, the person of fakeSession. */
 export function fakePagesApi(): FakePagesApi {
@@ -198,6 +284,12 @@ function signedIn(world: World, person: Person): FakePagesApi {
     return { wiki, role }
   }
 
+  const pageAccess = (pageId: string, needed: Role = 'viewer') => {
+    const page = world.pages.get(pageId)
+    if (!page) throw refuse('not_found')
+    return { page, ...access(page.wikiId, needed) }
+  }
+
   const bump = (wiki: StoredWiki) => {
     wiki.version += 1
     for (const listener of world.watchers.get(wiki.id) ?? []) {
@@ -220,17 +312,34 @@ function signedIn(world: World, person: Person): FakePagesApi {
     return { ...summaryOf(wiki, role), version: wiki.version }
   }
 
-  const livePages = (wikiId: string) =>
+  const pagesOf = (wikiId: string) =>
     [...world.pages.values()].filter(page => page.wikiId === wikiId)
 
-  const current = (page: StoredPage) => {
-    const version = page.versions.at(-1)
-    if (!version) throw new Error(`Page ${page.id} has no version`)
-    return version
+  const siblingsOf = (wikiId: string, parentId: string | null) =>
+    pagesOf(wikiId)
+      .filter(page => !page.home && page.parentId === parentId)
+      .sort(byPosition)
+
+  const checkParent = (wikiId: string, parentId: string | null) => {
+    if (parentId === null) return
+    const parent = world.pages.get(parentId)
+    if (parent?.wikiId !== wikiId || parent.home) {
+      throw refuse('invalid_parent')
+    }
+  }
+
+  const ancestorsOf = (page: StoredPage) => {
+    const ancestors: { id: string; title: string }[] = []
+    let parent = page.parentId ? world.pages.get(page.parentId) : undefined
+    while (parent) {
+      ancestors.unshift({ id: parent.id, title: currentOf(parent).title })
+      parent = parent.parentId ? world.pages.get(parent.parentId) : undefined
+    }
+    return ancestors
   }
 
   const pageFor = (page: StoredPage): Page => {
-    const version = current(page)
+    const version = currentOf(page)
     return {
       id: page.id,
       wikiId: page.wikiId,
@@ -246,8 +355,8 @@ function signedIn(world: World, person: Person): FakePagesApi {
       updatedAt: version.createdAt,
       updatedBy: version.author,
       labels: [],
-      ancestors: [],
-      following: false,
+      ancestors: ancestorsOf(page),
+      following: page.followers.has(person.id),
       favorite: false,
       deletedAt: null
     }
@@ -255,40 +364,57 @@ function signedIn(world: World, person: Person): FakePagesApi {
 
   const makePage = (
     wiki: StoredWiki,
-    seed: Required<Pick<PageSeed, 'title' | 'kind'>> & PageSeed,
+    fields: Content & {
+      kind: PageKind
+      parentId: string | null
+      position: string
+    },
     home = false
   ) => {
-    const parentId = seed.parentId ?? null
-    const last = livePages(wiki.id)
-      .filter(page => !page.home && page.parentId === parentId)
-      .sort(byPosition)
-      .at(-1)
     const createdAt = now()
     const author = { ...person }
     const page: StoredPage = {
       id: nextId(),
       wikiId: wiki.id,
-      parentId,
+      parentId: fields.parentId,
       home,
-      kind: seed.kind,
-      position: home ? '' : keyBetween(last?.position ?? null, null),
+      kind: fields.kind,
+      position: fields.position,
       createdAt,
       createdBy: author,
       versions: [
         {
           number: 1,
-          title: seed.title,
+          title: fields.title,
           author,
           createdAt,
           restoredFrom: null,
-          content: seed.content ?? [],
-          gristUrl: seed.gristUrl ?? null
+          content: fields.content,
+          gristUrl: fields.gristUrl
         }
-      ]
+      ],
+      followers: new Set([person.id])
     }
     world.pages.set(page.id, page)
     bump(wiki)
     return page
+  }
+
+  const addVersion = (
+    page: StoredPage,
+    wiki: StoredWiki,
+    fields: Content,
+    restoredFrom: number | null = null
+  ) => {
+    page.versions.push({
+      ...fields,
+      number: currentOf(page).number + 1,
+      author: { ...person },
+      createdAt: now(),
+      restoredFrom
+    })
+    page.followers.add(person.id)
+    bump(wiki)
   }
 
   const makeWiki = (name: string, wikiDescription: string, kind: WikiKind) => {
@@ -307,7 +433,19 @@ function signedIn(world: World, person: Person): FakePagesApi {
       invites: []
     }
     world.wikis.set(wiki.id, wiki)
-    wiki.homePageId = makePage(wiki, { title: name, kind: 'document' }, true).id
+    const home = makePage(
+      wiki,
+      {
+        title: name,
+        kind: 'document',
+        parentId: null,
+        position: '',
+        content: [],
+        gristUrl: null
+      },
+      true
+    )
+    wiki.homePageId = home.id
     return wiki
   }
 
@@ -355,9 +493,6 @@ function signedIn(world: World, person: Person): FakePagesApi {
     role,
     joinedAt
   })
-
-  const byEmail = (a: { email: string }, b: { email: string }) =>
-    a.email.localeCompare(b.email)
 
   const mocks: Mocks = {
     settings: vi.fn<PagesApi['settings']>(() =>
@@ -418,14 +553,14 @@ function signedIn(world: World, person: Person): FakePagesApi {
     getTree: vi.fn<PagesApi['getTree']>(wikiId =>
       answer(() => {
         const { wiki } = access(wikiId)
-        const pages = livePages(wikiId)
+        const pages = pagesOf(wikiId)
           .filter(page => !page.home)
           .sort(byPosition)
           .map((page): TreePage => ({
             id: page.id,
             parentId: page.parentId,
             position: page.position,
-            title: current(page).title,
+            title: currentOf(page).title,
             kind: page.kind
           }))
         return { version: wiki.version, pages }
@@ -517,6 +652,76 @@ function signedIn(world: World, person: Person): FakePagesApi {
           .slice(0, 10)
           .map(({ email, name }) => ({ email, name }))
       })
+    ),
+
+    createPage: vi.fn<PagesApi['createPage']>((wikiId, input) =>
+      answer(() => {
+        const { wiki } = access(wikiId, 'editor')
+        const title = text(input.title, 200)
+        checkParent(wikiId, input.parentId)
+        const position = positionBetween(
+          siblingsOf(wikiId, input.parentId),
+          input.afterId,
+          input.beforeId
+        )
+        const body =
+          input.kind === 'database'
+            ? { content: [], gristUrl: gristAddress(input.gristUrl) }
+            : { content: input.content ?? [], gristUrl: null }
+        const page = makePage(wiki, {
+          ...body,
+          title,
+          kind: input.kind,
+          parentId: input.parentId,
+          position
+        })
+        return pageFor(page)
+      })
+    ),
+    getPage: vi.fn<PagesApi['getPage']>(pageId =>
+      answer(() => pageFor(pageAccess(pageId).page))
+    ),
+    publish: vi.fn<PagesApi['publish']>((pageId, draft) =>
+      answer(() => {
+        const title = text(draft.title, 200)
+        const { page, wiki } = pageAccess(pageId, 'editor')
+        if ((page.kind === 'document') !== 'content' in draft) {
+          throw refuse('invalid_request')
+        }
+        const latest = currentOf(page)
+        if (draft.baseVersion !== latest.number) {
+          throw new EditConflict(summaryOfVersion(latest))
+        }
+        addVersion(page, wiki, {
+          title,
+          content: 'content' in draft ? draft.content : [],
+          gristUrl: 'gristUrl' in draft ? gristAddress(draft.gristUrl) : null
+        })
+        return pageFor(page)
+      })
+    ),
+    listVersions: vi.fn<PagesApi['listVersions']>(pageId =>
+      answer(() =>
+        pageAccess(pageId).page.versions.toReversed().map(summaryOfVersion)
+      )
+    ),
+    getVersion: vi.fn<PagesApi['getVersion']>((pageId, number) =>
+      answer(() => {
+        const { page } = pageAccess(pageId)
+        const version = page.versions.find(each => each.number === number)
+        if (!version) throw refuse('not_found')
+        return version
+      })
+    ),
+    restoreVersion: vi.fn<PagesApi['restoreVersion']>((pageId, number) =>
+      answer(() => {
+        const { page, wiki } = pageAccess(pageId, 'editor')
+        const version = page.versions.find(each => each.number === number)
+        if (!version) throw refuse('not_found')
+        const { title, content, gristUrl } = version
+        addVersion(page, wiki, { title, content, gristUrl }, number)
+        return pageFor(page)
+      })
     )
   }
 
@@ -550,10 +755,17 @@ function signedIn(world: World, person: Person): FakePagesApi {
     withPage: (wikiId, seed = {}) => {
       const wiki = wikiOf(wikiId)
       if (!wiki) throw new Error(`No wiki ${wikiId}`)
+      const kind = seed.kind ?? 'document'
+      const parentId = seed.parentId ?? null
       const page = makePage(wiki, {
-        ...seed,
         title: seed.title ?? 'Untitled',
-        kind: seed.kind ?? 'document'
+        kind,
+        parentId,
+        position: positionBetween(siblingsOf(wikiId, parentId)),
+        content: seed.content ?? [],
+        gristUrl:
+          seed.gristUrl ??
+          (kind === 'database' ? `${GRIST_ORIGIN}/o/docs/untitled` : null)
       })
       return structuredClone(pageFor(page))
     }

@@ -1,8 +1,14 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { httpPagesApi, type Send } from '@/adapters/http/httpPagesApi'
-import { ApiError, type PagesApi, type Sharing } from '@/application/pages'
-import type { TreePage } from '@/domain/page'
+import {
+  ApiError,
+  EditConflict,
+  type PagesApi,
+  type Sharing
+} from '@/application/pages'
+import type { Page, TreePage, Version, VersionSummary } from '@/domain/page'
+import type { Person } from '@/domain/person'
 import type { Wiki, WikiSummary } from '@/domain/wiki'
 
 function backend(status: number, body?: unknown) {
@@ -82,6 +88,40 @@ const sharing: Sharing = {
   ],
   managed: false
 }
+const alice: Person = {
+  id: 'u1',
+  email: 'alice@example.com',
+  name: 'Alice Martin'
+}
+const content = [{ type: 'paragraph', content: 'Welcome' }]
+const page: Page = {
+  id: 'p1',
+  wikiId: 'w1',
+  parentId: null,
+  home: false,
+  kind: 'document',
+  title: 'Onboarding',
+  content,
+  gristUrl: null,
+  version: 2,
+  createdAt: '2026-10-08T07:30:00.000Z',
+  createdBy: alice,
+  updatedAt: '2026-10-08T07:40:00.000Z',
+  updatedBy: alice,
+  labels: ['howto'],
+  ancestors: [],
+  following: true,
+  favorite: false,
+  deletedAt: null
+}
+const versionSummary: VersionSummary = {
+  number: 2,
+  title: 'Onboarding',
+  author: alice,
+  createdAt: '2026-10-08T07:40:00.000Z',
+  restoredFrom: null
+}
+const version: Version = { ...versionSummary, content, gristUrl: null }
 
 interface Exchange {
   call: (api: PagesApi) => Promise<unknown>
@@ -179,6 +219,68 @@ const exchanges: Record<string, Exchange> = {
     path: '/people?q=Ana+L',
     answer: { people: [{ email: 'ana@example.com', name: 'Ana Lopez' }] },
     resolves: [{ email: 'ana@example.com', name: 'Ana Lopez' }]
+  },
+  createPage: {
+    call: api =>
+      api.createPage('w1', {
+        title: 'Onboarding',
+        kind: 'document',
+        parentId: null,
+        afterId: 'p0',
+        content
+      }),
+    method: 'POST',
+    path: '/wikis/w1/pages',
+    body: {
+      title: 'Onboarding',
+      kind: 'document',
+      parentId: null,
+      afterId: 'p0',
+      content
+    },
+    status: 201,
+    answer: page,
+    resolves: page
+  },
+  getPage: {
+    call: api => api.getPage('p1'),
+    method: 'GET',
+    path: '/pages/p1',
+    answer: page,
+    resolves: page
+  },
+  publish: {
+    call: api =>
+      api.publish('p1', { baseVersion: 1, title: 'Onboarding', content }),
+    method: 'POST',
+    path: '/pages/p1/versions',
+    body: { baseVersion: 1, title: 'Onboarding', content },
+    status: 201,
+    answer: page,
+    resolves: page
+  },
+  listVersions: {
+    call: api => api.listVersions('p1'),
+    method: 'GET',
+    path: '/pages/p1/versions',
+    answer: { versions: [versionSummary] },
+    resolves: [versionSummary]
+  },
+  getVersion: {
+    call: api => api.getVersion('p1', 2),
+    method: 'GET',
+    path: '/pages/p1/versions/2',
+    answer: version,
+    resolves: version
+  },
+  restoreVersion: {
+    call: api => api.restoreVersion('p1', 1),
+    method: 'POST',
+    path: '/pages/p1/versions/1/restore',
+    body: {},
+    status: 201,
+    answer: page,
+    resolves: page
   }
 }
 
@@ -222,6 +324,26 @@ describe('httpPagesApi', () => {
     await expect(httpPagesApi(BASE, send).listWikis()).rejects.toEqual(
       new ApiError(403, 'forbidden')
     )
+  })
+
+  it('rejects a publish over a newer version with the current one', async () => {
+    const send = backend(409, {
+      error: 'edit_conflict',
+      current: versionSummary
+    })
+
+    const publishing = httpPagesApi(BASE, send).publish('p1', {
+      baseVersion: 1,
+      title: 'Onboarding',
+      content
+    })
+
+    await expect(publishing).rejects.toBeInstanceOf(EditConflict)
+    await expect(publishing).rejects.toMatchObject({
+      status: 409,
+      code: 'edit_conflict',
+      current: versionSummary
+    })
   })
 
   it('rejects without a code when the answer has no body', async () => {

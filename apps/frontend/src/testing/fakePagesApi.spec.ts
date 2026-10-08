@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import { ApiError } from '@/application/pages'
-import { fakePagesApi } from '@/testing/fakePagesApi'
+import { ApiError, EditConflict } from '@/application/pages'
+import { fakePagesApi, GRIST_ORIGIN, paragraph } from '@/testing/fakePagesApi'
 
 describe('fakePagesApi', () => {
   describe('wikis', () => {
@@ -214,6 +214,231 @@ describe('fakePagesApi', () => {
       await expect(api.searchPeople('carol@')).resolves.toEqual([
         { email: 'carol@example.com', name: 'Carol Diaz' }
       ])
+    })
+  })
+
+  describe('pages', () => {
+    it('makes a page at version 1, followed by its author', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki()
+
+      const page = await api.createPage(wiki.id, {
+        title: ' Onboarding ',
+        kind: 'document',
+        parentId: null,
+        content: [paragraph('Welcome')]
+      })
+
+      expect(page).toMatchObject({
+        wikiId: wiki.id,
+        parentId: null,
+        home: false,
+        title: 'Onboarding',
+        content: [paragraph('Welcome')],
+        gristUrl: null,
+        version: 1,
+        createdBy: api.person,
+        updatedBy: api.person,
+        labels: [],
+        ancestors: [],
+        following: true,
+        favorite: false,
+        deletedAt: null
+      })
+      await expect(api.getPage(page.id)).resolves.toEqual(page)
+    })
+
+    it('places a page after or before a sibling, by fractional keys', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki()
+      const a = api.withPage(wiki.id, { title: 'A' })
+      api.withPage(wiki.id, { title: 'B' })
+      const at = (afterId?: string, beforeId?: string) => ({
+        kind: 'document' as const,
+        parentId: null,
+        ...(afterId && { afterId }),
+        ...(beforeId && { beforeId })
+      })
+
+      await api.createPage(wiki.id, { title: 'C', ...at(a.id) })
+      await api.createPage(wiki.id, { title: 'D', ...at(undefined, a.id) })
+
+      const { pages } = await api.getTree(wiki.id)
+      const titles = pages
+        .toSorted((x, y) => (x.position < y.position ? -1 : 1))
+        .map(page => page.title)
+      expect(titles).toEqual(['D', 'A', 'C', 'B'])
+    })
+
+    it('refuses neighbours that are not next to each other under the parent', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki()
+      const a = api.withPage(wiki.id, { title: 'A' })
+      api.withPage(wiki.id, { title: 'B' })
+      const c = api.withPage(wiki.id, { title: 'C' })
+      const child = api.withPage(wiki.id, { title: 'Child', parentId: a.id })
+      const page = { title: 'New', kind: 'document' as const, parentId: null }
+      const stale = new ApiError(409, 'stale_neighbours')
+
+      await expect(
+        api.createPage(wiki.id, { ...page, afterId: child.id })
+      ).rejects.toEqual(stale)
+      await expect(
+        api.createPage(wiki.id, { ...page, afterId: a.id, beforeId: c.id })
+      ).rejects.toEqual(stale)
+    })
+
+    it('needs a live page of the wiki as parent, other than its home page', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki()
+      const other = api.withPage(api.withWiki().id)
+      const page = { title: 'New', kind: 'document' as const }
+      const invalidParent = new ApiError(400, 'invalid_parent')
+
+      await expect(
+        api.createPage(wiki.id, { ...page, parentId: wiki.homePageId })
+      ).rejects.toEqual(invalidParent)
+      await expect(
+        api.createPage(wiki.id, { ...page, parentId: other.id })
+      ).rejects.toEqual(invalidParent)
+    })
+
+    it('frames a database from an address on a Grist origin', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki()
+      const database = {
+        title: 'Budget',
+        kind: 'database' as const,
+        parentId: null
+      }
+
+      await expect(
+        api.createPage(wiki.id, {
+          ...database,
+          gristUrl: `${GRIST_ORIGIN}/o/docs/budget`
+        })
+      ).resolves.toMatchObject({
+        content: [],
+        gristUrl: `${GRIST_ORIGIN}/o/docs/budget`
+      })
+      await expect(
+        api.createPage(wiki.id, {
+          ...database,
+          gristUrl: 'https://evil.example.com/o/docs/budget'
+        })
+      ).rejects.toEqual(new ApiError(400, 'invalid_grist_url'))
+    })
+
+    it('lists the ancestors of a page, from the top of the tree', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki()
+      const onboarding = api.withPage(wiki.id, { title: 'Onboarding' })
+      const laptop = api.withPage(wiki.id, {
+        title: 'Laptop',
+        parentId: onboarding.id
+      })
+      const setup = api.withPage(wiki.id, {
+        title: 'Setup',
+        parentId: laptop.id
+      })
+
+      await expect(api.getPage(setup.id)).resolves.toMatchObject({
+        ancestors: [
+          { id: onboarding.id, title: 'Onboarding' },
+          { id: laptop.id, title: 'Laptop' }
+        ]
+      })
+    })
+
+    it('publishes a new version, followed by its author', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki({ members: { 'bob@example.com': 'editor' } })
+      const page = api.withPage(wiki.id, { title: 'Onboarding' })
+      const bob = api.signedInAs('bob@example.com', 'Bob Stone')
+
+      const published = await bob.publish(page.id, {
+        baseVersion: 1,
+        title: 'Onboarding guide',
+        content: [paragraph('Welcome aboard')]
+      })
+
+      expect(published).toMatchObject({
+        title: 'Onboarding guide',
+        content: [paragraph('Welcome aboard')],
+        version: 2,
+        createdBy: api.person,
+        updatedBy: bob.person,
+        following: true
+      })
+    })
+
+    it('refuses to publish over a newer version, telling the current one', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki({ members: { 'bob@example.com': 'editor' } })
+      const page = api.withPage(wiki.id, { title: 'Onboarding' })
+      const draft = { baseVersion: 1, title: 'Onboarding', content: [] }
+      await api.signedInAs('bob@example.com').publish(page.id, draft)
+
+      const publishing = api.publish(page.id, draft)
+
+      await expect(publishing).rejects.toBeInstanceOf(EditConflict)
+      await expect(publishing).rejects.toMatchObject({
+        status: 409,
+        current: { number: 2, author: { email: 'bob@example.com' } }
+      })
+    })
+
+    it('keeps every version, and restores one as a new version', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki()
+      const page = api.withPage(wiki.id, {
+        title: 'Onboarding',
+        content: [paragraph('First')]
+      })
+      await api.publish(page.id, {
+        baseVersion: 1,
+        title: 'Onboarding guide',
+        content: [paragraph('Second')]
+      })
+
+      const restored = await api.restoreVersion(page.id, 1)
+
+      expect(restored).toMatchObject({
+        title: 'Onboarding',
+        content: [paragraph('First')],
+        version: 3
+      })
+      const versions = await api.listVersions(page.id)
+      expect(versions.map(each => [each.number, each.restoredFrom])).toEqual([
+        [3, 1],
+        [2, null],
+        [1, null]
+      ])
+      await expect(api.getVersion(page.id, 2)).resolves.toMatchObject({
+        title: 'Onboarding guide',
+        content: [paragraph('Second')]
+      })
+    })
+
+    it('lets viewers read pages, and only editors write them', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki({ role: 'viewer' })
+      const page = api.withPage(wiki.id, { title: 'Onboarding' })
+      const forbidden = new ApiError(403, 'forbidden')
+
+      await expect(api.getPage(page.id)).resolves.toMatchObject({
+        title: 'Onboarding'
+      })
+      await expect(
+        api.createPage(wiki.id, {
+          title: 'New',
+          kind: 'document',
+          parentId: null
+        })
+      ).rejects.toEqual(forbidden)
+      await expect(
+        api.publish(page.id, { baseVersion: 1, title: 'New', content: [] })
+      ).rejects.toEqual(forbidden)
     })
   })
 })

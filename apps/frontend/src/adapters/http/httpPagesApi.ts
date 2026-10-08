@@ -1,20 +1,33 @@
-import { ApiError, type PagesApi, type PersonMatch } from '@/application/pages'
+import {
+  ApiError,
+  EditConflict,
+  type PagesApi,
+  type PersonMatch
+} from '@/application/pages'
+import type { VersionSummary } from '@/domain/page'
 import type { WikiSummary } from '@/domain/wiki'
 
 export type Send = (request: Request) => Promise<Response>
 
-async function errorCode(response: Response): Promise<string | null> {
+async function refusal(response: Response): Promise<ApiError> {
+  let body: unknown = null
   try {
-    const body: unknown = await response.json()
-    return typeof body === 'object' &&
-      body !== null &&
-      'error' in body &&
-      typeof body.error === 'string'
-      ? body.error
-      : null
+    body = await response.json()
   } catch {
-    return null
+    // No JSON body: a refusal without a code.
   }
+  const fields = typeof body === 'object' && body !== null ? body : {}
+  const code =
+    'error' in fields && typeof fields.error === 'string' ? fields.error : null
+  if (
+    code === 'edit_conflict' &&
+    'current' in fields &&
+    typeof fields.current === 'object' &&
+    fields.current !== null
+  ) {
+    return new EditConflict(fields.current as VersionSummary)
+  }
+  return new ApiError(response.status, code)
 }
 
 const RETRY_MS = 1000
@@ -53,9 +66,7 @@ export function httpPagesApi(baseUrl: string, send: Send): PagesApi {
         })
       })
     )
-    if (!response.ok) {
-      throw new ApiError(response.status, await errorCode(response))
-    }
+    if (!response.ok) throw await refusal(response)
     return (response.status === 204 ? undefined : await response.json()) as T
   }
 
@@ -117,6 +128,20 @@ export function httpPagesApi(baseUrl: string, send: Send): PagesApi {
       call<{ people: PersonMatch[] }>(
         'GET',
         `/people?${new URLSearchParams({ q: query }).toString()}`
-      ).then(({ people }) => people)
+      ).then(({ people }) => people),
+
+    createPage: (wikiId, page) => call('POST', `/wikis/${wikiId}/pages`, page),
+    getPage: pageId => call('GET', `/pages/${pageId}`),
+    publish: (pageId, version) =>
+      call('POST', `/pages/${pageId}/versions`, version),
+    listVersions: pageId =>
+      call<{ versions: VersionSummary[] }>(
+        'GET',
+        `/pages/${pageId}/versions`
+      ).then(({ versions }) => versions),
+    getVersion: (pageId, number) =>
+      call('GET', `/pages/${pageId}/versions/${String(number)}`),
+    restoreVersion: (pageId, number) =>
+      call('POST', `/pages/${pageId}/versions/${String(number)}/restore`, {})
   }
 }
