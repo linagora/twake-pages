@@ -1,4 +1,5 @@
 import type { Comment } from '@/domain/comment'
+import type { Notification } from '@/domain/notification'
 import type {
   Block,
   Page,
@@ -102,6 +103,23 @@ export interface NewComment {
   parentId?: string
 }
 
+export interface Notifications {
+  /** Newest first, at most 100. */
+  notifications: Notification[]
+  /** Every unread one, listed or not. */
+  unread: number
+}
+
+/** Some notifications by id, all of them, or those about a wiki's pages. */
+export type ReadSelection =
+  { ids: string[] } | { all: true } | { wikiId: string }
+
+/** How many unread notifications are about the pages of a wiki. */
+export interface Badge {
+  wikiId: string
+  count: number
+}
+
 /** Why the backend refused a request: the `error` of its answer. */
 export type Refusal =
   | 'not_found'
@@ -197,6 +215,12 @@ export interface PagesApi {
   editComment: (commentId: string, body: string) => Promise<Comment>
   /** Its author or an admin; its replies go with it. */
   deleteComment: (commentId: string) => Promise<void>
+
+  /** About the pages the person follows or was mentioned on. */
+  listNotifications: () => Promise<Notifications>
+  markRead: (selection: ReadSelection) => Promise<void>
+  /** The wikis with unread notifications, and how many. */
+  badges: () => Promise<Badge[]>
 }
 
 export class ApiError extends Error {

@@ -1,6 +1,7 @@
 import {
   ApiError,
   EditConflict,
+  type Badge,
   type Label,
   type LabelledPage,
   type PagesApi,
@@ -184,6 +185,11 @@ export function httpPagesApi(baseUrl: string, send: Send): PagesApi {
       call('POST', `/pages/${pageId}/comments`, comment),
     editComment: (commentId, body) =>
       call('PATCH', `/comments/${commentId}`, { body }),
-    deleteComment: commentId => call('DELETE', `/comments/${commentId}`)
+    deleteComment: commentId => call('DELETE', `/comments/${commentId}`),
+
+    listNotifications: () => call('GET', '/notifications'),
+    markRead: selection => call('POST', '/notifications/read', selection),
+    badges: () =>
+      call<{ badges: Badge[] }>('GET', '/badges').then(({ badges }) => badges)
   }
 }

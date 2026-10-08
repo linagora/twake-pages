@@ -23,6 +23,13 @@ async function outlineOf(api: FakePagesApi, wikiId: string) {
   return outline(buildTree((await api.getTree(wikiId)).pages))
 }
 
+async function badgesOf(api: FakePagesApi) {
+  const badges = await api.badges()
+  return Object.fromEntries(badges.map(badge => [badge.wikiId, badge.count]))
+}
+
+const nothing = { notifications: [], unread: 0 }
+
 describe('fakePagesApi', () => {
   describe('wikis', () => {
     it("makes the person's personal wiki on the first list", async () => {
@@ -938,6 +945,159 @@ describe('fakePagesApi', () => {
       await api.deleteComment(question.id)
 
       await expect(api.listComments(page.id)).resolves.toEqual([])
+    })
+  })
+
+  describe('notifications', () => {
+    it('tells the followers of a page about its new versions, restores too', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki({
+        name: 'Handbook',
+        members: { 'bob@example.com': 'editor', 'carol@example.com': 'viewer' }
+      })
+      const page = api.withPage(wiki.id, { title: 'Onboarding' })
+      const bob = api.signedInAs('bob@example.com', 'Bob Stone')
+      const carol = api.signedInAs('carol@example.com')
+
+      await bob.publish(page.id, {
+        baseVersion: 1,
+        title: 'Onboarding',
+        content: []
+      })
+      await api.restoreVersion(page.id, 1)
+
+      await expect(api.listNotifications()).resolves.toMatchObject({
+        notifications: [
+          {
+            reason: 'published',
+            page: { id: page.id, title: 'Onboarding' },
+            wiki: { id: wiki.id, name: 'Handbook' },
+            actor: { email: 'bob@example.com', name: 'Bob Stone' },
+            version: 2,
+            commentId: null,
+            readAt: null
+          }
+        ],
+        unread: 1
+      })
+      await expect(bob.listNotifications()).resolves.toMatchObject({
+        notifications: [{ reason: 'published', version: 3 }]
+      })
+      await expect(carol.listNotifications()).resolves.toEqual(nothing)
+    })
+
+    it('tells the members a comment mentions, and the other followers', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki({
+        members: { 'bob@example.com': 'viewer', 'carol@example.com': 'viewer' }
+      })
+      const page = api.withPage(wiki.id)
+      const bob = api.signedInAs('bob@example.com')
+      const carol = api.signedInAs('carol@example.com')
+      const dan = api.signedInAs('dan@example.com')
+      await bob.setFollowing(page.id, true)
+
+      const comment = await carol.addComment(page.id, {
+        body: '@bob@example.com, see @dan@example.com'
+      })
+
+      await expect(api.listNotifications()).resolves.toMatchObject({
+        notifications: [
+          {
+            reason: 'commented',
+            commentId: comment.id,
+            actor: { email: 'carol@example.com' }
+          }
+        ]
+      })
+      await expect(bob.listNotifications()).resolves.toMatchObject({
+        notifications: [{ reason: 'mentioned', commentId: comment.id }]
+      })
+      await expect(carol.listNotifications()).resolves.toEqual(nothing)
+      await expect(dan.listNotifications()).resolves.toEqual(nothing)
+    })
+
+    it('stops telling people who are no longer members', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki({ members: { 'bob@example.com': 'editor' } })
+      const page = api.withPage(wiki.id)
+      const bob = api.signedInAs('bob@example.com')
+      await bob.setFollowing(page.id, true)
+      await api.removeMember(wiki.id, bob.person.id)
+
+      await api.publish(page.id, { baseVersion: 1, title: 'New', content: [] })
+
+      await expect(bob.listNotifications()).resolves.toEqual(nothing)
+    })
+
+    it('forgets the notifications about deleted comments and left wikis', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki({ members: { 'bob@example.com': 'editor' } })
+      const page = api.withPage(wiki.id)
+      const bob = api.signedInAs('bob@example.com')
+      await bob.setFollowing(page.id, true)
+      const comment = await api.addComment(page.id, { body: 'Draft ready' })
+      await api.publish(page.id, { baseVersion: 1, title: 'New', content: [] })
+
+      await api.deleteComment(comment.id)
+
+      await expect(bob.listNotifications()).resolves.toMatchObject({
+        notifications: [{ reason: 'published' }],
+        unread: 1
+      })
+      await bob.removeMember(wiki.id, bob.person.id)
+      await expect(bob.listNotifications()).resolves.toEqual(nothing)
+      await expect(bob.badges()).resolves.toEqual([])
+    })
+
+    it('marks notifications read by id, by wiki or all, counting the unread per wiki', async () => {
+      const api = fakePagesApi()
+      const members = { 'bob@example.com': 'editor' } as const
+      const handbook = api.withWiki({ name: 'Handbook', members })
+      const guide = api.withWiki({ name: 'Guide', members })
+      const onboarding = api.withPage(handbook.id, { title: 'Onboarding' })
+      const setup = api.withPage(guide.id, { title: 'Setup' })
+      const bob = api.signedInAs('bob@example.com')
+      const draft = { title: 'New', content: [] }
+      await bob.publish(onboarding.id, { ...draft, baseVersion: 1 })
+      await bob.publish(setup.id, { ...draft, baseVersion: 1 })
+      await bob.publish(onboarding.id, { ...draft, baseVersion: 2 })
+      const { notifications } = await api.listNotifications()
+      const latest = notifications.filter(each => each.version === 3)
+
+      await api.markRead({ ids: latest.map(each => each.id) })
+
+      const read = await api.listNotifications()
+      expect(read.notifications.map(each => each.readAt === null)).toEqual([
+        false,
+        true,
+        true
+      ])
+      expect(read.unread).toBe(2)
+      expect(await badgesOf(api)).toEqual({ [handbook.id]: 1, [guide.id]: 1 })
+      await expect(api.listWikis()).resolves.toContainEqual(
+        expect.objectContaining({ id: guide.id, unread: 1 })
+      )
+      await api.markRead({ wikiId: guide.id })
+      expect(await badgesOf(api)).toEqual({ [handbook.id]: 1 })
+      await api.markRead({ all: true })
+      expect(await badgesOf(api)).toEqual({})
+    })
+
+    it('lists the 100 newest notifications, and counts every unread one', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki({ members: { 'bob@example.com': 'editor' } })
+      const page = api.withPage(wiki.id)
+      const bob = api.signedInAs('bob@example.com')
+      for (let baseVersion = 1; baseVersion <= 101; baseVersion += 1) {
+        await bob.publish(page.id, { baseVersion, title: 'New', content: [] })
+      }
+
+      const { notifications, unread } = await api.listNotifications()
+
+      expect(notifications).toHaveLength(100)
+      expect(notifications[0]?.version).toBe(102)
+      expect(unread).toBe(101)
     })
   })
 })

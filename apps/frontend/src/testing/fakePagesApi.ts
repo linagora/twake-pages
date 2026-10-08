@@ -8,6 +8,7 @@ import {
   type UserSettings
 } from '@/application/pages'
 import { mentionsIn, type Comment } from '@/domain/comment'
+import type { Notification, NotificationReason } from '@/domain/notification'
 import type {
   Block,
   Page,
@@ -168,11 +169,26 @@ interface StoredComment extends Comment {
   pageId: string
 }
 
+interface StoredNotification {
+  id: string
+  /** The person told. */
+  userId: string
+  pageId: string
+  reason: NotificationReason
+  actor: Person
+  version: number | null
+  commentId: string | null
+  createdAt: string
+  readAt: string | null
+}
+
 interface World {
   people: Map<string, Person>
   wikis: Map<string, StoredWiki>
   pages: Map<string, StoredPage>
   comments: Map<string, StoredComment>
+  /** Oldest first. */
+  notifications: StoredNotification[]
   watchers: Map<string, Set<(version: number) => void>>
   apis: Map<string, FakePagesApi>
 }
@@ -295,6 +311,7 @@ export function fakePagesApi(): FakePagesApi {
     wikis: new Map(),
     pages: new Map(),
     comments: new Map(),
+    notifications: [],
     watchers: new Map(),
     apis: new Map()
   }
@@ -365,6 +382,61 @@ function signedIn(world: World, person: Person): FakePagesApi {
     }
   }
 
+  // Never to the person who acted, nor to people who are not members.
+  const notify = (
+    page: StoredPage,
+    wiki: StoredWiki,
+    recipients: Iterable<string>,
+    fields: Pick<StoredNotification, 'reason' | 'version' | 'commentId'>
+  ) => {
+    for (const userId of recipients) {
+      if (userId === person.id || !wiki.members.has(userId)) continue
+      world.notifications.push({
+        ...fields,
+        id: nextId(),
+        userId,
+        pageId: page.id,
+        actor: { ...person },
+        createdAt: now(),
+        readAt: null
+      })
+    }
+  }
+
+  // The person's notifications, newest first, while they can see the page
+  // and the comment they are about.
+  const myNotifications = () =>
+    world.notifications
+      .flatMap(stored => {
+        const page = world.pages.get(stored.pageId)
+        const wiki = page && wikiOf(page.wikiId)
+        const seen =
+          stored.userId === person.id &&
+          wiki?.members.has(person.id) &&
+          (stored.commentId === null || world.comments.has(stored.commentId))
+        return page && wiki && seen ? [{ stored, page, wiki }] : []
+      })
+      .reverse()
+
+  const unreadNotifications = () =>
+    myNotifications().filter(({ stored }) => stored.readAt === null)
+
+  const notificationFor = ({
+    stored,
+    page,
+    wiki
+  }: ReturnType<typeof myNotifications>[number]): Notification => ({
+    id: stored.id,
+    reason: stored.reason,
+    page: { id: page.id, title: currentOf(page).title },
+    wiki: { id: wiki.id, name: wiki.name },
+    actor: stored.actor,
+    version: stored.version,
+    commentId: stored.commentId,
+    createdAt: stored.createdAt,
+    readAt: stored.readAt
+  })
+
   const summaryOf = (wiki: StoredWiki, role: Role): WikiSummary => ({
     id: wiki.id,
     name: wiki.name,
@@ -372,7 +444,7 @@ function signedIn(world: World, person: Person): FakePagesApi {
     kind: wiki.kind,
     role,
     homePageId: wiki.homePageId,
-    unread: 0
+    unread: unreadNotifications().filter(each => each.wiki === wiki).length
   })
 
   const wikiFor = (wikiId: string): Wiki => {
@@ -499,14 +571,20 @@ function signedIn(world: World, person: Person): FakePagesApi {
     fields: Content,
     restoredFrom: number | null = null
   ) => {
+    const number = currentOf(page).number + 1
     page.versions.push({
       ...fields,
-      number: currentOf(page).number + 1,
+      number,
       author: { ...person },
       createdAt: now(),
       restoredFrom
     })
     page.followers.add(person.id)
+    notify(page, wiki, page.followers, {
+      reason: 'published',
+      version: number,
+      commentId: null
+    })
     bump(wiki)
   }
 
@@ -987,9 +1065,18 @@ function signedIn(world: World, person: Person): FakePagesApi {
         }
         world.comments.set(comment.id, comment)
         page.followers.add(person.id)
-        for (const member of mentionedIn(wiki, body)) {
-          page.followers.add(member.id)
-        }
+        const mentioned = new Set(
+          mentionedIn(wiki, body).map(member => member.id)
+        )
+        const told = { version: null, commentId: comment.id }
+        notify(page, wiki, mentioned, { ...told, reason: 'mentioned' })
+        notify(
+          page,
+          wiki,
+          [...page.followers].filter(userId => !mentioned.has(userId)),
+          { ...told, reason: 'commented' }
+        )
+        for (const userId of mentioned) page.followers.add(userId)
         bump(wiki)
         return commentFor(comment)
       })
@@ -1018,6 +1105,35 @@ function signedIn(world: World, person: Person): FakePagesApi {
           }
         }
         bump(wiki)
+      })
+    ),
+
+    listNotifications: vi.fn<PagesApi['listNotifications']>(() =>
+      answer(() => ({
+        notifications: myNotifications().slice(0, 100).map(notificationFor),
+        unread: unreadNotifications().length
+      }))
+    ),
+    markRead: vi.fn<PagesApi['markRead']>(selection =>
+      answer(() => {
+        const readAt = now()
+        for (const { stored, wiki } of myNotifications()) {
+          const selected =
+            'all' in selection ||
+            ('wikiId' in selection
+              ? wiki.id === selection.wikiId
+              : selection.ids.includes(stored.id))
+          if (selected) stored.readAt ??= readAt
+        }
+      })
+    ),
+    badges: vi.fn<PagesApi['badges']>(() =>
+      answer(() => {
+        const counts = new Map<string, number>()
+        for (const { wiki } of unreadNotifications()) {
+          counts.set(wiki.id, (counts.get(wiki.id) ?? 0) + 1)
+        }
+        return [...counts].map(([wikiId, count]) => ({ wikiId, count }))
       })
     )
   }

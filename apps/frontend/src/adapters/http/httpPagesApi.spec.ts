@@ -8,6 +8,7 @@ import {
   type Sharing
 } from '@/application/pages'
 import type { Comment } from '@/domain/comment'
+import type { Notification } from '@/domain/notification'
 import type {
   Page,
   TrashEntry,
@@ -148,6 +149,17 @@ const comment: Comment = {
   body: 'Thanks @bob@example.com',
   createdAt: '2026-10-08T07:45:00.000Z',
   editedAt: null
+}
+const notification: Notification = {
+  id: 'n1',
+  reason: 'mentioned',
+  page: { id: 'p1', title: 'Onboarding' },
+  wiki: { id: 'w1', name: 'Handbook' },
+  actor: alice,
+  version: null,
+  commentId: 'c1',
+  createdAt: '2026-10-08T07:45:00.000Z',
+  readAt: null
 }
 
 interface Exchange {
@@ -426,6 +438,27 @@ const exchanges: Record<string, Exchange> = {
     method: 'DELETE',
     path: '/comments/c1',
     status: 204
+  },
+  listNotifications: {
+    call: api => api.listNotifications(),
+    method: 'GET',
+    path: '/notifications',
+    answer: { notifications: [notification], unread: 3 },
+    resolves: { notifications: [notification], unread: 3 }
+  },
+  markRead: {
+    call: api => api.markRead({ wikiId: 'w1' }),
+    method: 'POST',
+    path: '/notifications/read',
+    body: { wikiId: 'w1' },
+    status: 204
+  },
+  badges: {
+    call: api => api.badges(),
+    method: 'GET',
+    path: '/badges',
+    answer: { badges: [{ wikiId: 'w1', count: 3 }] },
+    resolves: [{ wikiId: 'w1', count: 3 }]
   }
 }
 
