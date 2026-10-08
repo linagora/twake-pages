@@ -107,10 +107,8 @@ export function httpPagesApi(baseUrl: string, send: Send): PagesApi {
     settings: () => call('GET', '/settings'),
     watchSettings: onVersion => watch('/settings/events', onVersion),
 
-    listWikis: () =>
-      call<{ wikis: WikiSummary[] }>('GET', '/wikis').then(
-        ({ wikis }) => wikis
-      ),
+    listWikis: async () =>
+      (await call<{ wikis: WikiSummary[] }>('GET', '/wikis')).wikis,
     createWiki: wiki => call('POST', '/wikis', wiki),
     getWiki: wikiId => call('GET', `/wikis/${wikiId}`),
     renameWiki: (wikiId, changes) => call('PATCH', `/wikis/${wikiId}`, changes),
@@ -120,69 +118,73 @@ export function httpPagesApi(baseUrl: string, send: Send): PagesApi {
       watch(`/wikis/${wikiId}/stream`, onVersion),
 
     getMembers: wikiId => call('GET', `/wikis/${wikiId}/members`),
-    invite: (wikiId, email, role) =>
-      call('POST', `/wikis/${wikiId}/invites`, { email, role }).then(
-        () => undefined
-      ),
+    invite: async (wikiId, email, role) => {
+      await call('POST', `/wikis/${wikiId}/invites`, { email, role })
+    },
     cancelInvite: (wikiId, inviteId) =>
       call('DELETE', `/wikis/${wikiId}/invites/${inviteId}`),
     setMemberRole: (wikiId, userId, role) =>
       call('PATCH', `/wikis/${wikiId}/members/${userId}`, { role }),
     removeMember: (wikiId, userId) =>
       call('DELETE', `/wikis/${wikiId}/members/${userId}`),
-    searchPeople: query =>
-      call<{ people: PersonMatch[] }>(
-        'GET',
-        `/people?${new URLSearchParams({ q: query }).toString()}`
-      ).then(({ people }) => people),
+    searchPeople: async query =>
+      (
+        await call<{ people: PersonMatch[] }>(
+          'GET',
+          `/people?${new URLSearchParams({ q: query }).toString()}`
+        )
+      ).people,
 
     createPage: (wikiId, page) => call('POST', `/wikis/${wikiId}/pages`, page),
     getPage: pageId => call('GET', `/pages/${pageId}`),
     publish: (pageId, version) =>
       call('POST', `/pages/${pageId}/versions`, version),
-    listVersions: pageId =>
-      call<{ versions: VersionSummary[] }>(
-        'GET',
-        `/pages/${pageId}/versions`
-      ).then(({ versions }) => versions),
+    listVersions: async pageId =>
+      (
+        await call<{ versions: VersionSummary[] }>(
+          'GET',
+          `/pages/${pageId}/versions`
+        )
+      ).versions,
     getVersion: (pageId, number) =>
       call('GET', `/pages/${pageId}/versions/${String(number)}`),
     restoreVersion: (pageId, number) =>
       call('POST', `/pages/${pageId}/versions/${String(number)}/restore`, {}),
     movePage: (pageId, move) => call('POST', `/pages/${pageId}/move`, move),
     deletePage: pageId => call('DELETE', `/pages/${pageId}`),
-    setLabels: (pageId, names) =>
-      call<{ labels: string[] }>('PUT', `/pages/${pageId}/labels`, {
-        names
-      }).then(({ labels }) => labels),
+    setLabels: async (pageId, names) =>
+      (
+        await call<{ labels: string[] }>('PUT', `/pages/${pageId}/labels`, {
+          names
+        })
+      ).labels,
     setFollowing: (pageId, following) =>
       call(following ? 'PUT' : 'DELETE', `/pages/${pageId}/follow`),
     setFavorite: (pageId, favorite) =>
       call(favorite ? 'PUT' : 'DELETE', `/pages/${pageId}/favorite`),
 
-    listTrash: wikiId =>
-      call<{ pages: TrashEntry[] }>('GET', `/wikis/${wikiId}/trash`).then(
-        ({ pages }) => pages
-      ),
+    listTrash: async wikiId =>
+      (await call<{ pages: TrashEntry[] }>('GET', `/wikis/${wikiId}/trash`))
+        .pages,
     restorePage: pageId => call('POST', `/pages/${pageId}/restore`, {}),
     purgePage: (wikiId, pageId) =>
       call('DELETE', `/wikis/${wikiId}/trash/${pageId}`),
     emptyTrash: wikiId => call('DELETE', `/wikis/${wikiId}/trash`),
 
-    listLabels: wikiId =>
-      call<{ labels: Label[] }>('GET', `/wikis/${wikiId}/labels`).then(
-        ({ labels }) => labels
-      ),
-    pagesWithLabel: (wikiId, name) =>
-      call<{ pages: LabelledPage[] }>(
-        'GET',
-        `/wikis/${wikiId}/labels/${encodeURIComponent(name)}/pages`
-      ).then(({ pages }) => pages),
+    listLabels: async wikiId =>
+      (await call<{ labels: Label[] }>('GET', `/wikis/${wikiId}/labels`))
+        .labels,
+    pagesWithLabel: async (wikiId, name) =>
+      (
+        await call<{ pages: LabelledPage[] }>(
+          'GET',
+          `/wikis/${wikiId}/labels/${encodeURIComponent(name)}/pages`
+        )
+      ).pages,
 
-    listComments: pageId =>
-      call<{ comments: Comment[] }>('GET', `/pages/${pageId}/comments`).then(
-        ({ comments }) => comments
-      ),
+    listComments: async pageId =>
+      (await call<{ comments: Comment[] }>('GET', `/pages/${pageId}/comments`))
+        .comments,
     addComment: (pageId, comment) =>
       call('POST', `/pages/${pageId}/comments`, comment),
     editComment: (commentId, body) =>
@@ -191,23 +193,21 @@ export function httpPagesApi(baseUrl: string, send: Send): PagesApi {
 
     listNotifications: () => call('GET', '/notifications'),
     markRead: selection => call('POST', '/notifications/read', selection),
-    badges: () =>
-      call<{ badges: Badge[] }>('GET', '/badges').then(({ badges }) => badges),
+    badges: async () =>
+      (await call<{ badges: Badge[] }>('GET', '/badges')).badges,
 
-    favorites: () =>
-      call<{ pages: PageRef[] }>('GET', '/favorites').then(
-        ({ pages }) => pages
-      ),
-    recent: () =>
-      call<{ pages: RecentPage[] }>('GET', '/recent').then(
-        ({ pages }) => pages
-      ),
-    search: (query, wikiId) =>
-      call<{ results: SearchResult[] }>(
-        'GET',
-        `/search?${new URLSearchParams(
-          wikiId === undefined ? { q: query } : { q: query, wikiId }
-        ).toString()}`
-      ).then(({ results }) => results)
+    favorites: async () =>
+      (await call<{ pages: PageRef[] }>('GET', '/favorites')).pages,
+    recent: async () =>
+      (await call<{ pages: RecentPage[] }>('GET', '/recent')).pages,
+    search: async (query, wikiId) =>
+      (
+        await call<{ results: SearchResult[] }>(
+          'GET',
+          `/search?${new URLSearchParams(
+            wikiId === undefined ? { q: query } : { q: query, wikiId }
+          ).toString()}`
+        )
+      ).results
   }
 }
