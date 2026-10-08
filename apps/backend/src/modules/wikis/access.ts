@@ -19,10 +19,6 @@ export function accessibleWikis(tx: Tx, userId: string) {
     .as('accessible')
 }
 
-/**
- * The person's role on the wiki, or null when the wiki is deleted, out of
- * their reach, or they are no member of it.
- */
 export async function access(
   tx: Tx,
   identity: { userId: string },
@@ -38,7 +34,6 @@ export async function access(
 
 const RANK: Record<Role, number> = { viewer: 0, editor: 1, admin: 2 }
 
-/** Refuses unless the person has at least the role needed on the wiki. */
 export async function checkRole(
   tx: Tx,
   identity: { userId: string },

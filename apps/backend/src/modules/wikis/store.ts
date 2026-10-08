@@ -63,7 +63,6 @@ export const purgeWiki: Handler = async (raw, tx) => {
 
 type Author = Pick<Identity, 'userId' | 'email' | 'name'>
 
-/** The empty home page of a new wiki, titled after it, at version 1. */
 export async function addHomePage(
   tx: Tx,
   author: Author,

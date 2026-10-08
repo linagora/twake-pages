@@ -61,9 +61,7 @@ export const notifications = pgTable.withRLS(
     actorId: uuid('actor_id').notNull(),
     actorEmail: text('actor_email').notNull(),
     actorName: text('actor_name'),
-    // The version published, for published.
     version: integer(),
-    // The comment written, for commented and mentioned.
     commentId: uuid('comment_id'),
     createdAt: timestamptz('created_at').notNull().defaultNow(),
     readAt: timestamptz('read_at'),

@@ -22,7 +22,6 @@ export const comments = pgTable.withRLS(
     pageId: uuid('page_id')
       .notNull()
       .references(() => pages.id, { onDelete: 'cascade' }),
-    // A reply, on the page of the comment it answers.
     parentId: uuid('parent_id'),
     organizationId: organizationId(),
     authorId: uuid('author_id').notNull(),
