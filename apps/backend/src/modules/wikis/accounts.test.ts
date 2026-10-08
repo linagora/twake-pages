@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest'
 import type { PlatformEvent } from '../../events/envelope.ts'
 import { RejectedEventError } from '../../events/router.ts'
-import { createDb } from '../../infra/db.ts'
+import { createDb, inTenant } from '../../infra/db.ts'
 import {
   aB2cUser,
   aSpaceWiki,
@@ -15,6 +15,7 @@ import {
   type TestUser,
   type WikiSummary
 } from '../../testing/app.ts'
+import { pageFavorites, pageVisits } from '../pages/schema.ts'
 import { keepSettings } from '../settings/events.ts'
 import type { Role } from './access.ts'
 import { accountRoutes } from './accounts.ts'
@@ -55,9 +56,9 @@ async function aWiki(
   name: string,
   members: [TestUser, Role][]
 ) {
-  const wiki = (await api.as(admin).post('/wikis', { name })).json<{
-    id: string
-  }>()
+  const wiki = (
+    await api.as(admin).post('/wikis', { name })
+  ).json<WikiSummary>()
   for (const [user, role] of members) {
     await joinWiki(db, admin, wiki.id, user, role)
   }
@@ -69,6 +70,18 @@ async function personalWikiOf(user: TestUser) {
   if (!personal) throw new Error('no personal wiki')
   return personal
 }
+
+/**
+ * The pages the person keeps as favorites and recent pages, which no route
+ * lists yet.
+ */
+const favoritesAndRecentOf = (user: TestUser) =>
+  inTenant(db, user, async tx => ({
+    favorites: await tx
+      .select({ pageId: pageFavorites.pageId })
+      .from(pageFavorites),
+    recent: await tx.select({ pageId: pageVisits.pageId }).from(pageVisits)
+  }))
 
 describe.each([
   {
@@ -156,6 +169,30 @@ describe.each([
     await deliver(routingKey, body(gone))
 
     expect(await purgeJobOf(db, deleted.id)).toEqual(job)
+  })
+
+  it('loses its favorites and recent pages', async () => {
+    const gone = makeUser()
+    const editor = aPeerOf(gone)
+    // A wiki the person created, once handed on, still shows its pages to them
+    // in B2C, so what they kept on those pages can be read as them.
+    const handedOn = await aWiki(gone, 'Handbook', [[editor, 'editor']])
+    const kept = {
+      pageId: handedOn.homePageId,
+      organizationId: gone.organizationId,
+      userId: gone.userId
+    }
+    await inTenant(db, gone, async tx => {
+      await tx.insert(pageFavorites).values(kept)
+      await tx.insert(pageVisits).values(kept)
+    })
+
+    await deliver(routingKey, body(gone))
+
+    expect(await favoritesAndRecentOf(gone)).toEqual({
+      favorites: [],
+      recent: []
+    })
   })
 
   it('loses its Twake Workplace settings', async () => {

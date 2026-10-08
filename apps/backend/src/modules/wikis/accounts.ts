@@ -8,6 +8,7 @@ import {
   type Handler
 } from '../../events/router.ts'
 import { asOrganization, asTenant, type Tx } from '../../infra/db.ts'
+import { pageFavorites, pageVisits } from '../pages/schema.ts'
 import { userSettings } from '../settings/schema.ts'
 import { bumpWiki } from './live.ts'
 import { wikiMembers, wikis } from './schema.ts'
@@ -126,6 +127,8 @@ async function forget(tx: Tx, organizationId: string | null, userId: string) {
         .where(eq(wikiMembers.userId, userId))
     )
   )
+  await tx.delete(pageFavorites).where(eq(pageFavorites.userId, userId))
+  await tx.delete(pageVisits).where(eq(pageVisits.userId, userId))
   await tx
     .delete(wikis)
     .where(and(eq(wikis.createdBy, userId), eq(wikis.kind, 'personal')))
