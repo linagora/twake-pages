@@ -1,0 +1,45 @@
+import type { Logger } from 'pino'
+import { versionStreams, type Changes } from './infra/changes.ts'
+import type { Db } from './infra/db.ts'
+import { createServer } from './infra/http.ts'
+import {
+  postgresAuthStore,
+  registerAuth,
+  type Authenticate,
+  type IdentityProvider
+} from './modules/auth/index.ts'
+import { registerSettings } from './modules/settings/routes.ts'
+import { registerWikis } from './modules/wikis/routes.ts'
+
+export async function buildApp(deps: {
+  logger: Logger
+  db: Db
+  settingsChanges: Changes
+  provider: IdentityProvider
+  authenticate: Authenticate
+  isReady: () => Promise<boolean>
+}) {
+  const app = createServer({ logger: deps.logger, isReady: deps.isReady })
+  // The frontend serves its own routes, such as /wikis/<id>, on the same origin.
+  await app.register(
+    api => {
+      const requireIdentity = registerAuth(api, {
+        authenticate: deps.authenticate,
+        provider: deps.provider,
+        store: postgresAuthStore(deps.db)
+      })
+      const streamVersions = versionStreams(api)
+      registerWikis(api, { requireIdentity })
+      registerSettings(api, {
+        db: deps.db,
+        requireIdentity,
+        changes: deps.settingsChanges,
+        streamVersions
+      })
+      return Promise.resolve()
+    },
+    { prefix: '/api' }
+  )
+  await app.ready()
+  return app
+}

@@ -1,0 +1,251 @@
+import { exportJWK, generateKeyPair, SignJWT, type CryptoKey } from 'jose'
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+import { discoverIdentityProvider } from './oidc.ts'
+
+const ISSUER = 'https://sso.test/'
+const BACKCHANNEL_LOGOUT_EVENT =
+  'http://schemas.openid.net/event/backchannel-logout'
+
+interface FakeToken {
+  introspection: Record<string, unknown>
+  userinfo: Record<string, unknown>
+}
+
+function json(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'content-type': 'application/json' }
+  })
+}
+
+// Like LemonLDAP before 2.23, which does not URL-decode the credentials.
+function basicCredentials(header: string | null) {
+  return atob(header?.replace(/^Basic /, '') ?? '')
+}
+
+function fakeSso(jwks: unknown, tokens: Map<string, FakeToken>) {
+  let introspectionStatus = 200
+  const fetch = (url: string, init: RequestInit = {}) => {
+    const headers = new Headers(init.headers)
+    switch (url) {
+      case `${ISSUER}.well-known/openid-configuration`:
+        return Promise.resolve(
+          json({
+            issuer: ISSUER,
+            authorization_endpoint: `${ISSUER}oauth2/authorize`,
+            token_endpoint: `${ISSUER}oauth2/token`,
+            introspection_endpoint: `${ISSUER}oauth2/introspect`,
+            userinfo_endpoint: `${ISSUER}oauth2/userinfo`,
+            jwks_uri: `${ISSUER}oauth2/jwks`
+          })
+        )
+      case `${ISSUER}oauth2/jwks`:
+        return Promise.resolve(json(jwks))
+      case `${ISSUER}oauth2/introspect`: {
+        const credentials = basicCredentials(headers.get('authorization'))
+        if (credentials !== 'twakepages-backend:secret') {
+          return Promise.resolve(json({ error: 'invalid_client' }, 401))
+        }
+        if (introspectionStatus !== 200) {
+          return Promise.resolve(json({}, introspectionStatus))
+        }
+        const token =
+          init.body instanceof URLSearchParams ? init.body.get('token') : null
+        const found = tokens.get(token ?? '')
+        return Promise.resolve(json(found?.introspection ?? { active: false }))
+      }
+      case `${ISSUER}oauth2/userinfo`: {
+        const token = headers.get('authorization')?.replace(/^Bearer /, '')
+        const found = tokens.get(token ?? '')
+        return Promise.resolve(
+          found
+            ? json(found.userinfo)
+            : new Response(null, {
+                status: 401,
+                headers: { 'www-authenticate': 'Bearer error="invalid_token"' }
+              })
+        )
+      }
+      default:
+        return Promise.resolve(new Response(null, { status: 404 }))
+    }
+  }
+  return {
+    fetch,
+    failIntrospection: () => {
+      introspectionStatus = 500
+    }
+  }
+}
+
+const now = () => Math.floor(Date.now() / 1000)
+
+function validToken(): FakeToken {
+  return {
+    introspection: {
+      active: true,
+      sub: 'alice@example.com',
+      exp: now() + 300,
+      aud: ['twakepages']
+    },
+    userinfo: {
+      sub: 'alice@example.com',
+      sid: 'session-1',
+      uuid: '0b7f6a1e-3c2d-4e5f-8a9b-1c2d3e4f5a6b',
+      email: 'alice@example.com',
+      org_id: 'org-1',
+      org_role: 'member'
+    }
+  }
+}
+
+let signingKey: CryptoKey
+let otherKey: CryptoKey
+let publicJwk: Record<string, unknown>
+
+beforeAll(async () => {
+  const pair = await generateKeyPair('RS256')
+  signingKey = pair.privateKey
+  publicJwk = { ...(await exportJWK(pair.publicKey)), kid: 'k1', alg: 'RS256' }
+  otherKey = (await generateKeyPair('RS256')).privateKey
+})
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
+
+async function setUp(tokens: Record<string, FakeToken> = {}) {
+  const sso = fakeSso({ keys: [publicJwk] }, new Map(Object.entries(tokens)))
+  vi.stubGlobal('fetch', sso.fetch)
+  const provider = await discoverIdentityProvider({
+    issuer: new URL(ISSUER),
+    clientId: 'twakepages-backend',
+    clientSecret: 'secret',
+    audience: 'twakepages'
+  })
+  return { provider, sso }
+}
+
+function logoutToken(
+  claims: Record<string, unknown> = {},
+  options: { key?: CryptoKey; audience?: string } = {}
+) {
+  return new SignJWT({
+    sid: 'session-1',
+    events: { [BACKCHANNEL_LOGOUT_EVENT]: {} },
+    ...claims
+  })
+    .setProtectedHeader({ alg: 'RS256', kid: 'k1', typ: 'logout+jwt' })
+    .setIssuer(ISSUER)
+    .setAudience(options.audience ?? 'twakepages')
+    .setIssuedAt()
+    .setJti(crypto.randomUUID())
+    .sign(options.key ?? signingKey)
+}
+
+describe('identify', () => {
+  it('returns the identity of an active token', async () => {
+    const { provider } = await setUp({ good: validToken() })
+
+    const identity = await provider.identify('good')
+
+    expect(identity).toMatchObject({
+      subject: 'alice@example.com',
+      userId: '0b7f6a1e-3c2d-4e5f-8a9b-1c2d3e4f5a6b',
+      email: 'alice@example.com',
+      sessionId: 'session-1',
+      organizationId: 'org-1',
+      organizationRole: 'member'
+    })
+  })
+
+  it.each([
+    ['inactive', { active: false }],
+    ['expired', { exp: now() - 1 }],
+    ['without aud', { aud: undefined }],
+    ['for another audience', { aud: 'tmail' }],
+    ['for another subject', { sub: 'bob@example.com' }]
+  ])('refuses a token %s', async (_case, override) => {
+    const token = validToken()
+    token.introspection = { ...token.introspection, ...override }
+    const { provider } = await setUp({ token })
+
+    await expect(provider.identify('token')).resolves.toBeNull()
+  })
+
+  it.each([
+    ['no email', { email: undefined }],
+    ['no sid', { sid: undefined }],
+    ['no uuid', { uuid: undefined }],
+    ['a uuid that is not one', { uuid: 'alice' }]
+  ])('refuses a token whose userinfo has %s', async (_case, override) => {
+    const token = validToken()
+    token.userinfo = { ...token.userinfo, ...override }
+    const { provider } = await setUp({ token })
+
+    await expect(provider.identify('token')).resolves.toBeNull()
+  })
+
+  it.each([
+    [
+      'given and family names',
+      { name: 'qvalmori', given_name: 'Quentin', family_name: 'VALMORI' },
+      'Quentin VALMORI'
+    ],
+    ['only a name', { name: 'Alice Martin' }, 'Alice Martin'],
+    ['blank names', { name: ' ', given_name: '' }, null],
+    ['no name', {}, null]
+  ])('names the person from %s', async (_case, claims, name) => {
+    const token = validToken()
+    token.userinfo = { ...token.userinfo, ...claims }
+    const { provider } = await setUp({ token })
+
+    expect((await provider.identify('token'))?.name).toBe(name)
+  })
+
+  it('drops an organization role it does not know', async () => {
+    const token = validToken()
+    token.userinfo = { ...token.userinfo, org_role: 'superuser' }
+    const { provider } = await setUp({ token })
+
+    const identity = await provider.identify('token')
+
+    expect(identity?.organizationRole).toBeNull()
+  })
+
+  it('refuses an unknown token', async () => {
+    const { provider } = await setUp()
+
+    await expect(provider.identify('unknown')).resolves.toBeNull()
+  })
+
+  it('fails when introspection fails', async () => {
+    const { provider, sso } = await setUp({ good: validToken() })
+    sso.failIntrospection()
+
+    await expect(provider.identify('good')).rejects.toThrow()
+  })
+})
+
+describe('verifyLogoutToken', () => {
+  it('returns the sid of a valid logout token', async () => {
+    const { provider } = await setUp()
+
+    await expect(provider.verifyLogoutToken(await logoutToken())).resolves.toBe(
+      'session-1'
+    )
+  })
+
+  it.each([
+    ['signed by another key', () => logoutToken({}, { key: otherKey })],
+    ['for another audience', () => logoutToken({}, { audience: 'tmail' })],
+    ['without events', () => logoutToken({ events: undefined })],
+    ['with another event', () => logoutToken({ events: { other: {} } })],
+    ['without sid', () => logoutToken({ sid: undefined })],
+    ['with a nonce', () => logoutToken({ nonce: 'n' })]
+  ])('refuses a token %s', async (_case, token) => {
+    const { provider } = await setUp()
+
+    await expect(provider.verifyLogoutToken(await token())).rejects.toThrow()
+  })
+})
