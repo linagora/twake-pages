@@ -4,7 +4,7 @@ import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest'
 import type { PlatformEvent } from '../../events/envelope.ts'
 import { outbox } from '../../events/schema.ts'
 import { createDb } from '../../infra/db.ts'
-import { aUser, startApp, type TestUser } from '../../testing/app.ts'
+import { aPageIn, aUser, startApp, type TestUser } from '../../testing/app.ts'
 import { spaceRoutes } from './events.ts'
 
 let api: Awaited<ReturnType<typeof startApp>>
@@ -52,6 +52,19 @@ async function spaceWikis(user: TestUser) {
   return (await api.as(user).get('/wikis'))
     .json<{ wikis: WikiSummary[] }>()
     .wikis.filter(wiki => wiki.kind === 'space')
+}
+
+/** The one space wiki the person sees. */
+async function spaceWikiOf(user: TestUser) {
+  const [wiki, ...more] = await spaceWikis(user)
+  if (!wiki || more.length > 0) throw new Error('expected one space wiki')
+  return wiki
+}
+
+async function versionOf(user: TestUser, wikiId: string) {
+  return (await api.as(user).get(`/wikis/${wikiId}`)).json<{
+    version: number
+  }>().version
 }
 
 /** The provisioned events waiting in the outbox for RabbitMQ, oldest first. */
@@ -151,6 +164,55 @@ describe('space members', () => {
       expect.objectContaining({ name: 'Ops', role: 'editor' })
     ])
   })
+
+  it('takes the wiki from a person removed from the space, and keeps the pages they wrote', async () => {
+    const admin = aUser()
+    const leaver = aUser({ organizationId: admin.organizationId })
+    const space = { organizationId: admin.organizationId, id: randomUUID() }
+    await deliver('twake.space.created', {
+      ...space,
+      name: 'Ops',
+      members: [member(admin, 'admin'), member(leaver, 'editor')]
+    })
+    const wiki = await spaceWikiOf(leaver)
+    const pageId = await aPageIn(db, leaver, wiki.id, {
+      title: 'Runbook',
+      position: 'a0'
+    })
+
+    await deliver('twake.space.member.removed', {
+      ...space,
+      members: [{ uuid: leaver.userId, email: leaver.email }]
+    })
+
+    expect(await spaceWikis(leaver)).toEqual([])
+    expect((await api.as(leaver).get(`/wikis/${wiki.id}`)).statusCode).toBe(404)
+    expect((await api.as(admin).get(`/wikis/${wiki.id}/tree`)).json()).toEqual({
+      version: expect.any(Number) as number,
+      pages: [expect.objectContaining({ id: pageId, title: 'Runbook' })]
+    })
+  })
+
+  it('takes the wiki from a person the event names by email only', async () => {
+    const admin = aUser()
+    const leaver = aUser({ organizationId: admin.organizationId })
+    const space = { organizationId: admin.organizationId, id: randomUUID() }
+    await deliver('twake.space.created', {
+      ...space,
+      name: 'Ops',
+      members: [member(admin, 'admin'), member(leaver, 'editor')]
+    })
+
+    await deliver('twake.space.member.removed', {
+      ...space,
+      members: [{ email: leaver.email }]
+    })
+
+    expect(await spaceWikis(leaver)).toEqual([])
+    expect(await spaceWikis(admin)).toEqual([
+      expect.objectContaining({ name: 'Ops' })
+    ])
+  })
 })
 
 describe('twake.space.updated', () => {
@@ -171,12 +233,6 @@ describe('twake.space.updated', () => {
   })
 })
 
-async function versionOf(user: TestUser, wikiId: string) {
-  return (await api.as(user).get(`/wikis/${wikiId}`)).json<{
-    version: number
-  }>().version
-}
-
 describe('live updates', () => {
   it('moves the version of the wiki each time the space changes its members or its name', async () => {
     const admin = aUser()
@@ -187,8 +243,7 @@ describe('live updates', () => {
       name: 'Ops',
       members: [member(admin, 'admin')]
     })
-    const [wiki] = await spaceWikis(admin)
-    if (!wiki) throw new Error('no space wiki')
+    const wiki = await spaceWikiOf(admin)
     const versions = [await versionOf(admin, wiki.id)]
 
     await deliver('twake.space.member.added', {
@@ -203,8 +258,36 @@ describe('live updates', () => {
     versions.push(await versionOf(admin, wiki.id))
     await deliver('twake.space.updated', { ...space, name: 'Operations' })
     versions.push(await versionOf(admin, wiki.id))
+    await deliver('twake.space.member.removed', {
+      ...space,
+      members: [{ uuid: newcomer.userId }]
+    })
+    versions.push(await versionOf(admin, wiki.id))
 
-    expect(new Set(versions).size).toBe(4)
+    expect(new Set(versions).size).toBe(5)
     expect(versions).toEqual([...versions].sort((a, b) => a - b))
+  })
+
+  it('leaves the version alone when an event changes nothing', async () => {
+    const admin = aUser()
+    const viewer = aUser({ organizationId: admin.organizationId })
+    const created = {
+      organizationId: admin.organizationId,
+      id: randomUUID(),
+      name: 'Ops',
+      members: [member(admin, 'admin'), member(viewer, 'viewer')]
+    }
+    await deliver('twake.space.created', created)
+    const wiki = await spaceWikiOf(admin)
+    const before = await versionOf(admin, wiki.id)
+
+    await deliver('twake.space.created', created)
+    await deliver('twake.space.member.added', {
+      ...created,
+      members: [member(viewer, 'viewer')]
+    })
+    await deliver('twake.space.updated', { ...created, name: 'Ops' })
+
+    expect(await versionOf(admin, wiki.id)).toBe(before)
   })
 })

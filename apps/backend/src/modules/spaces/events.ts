@@ -1,4 +1,4 @@
-import { eq, sql } from 'drizzle-orm'
+import { and, eq, inArray, ne, or, sql, type SQL } from 'drizzle-orm'
 import { z } from 'zod'
 import type { OutgoingEvent, PlatformEvent } from '../../events/envelope.ts'
 import { enqueue } from '../../events/outbox.ts'
@@ -31,6 +31,12 @@ const spaceCreated = spaceEvent.extend({
 const spaceUpdated = spaceEvent.extend({ name: z.string().min(1).optional() })
 
 const membersChanged = spaceEvent.extend({ members: z.array(member).min(1) })
+
+const person = z
+  .looseObject({ uuid: z.uuid().optional(), email: z.email().optional() })
+  .refine(p => p.uuid ?? p.email, 'needs a uuid or an email')
+
+const membersRemoved = spaceEvent.extend({ members: z.array(person).min(1) })
 
 type SpaceRef = Pick<z.infer<typeof spaceEvent>, 'organizationId' | 'id'>
 
@@ -86,14 +92,34 @@ async function upsertMembers(
     )
   )
   if (byUser.size === 0) return
-  await tx
+  const changed = await tx
     .insert(wikiMembers)
     .values([...byUser.values()])
     .onConflictDoUpdate({
       target: [wikiMembers.wikiId, wikiMembers.userId],
-      set: { email: sql`excluded.email`, role: sql`excluded.role` }
+      set: { email: sql`excluded.email`, role: sql`excluded.role` },
+      setWhere: sql`(${wikiMembers.email}, ${wikiMembers.role}) is distinct from (excluded.email, excluded.role)`
     })
-  await touch(tx, wikiId)
+    .returning({ userId: wikiMembers.userId })
+  if (changed.length > 0) await touch(tx, wikiId)
+}
+
+/**
+ * Takes the wiki from these people. What they wrote stays, and the
+ * notifications about it stop reaching them with their membership.
+ */
+async function removeMembers(
+  tx: Tx,
+  space: SpaceRef,
+  which: SQL | undefined
+): Promise<void> {
+  const wikiId = await wikiOf(tx, space)
+  if (!wikiId) return
+  const removed = await tx
+    .delete(wikiMembers)
+    .where(and(eq(wikiMembers.wikiId, wikiId), which))
+    .returning({ userId: wikiMembers.userId })
+  if (removed.length > 0) await touch(tx, wikiId)
 }
 
 async function provisioned(tx: Tx, space: SpaceRef): Promise<OutgoingEvent> {
@@ -148,8 +174,12 @@ async function provisionSpace(
 async function renameSpace(tx: Tx, space: SpaceRef, name: string) {
   const wikiId = await wikiOf(tx, space)
   if (!wikiId) return
-  await tx.update(wikis).set({ name }).where(eq(wikis.id, wikiId))
-  await touch(tx, wikiId)
+  const renamed = await tx
+    .update(wikis)
+    .set({ name })
+    .where(and(eq(wikis.id, wikiId), ne(wikis.name, name)))
+    .returning({ id: wikis.id })
+  if (renamed.length > 0) await touch(tx, wikiId)
 }
 
 export function spaceRoutes(): ReadonlyMap<string, Handler<PlatformEvent>> {
@@ -174,10 +204,23 @@ export function spaceRoutes(): ReadonlyMap<string, Handler<PlatformEvent>> {
     await upsertMembers(tx, space, space.members)
   }
 
+  const onMembersRemoved: Handler<PlatformEvent> = async (event, tx) => {
+    const space = parseOrDrop(membersRemoved, event.body, event.routingKey)
+    await asOrganization(tx, space.organizationId)
+    const uuids = space.members.flatMap(p => (p.uuid ? [p.uuid] : []))
+    const emails = space.members.flatMap(p => (p.email ? [p.email] : []))
+    await removeMembers(
+      tx,
+      space,
+      or(inArray(wikiMembers.userId, uuids), inArray(wikiMembers.email, emails))
+    )
+  }
+
   return new Map([
     ['twake.space.created', onCreated],
     ['twake.space.updated', onUpdated],
     ['twake.space.member.added', onMembersChanged],
-    ['twake.space.member.role.changed', onMembersChanged]
+    ['twake.space.member.role.changed', onMembersChanged],
+    ['twake.space.member.removed', onMembersRemoved]
   ])
 }
