@@ -80,25 +80,27 @@ export function useDeleteWiki(
  * elsewhere, or one missed while the stream was reconnecting. Called once
  * for the open wiki, where Twake Tasks watches in useBoard: a wiki shows in
  * several queries, each of which would open its own stream.
+ *
+ * Unlike Twake Tasks, it stops `watching` a wiki out of reach, whose stream
+ * would answer not_found again on each reconnection.
  */
-export function useLiveWiki(wikiId: string): void {
+export function useLiveWiki(wikiId: string, watching: boolean): void {
   const api = usePagesApi()
   const queryClient = useQueryClient()
-  useEffect(
-    () =>
-      api.watchWiki(wikiId, version => {
-        // The wiki and its tree are read apart, each at its own version: the
-        // older one tells what may be missing.
-        const shown = [
-          queryClient.getQueryData<Wiki>(wikiKey(wikiId))?.version,
-          queryClient.getQueryData<Tree>(treeKey(wikiId))?.version
-        ].filter(read => read !== undefined)
-        if (shown.length > 0 && version > Math.min(...shown)) {
-          void queryClient.invalidateQueries({ queryKey: wikiKey(wikiId) })
-        }
-      }),
-    [api, queryClient, wikiId]
-  )
+  useEffect(() => {
+    if (!watching) return
+    return api.watchWiki(wikiId, version => {
+      // The wiki and its tree are read apart, each at its own version: the
+      // older one tells what may be missing.
+      const shown = [
+        queryClient.getQueryData<Wiki>(wikiKey(wikiId))?.version,
+        queryClient.getQueryData<Tree>(treeKey(wikiId))?.version
+      ].filter(read => read !== undefined)
+      if (shown.length > 0 && version > Math.min(...shown)) {
+        void queryClient.invalidateQueries({ queryKey: wikiKey(wikiId) })
+      }
+    })
+  }, [api, queryClient, wikiId, watching])
 }
 
 export function useTree(wikiId: string): UseQueryResult<Tree> {

@@ -23,9 +23,9 @@ export function WikiLayout({ back = true }: { back?: boolean }): ReactElement {
   const { t } = useI18n()
   const { wikiId = '' } = useParams()
   const wiki = useWiki(wikiId)
-  useLiveWiki(wikiId)
   // Checked before the data, which a failed reload keeps.
   const missing = wiki.error instanceof ApiError && wiki.error.status === 404
+  useLiveWiki(wikiId, !missing)
 
   if (missing || !wiki.data) {
     return (

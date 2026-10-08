@@ -39,6 +39,22 @@ describe('a wiki', () => {
     }
   )
 
+  it('closes the stream of a wiki it does not find', async () => {
+    const { pagesApi, wiki } = wikiOfBob()
+    let open = 0
+    pagesApi.watchWiki.mockImplementation(() => {
+      open += 1
+      return () => {
+        open -= 1
+      }
+    })
+    renderRoute(`/wikis/${wiki.id}`, { pagesApi })
+
+    await findEmptyState(NOT_FOUND)
+
+    expect(open).toBe(0)
+  })
+
   it('is not found inside TwakeSpace either, with no way out of the frame', async () => {
     const { pagesApi, wiki } = wikiOfBob()
     renderRoute(`/embed/wikis/${wiki.id}`, { pagesApi })
