@@ -29,7 +29,7 @@ PostgreSQL 18, drizzle, with the conventions of Twake Tasks (`apps/backend/src/i
 
 ### wiki_members, wiki_invites
 
-Same columns, keys and policies as `project_members` and `project_invites` of Twake Tasks, with `wiki_id`. `app_member_wiki_ids()` and `app_claim_invites()` are the Twake Tasks functions with the names changed.
+Same columns, keys and policies as `project_members` and `project_invites` of Twake Tasks, with `wiki_id`, but for one deliberate difference: the B2C scope of `wiki_invites` matches the person's email in `USING` only, not in `WITH CHECK`. The email lets a B2C person see the invites to them, which `app_claim_invites()` deletes; in `WITH CHECK` it would let them write an invite to their own email on any B2C wiki, then claim it. `app_member_wiki_ids()` and `app_claim_invites()` are the Twake Tasks functions with the names changed.
 
 ### pages
 

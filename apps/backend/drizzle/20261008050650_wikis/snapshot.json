@@ -3391,7 +3391,7 @@
         "public"
       ],
       "using": "\"wiki_invites\".\"org_id\" is not distinct from nullif(current_setting('app.org_id', true), '') and (\"wiki_invites\".\"org_id\" is not null or exists (select 1 from \"wikis\" where \"wikis\".\"id\" = \"wiki_invites\".\"wiki_id\") or \"wiki_invites\".\"email\" = lower(current_setting('app.user_email', true)))",
-      "withCheck": "\"wiki_invites\".\"org_id\" is not distinct from nullif(current_setting('app.org_id', true), '') and (\"wiki_invites\".\"org_id\" is not null or exists (select 1 from \"wikis\" where \"wikis\".\"id\" = \"wiki_invites\".\"wiki_id\") or \"wiki_invites\".\"email\" = lower(current_setting('app.user_email', true)))",
+      "withCheck": "\"wiki_invites\".\"org_id\" is not distinct from nullif(current_setting('app.org_id', true), '') and (\"wiki_invites\".\"org_id\" is not null or exists (select 1 from \"wikis\" where \"wikis\".\"id\" = \"wiki_invites\".\"wiki_id\"))",
       "name": "tenant",
       "entityType": "policies",
       "schema": "public",

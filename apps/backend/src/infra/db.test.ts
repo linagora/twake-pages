@@ -313,6 +313,37 @@ describe('the tenant policies', () => {
   })
 })
 
+describe('the invites policy', () => {
+  const inviteTo = (wikiId: string, by: TestUser, email: string) =>
+    inTenant(db, by, tx =>
+      tx.execute(
+        statement`insert into wiki_invites (wiki_id, org_id, email, role, invited_by)
+          values (${wikiId}, ${by.organizationId}, ${email}, 'editor', ${by.userId})`
+      )
+    )
+
+  it('lets B2C users claim the invites to their email', async () => {
+    const alice = aB2cUser()
+    const bob = aB2cUser()
+    const { wikiId } = await aWikiOf(alice)
+    await inviteTo(wikiId, alice, bob.email)
+
+    await inTenant(db, bob, tx =>
+      tx.execute(statement`select app_claim_invites()`)
+    )
+
+    expect(await wikisSeenBy(bob)).toEqual([{ organizationId: null }])
+  })
+
+  it('keeps B2C users from inviting themselves to a wiki they cannot see', async () => {
+    const alice = aB2cUser()
+    const mallory = aB2cUser()
+    const { wikiId } = await aWikiOf(alice)
+
+    await expect(inviteTo(wikiId, mallory, mallory.email)).rejects.toThrow()
+  })
+})
+
 describe('tenant foreign keys', () => {
   const FOREIGN_KEY_VIOLATION = '23503'
   const stray: Record<

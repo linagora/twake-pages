@@ -115,9 +115,12 @@ export const wikiInvites = pgTable.withRLS(
       'wiki_invites_email_lower',
       sql`${table.email} = lower(${table.email})`
     ),
+    // The person's email lets them read and claim their invites, but not write
+    // one, unlike in Twake Tasks: they could invite themselves to any B2C wiki.
     tenantPolicy(
       table.organizationId,
-      sql`${visibleWiki(table.wikiId)} or ${table.email} = lower(current_setting('app.user_email', true))`
+      sql`${visibleWiki(table.wikiId)} or ${table.email} = lower(current_setting('app.user_email', true))`,
+      visibleWiki(table.wikiId)
     )
   ]
 )

@@ -39,12 +39,21 @@ export const currentUser = sql`nullif(current_setting('app.user_id', true), ''):
 
 // B2C rows have no organization: a request without one only sees those, and
 // only within `b2cScope`, since every B2C user shares the missing organization.
-export function tenantPolicy(column: AnyPgColumn, b2cScope?: SQL) {
+// A narrower `b2cWriteScope` limits the B2C rows it may write.
+export function tenantPolicy(
+  column: AnyPgColumn,
+  b2cScope?: SQL,
+  b2cWriteScope = b2cScope
+) {
   const sameTenant = sql`${column} is not distinct from ${currentOrganization}`
-  const scoped = b2cScope
-    ? sql`${sameTenant} and (${column} is not null or ${b2cScope})`
-    : sameTenant
-  return pgPolicy('tenant', { using: scoped, withCheck: scoped })
+  const within = (scope: SQL | undefined) =>
+    scope
+      ? sql`${sameTenant} and (${column} is not null or ${scope})`
+      : sameTenant
+  return pgPolicy('tenant', {
+    using: within(b2cScope),
+    withCheck: within(b2cWriteScope)
+  })
 }
 
 export function createDb(url: string) {
