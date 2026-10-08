@@ -157,6 +157,28 @@ async function checkParent(tx: Tx, wikiId: string, parentId: string) {
   if (!parent) throw new Refused('invalid_parent')
 }
 
+/** The live pages under the parent, or at the top of the tree, in order. */
+function siblingsUnder(tx: Tx, wikiId: string, parentId: string | null) {
+  return tx
+    .select({
+      id: pages.id,
+      // A check gives every page but the home page a position.
+      position: sql<string>`${pages.position}`
+    })
+    .from(pages)
+    .where(
+      and(
+        eq(pages.wikiId, wikiId),
+        parentId === null
+          ? isNull(pages.parentId)
+          : eq(pages.parentId, parentId),
+        eq(pages.home, false),
+        isNull(pages.deletedAt)
+      )
+    )
+    .orderBy(asc(pages.position))
+}
+
 /** Who writes a version: a person, or a space writing its wiki's home page. */
 export type Author = Pick<Identity, 'userId' | 'email' | 'name'>
 
@@ -251,24 +273,7 @@ export function createPageStore(db: Db, gristOrigins: readonly string[]) {
         if (input.parentId !== null) {
           await checkParent(tx, wikiId, input.parentId)
         }
-        const siblings = await tx
-          .select({
-            id: pages.id,
-            // A check gives every page but the home page a position.
-            position: sql<string>`${pages.position}`
-          })
-          .from(pages)
-          .where(
-            and(
-              eq(pages.wikiId, wikiId),
-              input.parentId === null
-                ? isNull(pages.parentId)
-                : eq(pages.parentId, input.parentId),
-              eq(pages.home, false),
-              isNull(pages.deletedAt)
-            )
-          )
-          .orderBy(asc(pages.position))
+        const siblings = await siblingsUnder(tx, wikiId, input.parentId)
         const page = await addPage(tx, identity, {
           wikiId,
           organizationId: wiki.organizationId,
