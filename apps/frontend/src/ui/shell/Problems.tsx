@@ -1,9 +1,9 @@
 import { Compass, Icon, Left, WarningCircle } from '@linagora/twake-icons'
-import { Button } from '@linagora/twake-mui'
-import type { ReactElement } from 'react'
+import { Button, Typography } from '@linagora/twake-mui'
+import type { ReactElement, ReactNode } from 'react'
 import { Link as RouterLink } from 'react-router'
 
-import { EmptyState } from '@/ds/EmptyState'
+import { EmptyState, ListSkeleton } from '@/ds/EmptyState'
 import { useI18n } from '@/ui/i18n/useI18n'
 import { useDocumentTitle } from '@/ui/useDocumentTitle'
 
@@ -32,6 +32,42 @@ export function NotFoundScreen(): ReactElement {
         text={t('problems.notFoundHint')}
         action={<BackToWikis />}
       />
+    </main>
+  )
+}
+
+/**
+ * In place of a wiki or a page that cannot be shown: `missing`, failed to
+ * load, or still loading.
+ */
+export function UnavailableScreen({
+  query,
+  missing,
+  notFound,
+  loadFailed,
+  action
+}: {
+  query: { isError: boolean; isPending: boolean }
+  missing: boolean
+  notFound: string
+  loadFailed: string
+  action?: ReactNode
+}): ReactElement {
+  const { t } = useI18n()
+  return (
+    <main className="u-p-2">
+      {missing && (
+        <EmptyState
+          icon={Compass}
+          title={notFound}
+          text={t('problems.notFoundHint')}
+          action={action}
+        />
+      )}
+      {query.isError && !missing && (
+        <Typography role="alert">{loadFailed}</Typography>
+      )}
+      {query.isPending && <ListSkeleton label={t('app.loading')} />}
     </main>
   )
 }

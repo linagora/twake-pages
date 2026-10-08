@@ -1,14 +1,13 @@
-import { Compass } from '@linagora/twake-icons'
 import { Alert, Breadcrumbs, Link, Typography } from '@linagora/twake-mui'
 import type { ReactElement } from 'react'
 import { Link as RouterLink, useParams } from 'react-router'
 
 import { ApiError } from '@/application/pages'
-import { EmptyState, ListSkeleton } from '@/ds/EmptyState'
 import { PageHeader } from '@/ds/PageHeader'
 import type { Page } from '@/domain/page'
 import { useI18n } from '@/ui/i18n/useI18n'
 import { PageContent } from '@/ui/page/PageContent'
+import { UnavailableScreen } from '@/ui/shell/Problems'
 import { useDocumentTitle } from '@/ui/useDocumentTitle'
 import { usePage, useWiki } from '@/ui/wiki/queries'
 import { useWikiName } from '@/ui/wiki/useWikiName'
@@ -26,19 +25,12 @@ export function PageScreen(): ReactElement {
 
   if (missing || !page.data) {
     return (
-      <main className="u-p-2">
-        {missing && (
-          <EmptyState
-            icon={Compass}
-            title={t('page.notFound')}
-            text={t('problems.notFoundHint')}
-          />
-        )}
-        {page.isError && !missing && (
-          <Typography role="alert">{t('page.loadFailed')}</Typography>
-        )}
-        {page.isPending && <ListSkeleton label={t('app.loading')} />}
-      </main>
+      <UnavailableScreen
+        query={page}
+        missing={missing}
+        notFound={t('page.notFound')}
+        loadFailed={t('page.loadFailed')}
+      />
     )
   }
 

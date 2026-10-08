@@ -1,19 +1,16 @@
-import { Compass } from '@linagora/twake-icons'
 import {
   List,
   ListItem,
   ListItemButton,
-  ListItemText,
-  Typography
+  ListItemText
 } from '@linagora/twake-mui'
 import type { ReactElement } from 'react'
 import { Outlet, useParams } from 'react-router'
 
 import { ApiError } from '@/application/pages'
-import { EmptyState, ListSkeleton } from '@/ds/EmptyState'
 import { WikiFrame } from '@/ds/WikiFrame'
 import { useI18n } from '@/ui/i18n/useI18n'
-import { BackToWikis } from '@/ui/shell/Problems'
+import { BackToWikis, UnavailableScreen } from '@/ui/shell/Problems'
 import { EntryLink } from '@/ui/shell/SidebarLink'
 import { PageTree } from '@/ui/wiki/PageTree'
 import { useLiveWiki, useWiki } from '@/ui/wiki/queries'
@@ -29,20 +26,13 @@ export function WikiLayout({ back = true }: { back?: boolean }): ReactElement {
 
   if (missing || !wiki.data) {
     return (
-      <main className="u-p-2">
-        {missing && (
-          <EmptyState
-            icon={Compass}
-            title={t('wiki.notFound')}
-            text={t('problems.notFoundHint')}
-            action={back ? <BackToWikis /> : undefined}
-          />
-        )}
-        {wiki.isError && !missing && (
-          <Typography role="alert">{t('wiki.loadFailed')}</Typography>
-        )}
-        {wiki.isPending && <ListSkeleton label={t('app.loading')} />}
-      </main>
+      <UnavailableScreen
+        query={wiki}
+        missing={missing}
+        notFound={t('wiki.notFound')}
+        loadFailed={t('wiki.loadFailed')}
+        action={back ? <BackToWikis /> : undefined}
+      />
     )
   }
 
