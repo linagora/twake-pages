@@ -83,10 +83,13 @@
     "empty": "This page is empty.",
     "inTrash": "This page is in the trash.",
     "edit": "Edit page",
-    "history": "Page history"
+    "history": "Page history",
+    "menu": "Page options",
+    "newChild": "New child page"
   },
   "newPage": {
     "title": "New page",
+    "under": "New page under %{title}",
     "pageTitle": "Title",
     "template": "Template",
     "cancel": "Cancel",

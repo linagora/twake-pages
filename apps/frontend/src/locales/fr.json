@@ -83,10 +83,13 @@
     "empty": "Cette page est vide.",
     "inTrash": "Cette page est dans la corbeille.",
     "edit": "Modifier la page",
-    "history": "Historique de la page"
+    "history": "Historique de la page",
+    "menu": "Options de la page",
+    "newChild": "Nouvelle page enfant"
   },
   "newPage": {
     "title": "Nouvelle page",
+    "under": "Nouvelle page sous %{title}",
     "pageTitle": "Titre",
     "template": "Modèle",
     "cancel": "Annuler",

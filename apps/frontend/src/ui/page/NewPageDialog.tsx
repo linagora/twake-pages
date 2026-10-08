@@ -14,13 +14,18 @@ import { useI18n } from '@/ui/i18n/useI18n'
 import { blocksOf, TEMPLATES, type Template } from '@/ui/page/templates'
 import { useCreatePage } from '@/ui/wiki/queries'
 
-/** The title and the template of a page made at the top of the tree. */
+/**
+ * The title and the template of a page made under `parent`, else at the top of
+ * the tree.
+ */
 export function NewPageDialog({
   wikiId,
+  parent,
   onCreated,
   onClose
 }: {
   wikiId: string
+  parent?: { id: string; title: string } | undefined
   onCreated: (page: Page) => void
   onClose: () => void
 }): ReactElement {
@@ -39,14 +44,18 @@ export function NewPageDialog({
             {
               title: title.trim(),
               kind: 'document',
-              parentId: null,
+              parentId: parent?.id ?? null,
               content: blocksOf(template, t)
             },
             { onSuccess: onCreated }
           )
         }}
       >
-        <DialogTitle id={titleId}>{t('newPage.title')}</DialogTitle>
+        <DialogTitle id={titleId}>
+          {parent
+            ? t('newPage.under', { title: parent.title })
+            : t('newPage.title')}
+        </DialogTitle>
         <DialogContent>
           <TextField
             label={t('newPage.pageTitle')}

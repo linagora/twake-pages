@@ -19,20 +19,32 @@ interface Opening {
   base?: string
   role?: Role
   lang?: SupportedLanguage
+  /** Onboarding, a page at the top of the tree, live or in the trash. */
+  parent?: 'live' | 'in the trash'
+  /** The page opened at its own path, in place of the wiki on its home page. */
+  open?: 'parent' | 'home page'
 }
 
-/** The Engineering wiki, open on its home page. */
-function engineering({
+/** The Engineering wiki, open on its home page or on the page asked for. */
+async function engineering({
   base = '/wikis',
   role = 'admin',
-  lang = 'en'
+  lang = 'en',
+  parent: placed,
+  open
 }: Opening = {}) {
   const pagesApi = fakePagesApi()
   const wiki = pagesApi.withWiki({ name: 'Engineering', role })
+  const parent = placed && pagesApi.withPage(wiki.id, { title: 'Onboarding' })
+  if (parent && placed === 'in the trash') await pagesApi.deletePage(parent.id)
+  let path = `${base}/${wiki.id}`
+  if (open === 'parent' && parent) path += `/pages/${parent.id}`
+  if (open === 'home page') path += `/pages/${wiki.homePageId}`
   return {
     pagesApi,
     wiki,
-    ...renderRoute(`${base}/${wiki.id}`, { pagesApi, lang })
+    parent,
+    ...renderRoute(path, { pagesApi, lang })
   }
 }
 
@@ -40,7 +52,7 @@ describe('a new page', () => {
   it.each(['/wikis', '/embed/wikis'])(
     'opens once created at the top of the tree, from the home page at %s/<wiki>',
     async base => {
-      const { pagesApi, wiki, router } = engineering({ base })
+      const { pagesApi, wiki, router } = await engineering({ base })
 
       const dialog = await openNewPage()
       typeIn(dialog, 'Title', ' Onboarding ')
@@ -63,7 +75,7 @@ describe('a new page', () => {
   )
 
   it('needs a title', async () => {
-    engineering()
+    await engineering()
 
     const dialog = await openNewPage()
     const create = within(dialog).getByRole('button', { name: 'Create' })
@@ -75,7 +87,7 @@ describe('a new page', () => {
   })
 
   it('says so when it cannot be created', async () => {
-    const { pagesApi } = engineering()
+    const { pagesApi } = await engineering()
     pagesApi.createPage.mockRejectedValue(new ApiError(403, 'forbidden'))
 
     const dialog = await openNewPage()
@@ -88,7 +100,7 @@ describe('a new page', () => {
   })
 
   it('is not made when the dialog is closed', async () => {
-    const { pagesApi } = engineering()
+    const { pagesApi } = await engineering()
 
     const dialog = await openNewPage()
     typeIn(dialog, 'Title', 'Onboarding')
@@ -101,7 +113,7 @@ describe('a new page', () => {
   })
 
   it('cannot be created by a viewer of the wiki', async () => {
-    engineering({ role: 'viewer' })
+    await engineering({ role: 'viewer' })
 
     await screen.findByRole('heading', { level: 1, name: 'Engineering' })
 
@@ -119,7 +131,7 @@ const sections = () =>
 
 describe('the template of a new page', () => {
   it('is one of six, blank unless another is chosen', async () => {
-    engineering()
+    await engineering()
 
     const dialog = await openNewPage()
     const template = within(dialog).getByRole('combobox', { name: 'Template' })
@@ -146,7 +158,7 @@ describe('the template of a new page', () => {
     ['Retrospective', ['What went well', 'What could be better', 'Actions']],
     ['Requirements', ['Goal', 'Requirements', 'Out of scope', 'Open questions']]
   ])('gives the page made from %s its sections', async (template, titles) => {
-    engineering()
+    await engineering()
 
     const dialog = await openNewPage()
     typeIn(dialog, 'Title', 'Onboarding')
@@ -158,7 +170,7 @@ describe('the template of a new page', () => {
   })
 
   it('is written in the language of the person', async () => {
-    engineering({ lang: 'fr' })
+    await engineering({ lang: 'fr' })
 
     fireEvent.click(
       await screen.findByRole('button', { name: 'Nouvelle page' })
@@ -174,5 +186,75 @@ describe('the template of a new page', () => {
       'Étapes',
       'En cas de problème'
     ])
+  })
+})
+
+describe('a child page', () => {
+  it.each(['/wikis', '/embed/wikis'])(
+    'opens once created under its parent, from the menu of the parent at %s/<wiki>',
+    async base => {
+      const { pagesApi, wiki, parent, router } = await engineering({
+        base,
+        parent: 'live',
+        open: 'parent'
+      })
+
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'Page options' })
+      )
+      fireEvent.click(screen.getByRole('menuitem', { name: 'New child page' }))
+      const dialog = screen.getByRole('dialog', {
+        name: 'New page under Onboarding'
+      })
+      typeIn(dialog, 'Title', 'Laptop setup')
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Create' }))
+
+      expect(
+        await screen.findByRole('heading', { level: 1, name: 'Laptop setup' })
+      ).toBeVisible()
+      const child = within(
+        screen.getByRole('group', { name: 'Onboarding' })
+      ).getByRole('treeitem', { name: 'Laptop setup' })
+      expect(child).toHaveAttribute('aria-level', '2')
+      expect(child).toHaveAttribute('aria-current', 'page')
+      expect(router.state.location.pathname).toBe(child.getAttribute('href'))
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+      expect(pagesApi.createPage).toHaveBeenCalledWith(wiki.id, {
+        title: 'Laptop setup',
+        kind: 'document',
+        parentId: parent?.id,
+        content: []
+      })
+    }
+  )
+
+  it('cannot be made under a page in the trash', async () => {
+    await engineering({ parent: 'in the trash', open: 'parent' })
+
+    await screen.findByText('This page is in the trash.')
+
+    expect(
+      screen.queryByRole('button', { name: 'Page options' })
+    ).not.toBeInTheDocument()
+  })
+
+  it('cannot be made under the home page', async () => {
+    await engineering({ open: 'home page' })
+
+    await screen.findByRole('heading', { level: 1, name: 'Engineering' })
+
+    expect(
+      screen.queryByRole('button', { name: 'Page options' })
+    ).not.toBeInTheDocument()
+  })
+
+  it('cannot be made by a viewer of the wiki', async () => {
+    await engineering({ role: 'viewer', parent: 'live', open: 'parent' })
+
+    await screen.findByRole('heading', { level: 1, name: 'Onboarding' })
+
+    expect(
+      screen.queryByRole('button', { name: 'Page options' })
+    ).not.toBeInTheDocument()
   })
 })

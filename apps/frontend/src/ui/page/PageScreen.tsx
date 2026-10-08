@@ -7,6 +7,7 @@ import { PageHeader } from '@/ds/PageHeader'
 import type { Page } from '@/domain/page'
 import { useI18n } from '@/ui/i18n/useI18n'
 import { PageContent } from '@/ui/page/PageContent'
+import { PageMenu } from '@/ui/page/PageMenu'
 import { UnavailableScreen } from '@/ui/shell/Problems'
 import { useDocumentTitle } from '@/ui/useDocumentTitle'
 import { usePage, useWiki } from '@/ui/wiki/queries'
@@ -43,6 +44,7 @@ export function PageScreen(): ReactElement {
             {page.data.title}
           </Typography>
         }
+        actions={<PageMenu page={page.data} />}
       />
       {/* As Twake Tasks tells of an archived board. The page stays readable,
           sent to the trash while open or opened from it. */}
