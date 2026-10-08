@@ -190,7 +190,7 @@ interface NewPage {
 }
 ```
 
-`title` is 1 to 200 characters, trimmed. `content` is an array of BlockNote blocks. The server checks its size, its links and the addresses of its blocks (see `invalid_content`) and keeps a plain text copy, a line per block and per table cell, but never rewrites it. A link is an inline `{ type: 'link', href }`, wherever it sits. An `image`, `video`, `audio` or `file` block, and a Grist embed (`type: 'gristEmbed'`), hold their address in `props.url`, empty until they have one.
+`title` is 1 to 200 characters, trimmed. `content` is an array of BlockNote blocks. The server checks its size, its links and the addresses of its blocks (see `invalid_content`) and keeps a plain text copy, a line per block, per table cell and per caption (`props.caption`), but never rewrites it. A link is an inline `{ type: 'link', href }`, wherever it sits. An `image`, `video`, `audio` or `file` block, and a Grist embed (`type: 'gristEmbed'`), hold their address in `props.url`, empty until they have one.
 
 ## Trash
 

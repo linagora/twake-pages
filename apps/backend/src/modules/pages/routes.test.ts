@@ -802,8 +802,7 @@ describe('POST /wikis/:wikiId/pages', () => {
       expect(page.content).toEqual(blocks)
     })
 
-    // An image's caption is no text of the page.
-    it('keeps their plain text, a line per block and per table cell', async () => {
+    it('keeps their plain text, a line per block, table cell and caption', async () => {
       const alice = aUser()
       const wiki = await aWikiOf(api, alice)
 
@@ -824,7 +823,8 @@ describe('POST /wikis/:wikiId/pages', () => {
         ]
       })
 
-      const text = 'Steps\nRead the guide\nThen ask\nLaptop\nBadge\nnpm ci'
+      const text =
+        'Steps\nRead the guide\nThen ask\nLaptop\nBadge\nA desk\nnpm ci'
       expect(await textsOf(alice, created.json<Page>().id)).toEqual({
         page: text,
         versions: [text]

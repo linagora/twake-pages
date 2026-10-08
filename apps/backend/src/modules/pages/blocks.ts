@@ -102,7 +102,7 @@ function inlineText(content: unknown): string {
 
 function addLines(block: unknown, lines: string[]) {
   if (!isFields(block)) return
-  const { content, children } = block
+  const { content, props, children } = block
   if (isFields(content) && isList(content.rows)) {
     for (const row of content.rows) {
       const cells = isFields(row) && isList(row.cells) ? row.cells : []
@@ -113,12 +113,16 @@ function addLines(block: unknown, lines: string[]) {
   } else {
     lines.push(inlineText(content))
   }
+  // The caption of an image, a video, an audio block or a file.
+  if (isFields(props) && typeof props.caption === 'string') {
+    lines.push(props.caption)
+  }
   if (isList(children)) {
     for (const child of children) addLines(child, lines)
   }
 }
 
-/** The text of the blocks, a line per block and per table cell. */
+/** The text of the blocks, a line per block, per table cell and per caption. */
 function plainText(blocks: Blocks): string {
   const lines: string[] = []
   for (const block of blocks) addLines(block, lines)
