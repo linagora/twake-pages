@@ -332,10 +332,12 @@ export function spaceRoutes(): ReadonlyMap<string, Handler<PlatformEvent>> {
 
   const onSynced = inOrder(spaceCreated, matchSpace)
 
+  // Applied whatever its timestamp, since a space id is never reused.
   const onDeleted: Handler<PlatformEvent> = async (event, tx) => {
     const space = parseOrDrop(spaceEvent, event.body, event.routingKey)
     await asOrganization(tx, space.organizationId)
     await deleteSpace(tx, space)
+    await applied(tx, space)
   }
 
   // A space with an event newer than the snapshot may be missing from it.
