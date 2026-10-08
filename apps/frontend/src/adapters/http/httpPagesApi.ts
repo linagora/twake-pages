@@ -1,4 +1,5 @@
 import { ApiError, type PagesApi } from '@/application/pages'
+import type { WikiSummary } from '@/domain/wiki'
 
 export type Send = (request: Request) => Promise<Response>
 
@@ -88,6 +89,17 @@ export function httpPagesApi(baseUrl: string, send: Send): PagesApi {
   return {
     settings: () => call('GET', '/settings'),
     watchSettings: onVersion => watch('/settings/events', onVersion),
-    listWikis: () => call('GET', '/wikis')
+
+    listWikis: () =>
+      call<{ wikis: WikiSummary[] }>('GET', '/wikis').then(
+        ({ wikis }) => wikis
+      ),
+    createWiki: wiki => call('POST', '/wikis', wiki),
+    getWiki: wikiId => call('GET', `/wikis/${wikiId}`),
+    renameWiki: (wikiId, changes) => call('PATCH', `/wikis/${wikiId}`, changes),
+    deleteWiki: wikiId => call('DELETE', `/wikis/${wikiId}`),
+    getTree: wikiId => call('GET', `/wikis/${wikiId}/tree`),
+    watchWiki: (wikiId, onVersion) =>
+      watch(`/wikis/${wikiId}/stream`, onVersion)
   }
 }
