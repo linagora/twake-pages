@@ -82,6 +82,18 @@ export interface Placement {
   position: string
 }
 
+/** A label of a wiki, with the number of live pages carrying it. */
+export interface Label {
+  name: string
+  pages: number
+}
+
+export interface LabelledPage {
+  id: string
+  title: string
+  updatedAt: string
+}
+
 /** Why the backend refused a request: the `error` of its answer. */
 export type Refusal =
   | 'not_found'
@@ -149,6 +161,8 @@ export interface PagesApi {
   movePage: (pageId: string, move: Move) => Promise<Placement>
   /** Editor; the page and its live descendants go to the trash as one branch. */
   deletePage: (pageId: string) => Promise<void>
+  /** Editor; trims and lowercases the names, and answers the page's labels. */
+  setLabels: (pageId: string, names: string[]) => Promise<string[]>
   /** Whether the person is notified of the page's versions and comments. */
   setFollowing: (pageId: string, following: boolean) => Promise<void>
   setFavorite: (pageId: string, favorite: boolean) => Promise<void>
@@ -161,6 +175,11 @@ export interface PagesApi {
   purgePage: (wikiId: string, pageId: string) => Promise<void>
   /** Admin; deletes every branch of the trash for good. */
   emptyTrash: (wikiId: string) => Promise<void>
+
+  /** The wiki's labels, by name. */
+  listLabels: (wikiId: string) => Promise<Label[]>
+  /** The live pages carrying the label, by title. */
+  pagesWithLabel: (wikiId: string, name: string) => Promise<LabelledPage[]>
 }
 
 export class ApiError extends Error {

@@ -1,6 +1,8 @@
 import {
   ApiError,
   EditConflict,
+  type Label,
+  type LabelledPage,
   type PagesApi,
   type PersonMatch
 } from '@/application/pages'
@@ -145,6 +147,10 @@ export function httpPagesApi(baseUrl: string, send: Send): PagesApi {
       call('POST', `/pages/${pageId}/versions/${String(number)}/restore`, {}),
     movePage: (pageId, move) => call('POST', `/pages/${pageId}/move`, move),
     deletePage: pageId => call('DELETE', `/pages/${pageId}`),
+    setLabels: (pageId, names) =>
+      call<{ labels: string[] }>('PUT', `/pages/${pageId}/labels`, {
+        names
+      }).then(({ labels }) => labels),
     setFollowing: (pageId, following) =>
       call(following ? 'PUT' : 'DELETE', `/pages/${pageId}/follow`),
     setFavorite: (pageId, favorite) =>
@@ -157,6 +163,16 @@ export function httpPagesApi(baseUrl: string, send: Send): PagesApi {
     restorePage: pageId => call('POST', `/pages/${pageId}/restore`, {}),
     purgePage: (wikiId, pageId) =>
       call('DELETE', `/wikis/${wikiId}/trash/${pageId}`),
-    emptyTrash: wikiId => call('DELETE', `/wikis/${wikiId}/trash`)
+    emptyTrash: wikiId => call('DELETE', `/wikis/${wikiId}/trash`),
+
+    listLabels: wikiId =>
+      call<{ labels: Label[] }>('GET', `/wikis/${wikiId}/labels`).then(
+        ({ labels }) => labels
+      ),
+    pagesWithLabel: (wikiId, name) =>
+      call<{ pages: LabelledPage[] }>(
+        'GET',
+        `/wikis/${wikiId}/labels/${encodeURIComponent(name)}/pages`
+      ).then(({ pages }) => pages)
   }
 }

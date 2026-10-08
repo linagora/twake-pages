@@ -135,6 +135,11 @@ const trashEntry: TrashEntry = {
   deletedBy: alice,
   descendants: 2
 }
+const labelledPage = {
+  id: 'p1',
+  title: 'Onboarding',
+  updatedAt: '2026-10-08T07:40:00.000Z'
+}
 
 interface Exchange {
   call: (api: PagesApi) => Promise<unknown>
@@ -359,6 +364,28 @@ const exchanges: Record<string, Exchange> = {
     method: 'DELETE',
     path: '/wikis/w1/trash',
     status: 204
+  },
+  setLabels: {
+    call: api => api.setLabels('p1', ['howto', 'laptop']),
+    method: 'PUT',
+    path: '/pages/p1/labels',
+    body: { names: ['howto', 'laptop'] },
+    answer: { labels: ['howto', 'laptop'] },
+    resolves: ['howto', 'laptop']
+  },
+  listLabels: {
+    call: api => api.listLabels('w1'),
+    method: 'GET',
+    path: '/wikis/w1/labels',
+    answer: { labels: [{ name: 'howto', pages: 2 }] },
+    resolves: [{ name: 'howto', pages: 2 }]
+  },
+  pagesWithLabel: {
+    call: api => api.pagesWithLabel('w1', 'café'),
+    method: 'GET',
+    path: '/wikis/w1/labels/caf%C3%A9/pages',
+    answer: { pages: [labelledPage] },
+    resolves: [labelledPage]
   }
 }
 

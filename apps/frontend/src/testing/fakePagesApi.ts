@@ -150,6 +150,8 @@ interface StoredPage {
   followers: Set<string>
   /** When each person marked it, by person id. */
   favoredBy: Map<string, string>
+  /** Label names, sorted. */
+  labels: string[]
   /** Null while the page is live. */
   deletion: Deletion | null
 }
@@ -180,6 +182,16 @@ const byPosition = (a: { position: string }, b: { position: string }) =>
 
 const byEmail = (a: { email: string }, b: { email: string }) =>
   a.email.localeCompare(b.email)
+
+const byName = (a: string, b: string) => a.localeCompare(b)
+
+const LABEL = /^[\p{L}\p{N}_-]{1,50}$/u
+
+function labelName(value: string) {
+  const name = value.trim().toLowerCase()
+  if (!LABEL.test(name)) throw refuse('invalid_label')
+  return name
+}
 
 // Answers like the network would: later, and with copies.
 const answer = <T>(work: () => T): Promise<T> =>
@@ -395,7 +407,7 @@ function signedIn(world: World, person: Person): FakePagesApi {
       createdBy: page.createdBy,
       updatedAt: version.createdAt,
       updatedBy: version.author,
-      labels: [],
+      labels: page.labels,
       ancestors: ancestorsOf(page),
       following: page.followers.has(person.id),
       favorite: page.favoredBy.has(person.id),
@@ -436,6 +448,7 @@ function signedIn(world: World, person: Person): FakePagesApi {
       ],
       followers: new Set([person.id]),
       favoredBy: new Map(),
+      labels: [],
       deletion: null
     }
     world.pages.set(page.id, page)
@@ -796,6 +809,14 @@ function signedIn(world: World, person: Person): FakePagesApi {
         bump(wiki)
       })
     ),
+    setLabels: vi.fn<PagesApi['setLabels']>((pageId, names) =>
+      answer(() => {
+        const { page, wiki } = liveAccess(pageId)
+        page.labels = [...new Set(names.map(labelName))].sort(byName)
+        bump(wiki)
+        return page.labels
+      })
+    ),
     setFollowing: vi.fn<PagesApi['setFollowing']>((pageId, following) =>
       answer(() => {
         const { page } = pageAccess(pageId)
@@ -863,6 +884,38 @@ function signedIn(world: World, person: Person): FakePagesApi {
           if (page.deletion) world.pages.delete(page.id)
         }
         bump(wiki)
+      })
+    ),
+
+    // A label lives while a page carries it, even from the trash.
+    listLabels: vi.fn<PagesApi['listLabels']>(wikiId =>
+      answer(() => {
+        access(wikiId)
+        const counts = new Map<string, number>()
+        for (const page of livePagesOf(wikiId)) {
+          for (const name of page.labels) {
+            counts.set(name, (counts.get(name) ?? 0) + 1)
+          }
+        }
+        return [...counts]
+          .map(([name, pages]) => ({ name, pages }))
+          .sort((a, b) => byName(a.name, b.name))
+      })
+    ),
+    pagesWithLabel: vi.fn<PagesApi['pagesWithLabel']>((wikiId, name) =>
+      answer(() => {
+        access(wikiId)
+        const carrying = pagesOf(wikiId).filter(page =>
+          page.labels.includes(name)
+        )
+        if (carrying.length === 0) throw refuse('not_found')
+        return carrying
+          .filter(page => !page.deletion)
+          .map(page => {
+            const { title, createdAt } = currentOf(page)
+            return { id: page.id, title, updatedAt: createdAt }
+          })
+          .sort((a, b) => byName(a.title, b.title))
       })
     )
   }

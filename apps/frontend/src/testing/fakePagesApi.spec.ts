@@ -463,6 +463,7 @@ describe('fakePagesApi', () => {
         forbidden
       )
       await expect(api.deletePage(page.id)).rejects.toEqual(forbidden)
+      await expect(api.setLabels(page.id, ['howto'])).rejects.toEqual(forbidden)
     })
   })
 
@@ -752,6 +753,9 @@ describe('fakePagesApi', () => {
         api.movePage(onboarding.id, { parentId: null })
       ).rejects.toEqual(inTrash)
       await expect(api.deletePage(onboarding.id)).rejects.toEqual(inTrash)
+      await expect(api.setLabels(onboarding.id, ['howto'])).rejects.toEqual(
+        inTrash
+      )
       await expect(
         api.createPage(wiki.id, {
           title: 'Laptop',
@@ -759,6 +763,72 @@ describe('fakePagesApi', () => {
           parentId: onboarding.id
         })
       ).rejects.toEqual(new ApiError(400, 'invalid_parent'))
+    })
+  })
+
+  describe('labels', () => {
+    it('labels a page with trimmed, lowercased names, sorted', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki()
+      const page = api.withPage(wiki.id)
+
+      const labels = await api.setLabels(page.id, [
+        ' Laptop ',
+        'HowTo',
+        'howto',
+        'équipe_2'
+      ])
+
+      expect(labels).toEqual(['équipe_2', 'howto', 'laptop'])
+      await expect(api.getPage(page.id)).resolves.toMatchObject({ labels })
+    })
+
+    it('refuses names other than 1 to 50 letters, digits, - and _', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki()
+      const page = api.withPage(wiki.id)
+      const invalidLabel = new ApiError(400, 'invalid_label')
+
+      await expect(api.setLabels(page.id, ['how to'])).rejects.toEqual(
+        invalidLabel
+      )
+      await expect(api.setLabels(page.id, [' '])).rejects.toEqual(invalidLabel)
+      await expect(api.setLabels(page.id, ['a'.repeat(51)])).rejects.toEqual(
+        invalidLabel
+      )
+    })
+
+    it('lists the labels of a wiki and their live pages', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki()
+      const setup = api.withPage(wiki.id, { title: 'Setup' })
+      const badge = api.withPage(wiki.id, { title: 'Badge' })
+      const faq = api.withPage(wiki.id, { title: 'FAQ' })
+      await api.setLabels(setup.id, ['howto', 'laptop'])
+      await api.setLabels(badge.id, ['howto'])
+      await api.setLabels(faq.id, ['howto'])
+      await api.deletePage(faq.id)
+
+      await expect(api.listLabels(wiki.id)).resolves.toEqual([
+        { name: 'howto', pages: 2 },
+        { name: 'laptop', pages: 1 }
+      ])
+      const pages = await api.pagesWithLabel(wiki.id, 'howto')
+      expect(pages.map(page => page.title)).toEqual(['Badge', 'Setup'])
+    })
+
+    it('forgets a label no page uses any more', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki()
+      const page = api.withPage(wiki.id)
+      await api.setLabels(page.id, ['howto'])
+
+      await api.setLabels(page.id, [])
+
+      await expect(api.listLabels(wiki.id)).resolves.toEqual([])
+      await expect(api.pagesWithLabel(wiki.id, 'howto')).rejects.toEqual(
+        new ApiError(404, 'not_found')
+      )
     })
   })
 })
