@@ -70,6 +70,39 @@ describe('a page', () => {
     expect(within(main).queryByRole('textbox')).not.toBeInTheDocument()
   })
 
+  it('shows the headings of its blocks below its title', async () => {
+    openChecklistOf([
+      { type: 'heading', props: { level: 1 }, content: 'Before the release' },
+      { type: 'heading', props: { level: 2 }, content: 'On Thursday' }
+    ])
+    await screen.findByText('On Thursday')
+
+    const main = screen.getByRole('main')
+    expect(within(main).getByRole('heading', { level: 1 })).toHaveTextContent(
+      'Release checklist'
+    )
+    expect(within(main).getByRole('heading', { level: 2 })).toHaveTextContent(
+      'Before the release'
+    )
+    expect(within(main).getByRole('heading', { level: 3 })).toHaveTextContent(
+      'On Thursday'
+    )
+  })
+
+  it('shows the two deepest headings of its blocks at the last level', async () => {
+    openChecklistOf([
+      { type: 'heading', props: { level: 5 }, content: 'Before the release' },
+      { type: 'heading', props: { level: 6 }, content: 'On Thursday' }
+    ])
+    await screen.findByText('On Thursday')
+
+    expect(
+      screen
+        .getAllByRole('heading', { level: 6 })
+        .map(heading => heading.textContent)
+    ).toEqual(['Before the release', 'On Thursday'])
+  })
+
   it('shows the list items of its blocks in a list', async () => {
     openChecklistOf([
       { type: 'bulletListItem', content: 'Freeze the branch' },

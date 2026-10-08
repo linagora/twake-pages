@@ -25,6 +25,17 @@ export function Blocks({
       })
       // As the editor shows a check list item when it is not editable.
       for (const box of html.querySelectorAll('input')) box.disabled = true
+      // The blocks show under a title, which is the h1: each of their
+      // headings goes one level down, and h6 takes the two deepest.
+      for (const heading of html.querySelectorAll('h1, h2, h3, h4, h5')) {
+        const level = Number(heading.tagName.charAt(1)) + 1
+        const below = document.createElement(`h${String(level)}`)
+        for (const { name, value } of heading.attributes) {
+          below.setAttribute(name, value)
+        }
+        below.append(...heading.childNodes)
+        heading.replaceWith(below)
+      }
       element.replaceChildren(html)
     },
     [blocks]
