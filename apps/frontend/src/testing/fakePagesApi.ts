@@ -203,6 +203,13 @@ const WORD = /[\p{L}\p{N}]+/gu
 
 const wordsOf = (value: string) => value.toLowerCase().match(WORD) ?? []
 
+type Fields = Record<string, unknown>
+
+const isFields = (value: unknown): value is Fields =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+
+const isList = (value: unknown): value is unknown[] => Array.isArray(value)
+
 function inlineText(value: unknown): string {
   if (Array.isArray(value)) return value.map(inlineText).join('')
   if (typeof value !== 'object' || value === null) return ''
@@ -290,6 +297,72 @@ function checkGristUrl(value: string | undefined) {
   if (!url) throw refuse('invalid_request')
   if (url.origin !== GRIST_ORIGIN) throw refuse('invalid_grist_url')
   return value
+}
+
+/** Text the backend keeps as sent: no NUL character, no lone surrogate. */
+const storable = (text: string) =>
+  !text.includes('\u0000') && text.isWellFormed()
+
+function checkTitle(value: string) {
+  const title = checkText(value, 200)
+  if (!storable(title)) throw refuse('invalid_request')
+  return title
+}
+
+// A block's address is its `url` prop, empty until the block is given one.
+function urlAllowed(block: Fields, allowed: (url: URL) => boolean) {
+  const url = isFields(block.props) ? block.props.url : undefined
+  if (url === undefined || url === '') return true
+  const address = typeof url === 'string' ? URL.parse(url) : null
+  return address !== null && allowed(address)
+}
+
+/** The check of each type of object the blocks hold, by its `type`. */
+function addressAllowed(fields: Fields) {
+  switch (fields.type) {
+    case 'link': {
+      const href =
+        typeof fields.href === 'string' ? URL.parse(fields.href) : null
+      return (
+        href !== null && ['http:', 'https:', 'mailto:'].includes(href.protocol)
+      )
+    }
+    case 'image':
+    case 'video':
+    case 'audio':
+    case 'file':
+      return urlAllowed(fields, url => url.protocol === 'https:')
+    case 'gristEmbed':
+      return urlAllowed(fields, url => url.origin === GRIST_ORIGIN)
+    default:
+      return true
+  }
+}
+
+const MAX_BLOCKS_BYTES = 2 * 1024 * 1024
+
+/** The blocks as sent, or `invalid_content` on the checks of docs/api.md. */
+function checkBlocks(blocks: Block[]) {
+  const json = JSON.stringify(blocks)
+  if (new TextEncoder().encode(json).length > MAX_BLOCKS_BYTES) {
+    throw refuse('invalid_content')
+  }
+  // Every object and string of the blocks, wherever it sits.
+  const pending: unknown[] = [...blocks]
+  while (pending.length > 0) {
+    const value = pending.pop()
+    if (typeof value === 'string') {
+      if (!storable(value)) throw refuse('invalid_content')
+    } else if (isList(value)) {
+      for (const item of value) pending.push(item)
+    } else if (isFields(value)) {
+      if (!Object.keys(value).every(storable) || !addressAllowed(value)) {
+        throw refuse('invalid_content')
+      }
+      for (const field of Object.values(value)) pending.push(field)
+    }
+  }
+  return blocks
 }
 
 function positionBetween(
@@ -918,12 +991,12 @@ function signedIn(world: World, person: Person): FakePagesApi {
     createPage: vi.fn<PagesApi['createPage']>((wikiId, input) =>
       answer(() => {
         const { wiki } = access(wikiId, 'editor')
-        const title = checkText(input.title, 200)
+        const title = checkTitle(input.title)
         const placement = placementFor(wikiId, input)
         const body =
           input.kind === 'database'
             ? { content: [], gristUrl: checkGristUrl(input.gristUrl) }
-            : { content: input.content ?? [], gristUrl: null }
+            : { content: checkBlocks(input.content ?? []), gristUrl: null }
         const page = makePage(wiki, {
           ...body,
           ...placement,
@@ -964,7 +1037,7 @@ function signedIn(world: World, person: Person): FakePagesApi {
         }
         addVersion(page, wiki, {
           title,
-          content: 'content' in draft ? draft.content : [],
+          content: 'content' in draft ? checkBlocks(draft.content) : [],
           gristUrl: 'gristUrl' in draft ? checkGristUrl(draft.gristUrl) : null
         })
         return pageFor(page)

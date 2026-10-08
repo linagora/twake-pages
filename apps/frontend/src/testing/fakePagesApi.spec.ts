@@ -401,6 +401,96 @@ describe('fakePagesApi', () => {
       ).rejects.toEqual(new ApiError(400, 'invalid_grist_url'))
     })
 
+    it('refuses a title with a NUL character or a lone surrogate', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki()
+      const page = { kind: 'document' as const, parentId: null }
+      const invalid = new ApiError(400, 'invalid_request')
+
+      await expect(
+        api.createPage(wiki.id, { ...page, title: 'On\u0000boarding' })
+      ).rejects.toEqual(invalid)
+      await expect(
+        api.createPage(wiki.id, { ...page, title: 'Onboarding \ud83d' })
+      ).rejects.toEqual(invalid)
+    })
+
+    describe('its blocks', () => {
+      const linkingTo = (href: string) => ({
+        type: 'paragraph',
+        content: [{ type: 'link', href, content: [] }],
+        children: []
+      })
+
+      /** A block whose address is its `url` prop: a media or a Grist embed. */
+      const anAddressed = (type: string, url: string) => ({
+        type,
+        props: { url },
+        children: []
+      })
+
+      it('takes the links and addresses the backend takes', async () => {
+        const api = fakePagesApi()
+        const wiki = api.withWiki()
+        const content = [
+          linkingTo('https://example.com/guide'),
+          linkingTo('http://example.com/guide'),
+          linkingTo('mailto:alice@example.com'),
+          anAddressed('image', 'https://example.com/desk.png'),
+          anAddressed('file', ''),
+          anAddressed('gristEmbed', `${GRIST_ORIGIN}/o/docs/budget`)
+        ]
+
+        await expect(
+          api.createPage(wiki.id, {
+            title: 'Onboarding',
+            kind: 'document',
+            parentId: null,
+            content
+          })
+        ).resolves.toMatchObject({ content })
+      })
+
+      it.each([
+        ['over 2 MiB of JSON', paragraph('a'.repeat(2 * 1024 * 1024))],
+        ['a link that is not http, https or mailto', linkingTo('ftp://a.b')],
+        [
+          'an image whose address is not https',
+          anAddressed('image', 'http://example.com/desk.png')
+        ],
+        [
+          'a Grist embed outside the Grist origin',
+          anAddressed('gristEmbed', 'https://evil.example.com/o/docs/budget')
+        ],
+        ['a NUL character in a text', paragraph('Steps\u0000')],
+        [
+          'a lone surrogate in a key',
+          { ...paragraph('Steps'), '\udc00level': 2 }
+        ]
+      ])('refuses %s, on creation and on publishing', async (_case, block) => {
+        const api = fakePagesApi()
+        const wiki = api.withWiki()
+        const page = api.withPage(wiki.id, { title: 'Onboarding' })
+        const invalid = new ApiError(400, 'invalid_content')
+
+        await expect(
+          api.createPage(wiki.id, {
+            title: 'Onboarding',
+            kind: 'document',
+            parentId: null,
+            content: [block]
+          })
+        ).rejects.toEqual(invalid)
+        await expect(
+          api.publish(page.id, {
+            baseVersion: 1,
+            title: 'Onboarding',
+            content: [block]
+          })
+        ).rejects.toEqual(invalid)
+      })
+    })
+
     it('lists the ancestors of a page, from the top of the tree', async () => {
       const api = fakePagesApi()
       const wiki = api.withWiki()
