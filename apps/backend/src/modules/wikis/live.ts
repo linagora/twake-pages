@@ -5,7 +5,7 @@ import { inTenant, type Db, type Tx } from '../../infra/db.ts'
 import type { HttpServer } from '../../infra/http.ts'
 import { refuse, Refused } from '../../infra/refusals.ts'
 import type { RequireIdentity } from '../auth/index.ts'
-import { access } from './access.ts'
+import { roleOn } from './access.ts'
 import { wikis } from './schema.ts'
 
 // Sent by the wikis_notify_change trigger.
@@ -47,7 +47,7 @@ export function registerLive(
       if (!params.success) return refuse(reply, 'not_found')
       const { wikiId } = params.data
       const role = await inTenant(deps.db, identity, tx =>
-        access(tx, identity, wikiId)
+        roleOn(tx, identity, wikiId)
       )
       if (!role) return refuse(reply, 'not_found')
 

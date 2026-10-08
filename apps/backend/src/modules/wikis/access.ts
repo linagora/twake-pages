@@ -19,7 +19,7 @@ export function accessibleWikis(tx: Tx, userId: string) {
     .as('accessible')
 }
 
-export async function access(
+export async function roleOn(
   tx: Tx,
   identity: { userId: string },
   wikiId: string
@@ -40,7 +40,7 @@ export async function checkRole(
   wikiId: string,
   needed: Role
 ): Promise<Role> {
-  const role = await access(tx, identity, wikiId)
+  const role = await roleOn(tx, identity, wikiId)
   if (!role) throw new Refused('not_found')
   if (RANK[role] < RANK[needed]) throw new Refused('forbidden')
   return role
