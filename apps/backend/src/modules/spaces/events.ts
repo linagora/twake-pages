@@ -15,6 +15,7 @@ import type { OutgoingEvent, PlatformEvent } from '../../events/envelope.ts'
 import { enqueue } from '../../events/outbox.ts'
 import { parseOrDrop, type Handler } from '../../events/router.ts'
 import { asOrganization, type Db, type Tx } from '../../infra/db.ts'
+import { bumpWiki } from '../wikis/live.ts'
 import { memberRole, wikiMembers, wikis } from '../wikis/schema.ts'
 import { addHomePage, putOutOfReach } from '../wikis/store.ts'
 import { spaces } from './schema.ts'
@@ -121,14 +122,6 @@ const knownName = (userId: string) =>
     where ${wikiMembers.userId} = ${userId} and ${wikiMembers.name} is not null
     limit 1)`
 
-// The people who show the wiki reload it when its version moves.
-async function touch(tx: Tx, wikiId: string) {
-  await tx
-    .update(wikis)
-    .set({ version: sql`${wikis.version} + 1` })
-    .where(eq(wikis.id, wikiId))
-}
-
 async function upsertMembers(
   tx: Tx,
   space: SpaceRef,
@@ -166,7 +159,7 @@ async function upsertMembers(
       setWhere: sql`(${wikiMembers.email}, ${wikiMembers.role}) is distinct from (excluded.email, excluded.role)`
     })
     .returning({ userId: wikiMembers.userId })
-  if (changed.length > 0) await touch(tx, wikiId)
+  if (changed.length > 0) await bumpWiki(tx, wikiId)
 }
 
 async function provisioned(tx: Tx, space: SpaceRef): Promise<OutgoingEvent> {
@@ -226,7 +219,7 @@ async function renameSpace(tx: Tx, space: SpaceRef, name: string) {
     .set({ name })
     .where(and(eq(wikis.id, wikiId), ne(wikis.name, name)))
     .returning({ id: wikis.id })
-  if (renamed.length > 0) await touch(tx, wikiId)
+  if (renamed.length > 0) await bumpWiki(tx, wikiId)
 }
 
 /**
@@ -244,7 +237,7 @@ async function removeMembers(
     .delete(wikiMembers)
     .where(and(eq(wikiMembers.wikiId, wikiId), which))
     .returning({ userId: wikiMembers.userId })
-  if (removed.length > 0) await touch(tx, wikiId)
+  if (removed.length > 0) await bumpWiki(tx, wikiId)
 }
 
 /** Puts the space's wiki out of reach now, for the wiki purge job to take. */
