@@ -1,9 +1,10 @@
-import { and, eq } from 'drizzle-orm'
+import { and, desc, eq } from 'drizzle-orm'
 import { inTenant, type Db } from '../../infra/db.ts'
 import type { HttpServer } from '../../infra/http.ts'
 import { refuse } from '../../infra/refusals.ts'
 import type { Identity, RequireIdentity } from '../auth/index.ts'
 import { roleOn } from '../wikis/access.ts'
+import { pageRefOf, reachablePages } from './refs.ts'
 import { pageParams } from './routes.ts'
 import { pageFavorites, pages } from './schema.ts'
 
@@ -45,6 +46,20 @@ function createFavoriteStore(db: Db) {
         }
         return true
       })
+    },
+
+    // Twake Tasks flags its favorite boards in the list of boards. Favorite
+    // pages make a list of their own, across the person's wikis.
+    favorites(identity: Identity) {
+      return inTenant(db, identity, tx => {
+        const reachable = reachablePages(tx, identity.userId)
+        return tx
+          .select(pageRefOf(reachable))
+          .from(pageFavorites)
+          .innerJoin(reachable, eq(reachable.id, pageFavorites.pageId))
+          .where(eq(pageFavorites.userId, identity.userId))
+          .orderBy(desc(pageFavorites.createdAt))
+      })
     }
   }
 }
@@ -78,4 +93,14 @@ export function registerFavorites(
       }
     })
   }
+
+  app.get(
+    '/favorites',
+    { preHandler: deps.requireIdentity },
+    async (request, reply) => {
+      const identity = request.identity
+      if (!identity) return reply.code(401).send()
+      return { pages: await store.favorites(identity) }
+    }
+  )
 }

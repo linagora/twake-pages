@@ -185,6 +185,13 @@ export interface Wiki extends WikiSummary {
   version: number
 }
 
+/** A page as the lists across wikis show it, such as `GET /favorites`. */
+export interface PageRef {
+  id: string
+  title: string
+  wiki: Pick<WikiSummary, 'id' | 'name' | 'kind'>
+}
+
 /** The job planned to purge the deleted wiki. */
 export async function purgeJobOf(db: Db, wikiId: string) {
   const [job] = await db
