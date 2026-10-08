@@ -214,7 +214,7 @@ async function provisionSpace(
   const author = admin?.uuid
     ? { userId: admin.uuid, email: admin.email, name: null }
     : { userId: space.id, email: '', name: space.name }
-  await addHomePage(tx, author, wiki)
+  await addHomePage(tx, author, wiki, admin?.uuid ?? null)
 }
 
 async function renameSpace(tx: Tx, space: SpaceRef, name: string) {

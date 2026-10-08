@@ -4,7 +4,7 @@ import { asTenant, inTenant, type Db, type Tx } from '../../infra/db.ts'
 import { Refused, writeOrRefuse, type Result } from '../../infra/refusals.ts'
 import { schedule, type Handler } from '../../scheduler/scheduler.ts'
 import type { Identity } from '../auth/index.ts'
-import { notifications } from '../notifications/schema.ts'
+import { notifications, pageFollowers } from '../notifications/schema.ts'
 import { pages, pageVersions } from '../pages/schema.ts'
 import { accessibleWikis, checkRole, type Role } from './access.ts'
 import { bumpWiki } from './live.ts'
@@ -87,10 +87,15 @@ export async function putOutOfReach(tx: Tx, wikiId: string) {
 
 type Author = Pick<Identity, 'userId' | 'email' | 'name'>
 
+/**
+ * The follower is the author, as the creator of any page follows it, unless
+ * the author is no person: a space that writes its own wiki's home page.
+ */
 export async function addHomePage(
   tx: Tx,
   author: Author,
-  wiki: { id: string; organizationId: string | null; name: string }
+  wiki: { id: string; organizationId: string | null; name: string },
+  follower: string | null = author.userId
 ): Promise<void> {
   const [home] = await tx
     .insert(pages)
@@ -113,6 +118,12 @@ export async function addHomePage(
     authorId: author.userId,
     authorEmail: author.email,
     authorName: author.name
+  })
+  if (follower === null) return
+  await tx.insert(pageFollowers).values({
+    pageId: home.id,
+    organizationId: wiki.organizationId,
+    userId: follower
   })
 }
 

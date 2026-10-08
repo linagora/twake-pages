@@ -103,6 +103,15 @@ describe('GET /wikis', () => {
     })
   })
 
+  it('has the person follow the home page of their personal wiki', async () => {
+    const alice = aUser()
+    const [personal] = await wikisOf(api, alice)
+
+    const home = await api.as(alice).get(`/pages/${personal?.homePageId ?? ''}`)
+
+    expect(home.json()).toMatchObject({ following: true })
+  })
+
   it('keeps the same personal wiki on later calls', async () => {
     const alice = aUser()
 
@@ -182,6 +191,15 @@ describe('POST /wikis', () => {
       unread: 0,
       version: 0
     })
+  })
+
+  it('has the creator follow the home page', async () => {
+    const alice = aUser()
+    const wiki = await aWikiOf(api, alice)
+
+    const home = await api.as(alice).get(`/pages/${wiki.homePageId}`)
+
+    expect(home.json()).toMatchObject({ following: true })
   })
 
   it.each([

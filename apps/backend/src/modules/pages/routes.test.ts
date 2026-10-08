@@ -185,7 +185,7 @@ describe('GET /pages/:pageId', () => {
       updatedBy: personOf(alice),
       labels: [],
       ancestors: [],
-      following: false,
+      following: true,
       favorite: false,
       deletedAt: null
     })
@@ -258,13 +258,17 @@ describe('GET /pages/:pageId', () => {
     const alice = aUser()
     const bob = aUser({ organizationId: alice.organizationId })
     const wiki = await aWikiOf(api, alice)
+    const plans = await aPageIn(db, alice, wiki.id, {
+      title: 'Plans',
+      position: 'a0'
+    })
     await joinWiki(db, alice, wiki.id, bob, 'viewer')
-    await follow(alice, wiki.homePageId)
-    await keepAsFavorite(bob, wiki.homePageId)
+    await follow(alice, plans)
+    await keepAsFavorite(bob, plans)
 
     const marks = await Promise.all(
       [alice, bob].map(async user => {
-        const page = await pageOf(user, wiki.homePageId)
+        const page = await pageOf(user, plans)
         return { following: page.following, favorite: page.favorite }
       })
     )

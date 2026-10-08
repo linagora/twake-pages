@@ -140,7 +140,7 @@ interface TrashEntry {
 | Method and path | Body | Answer | Who |
 |---|---|---|---|
 | `GET /wikis` | | `{ wikis: WikiSummary[] }`, personal first, then by name. Creates the personal wiki on first call. | anyone |
-| `POST /wikis` | `{ name, description? }` | `201 Wiki`, kind `shared`, the creator admin, with an empty home page titled after the wiki | anyone |
+| `POST /wikis` | `{ name, description? }` | `201 Wiki`, kind `shared`, the creator admin, with an empty home page titled after the wiki, which the creator follows | anyone |
 | `GET /wikis/:wikiId` | | `Wiki` | member |
 | `PATCH /wikis/:wikiId` | `{ name?, description? }` | `Wiki`; `managed` for the name of a space's wiki | admin |
 | `DELETE /wikis/:wikiId` | | `204`; `managed` for a personal or space wiki | admin |

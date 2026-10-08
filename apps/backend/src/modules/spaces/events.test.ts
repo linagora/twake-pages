@@ -15,6 +15,7 @@ import {
   type TestUser,
   type WikiSummary
 } from '../../testing/app.ts'
+import { pageFollowers } from '../notifications/schema.ts'
 import { pages, pageVersions } from '../pages/schema.ts'
 import { wikiMembers } from '../wikis/schema.ts'
 import { PURGE_WIKI_JOB, purgeWiki } from '../wikis/store.ts'
@@ -96,6 +97,18 @@ async function homePageAuthorOf(user: TestUser) {
       .where(eq(pages.id, wiki.homePageId))
   )
   return author
+}
+
+/** Who follows the home page of the person's space wiki, which no route lists. */
+async function homePageFollowersOf(user: TestUser) {
+  const wiki = await spaceWikiOf(user)
+  const followers = await inTenant(db, user, tx =>
+    tx
+      .select({ userId: pageFollowers.userId })
+      .from(pageFollowers)
+      .where(eq(pageFollowers.pageId, wiki.homePageId))
+  )
+  return followers.map(follower => follower.userId)
 }
 
 /** A space of the person's organization, with them as its admin. */
@@ -216,6 +229,40 @@ describe('twake.space.created', () => {
       authorEmail: '',
       authorName: 'Ops'
     })
+  })
+
+  it('has the first admin with a uuid in the event follow the home page', async () => {
+    const admin = aUser()
+    const second = aUser({ organizationId: admin.organizationId })
+
+    await deliver('twake.space.created', {
+      organizationId: admin.organizationId,
+      id: randomUUID(),
+      name: 'Ops',
+      members: [
+        { email: 'no-uuid@example.com', role: 'admin' },
+        member(admin, 'admin'),
+        member(second, 'admin')
+      ]
+    })
+
+    expect(await homePageFollowersOf(admin)).toEqual([admin.userId])
+  })
+
+  it('has no one follow the home page the space writes', async () => {
+    const viewer = aUser()
+
+    await deliver('twake.space.created', {
+      organizationId: viewer.organizationId,
+      id: randomUUID(),
+      name: 'Ops',
+      members: [
+        member(viewer, 'viewer'),
+        { email: 'no-uuid@example.com', role: 'admin' }
+      ]
+    })
+
+    expect(await homePageFollowersOf(viewer)).toEqual([])
   })
 
   it('drops an event without a space id', async () => {
