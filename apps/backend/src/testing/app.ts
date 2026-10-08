@@ -167,6 +167,15 @@ export function wikiRowsOf(db: Db, someone: TestUser, wikiId: string) {
   )
 }
 
+export type TestApp = Awaited<ReturnType<typeof startApp>>
+
+/** The wiki's version, as `GET /wikis/:wikiId` shows it to the person. */
+export async function versionOf(api: TestApp, user: TestUser, wikiId: string) {
+  return (await api.as(user).get(`/wikis/${wikiId}`)).json<{
+    version: number
+  }>().version
+}
+
 export async function startApp() {
   const { sql, db } = createDb(inject('databaseUrl'))
   const settingsChanges = await listenToChanges(sql, SETTINGS_CHANNEL)
@@ -229,13 +238,4 @@ export async function startApp() {
       await sql.end()
     }
   }
-}
-
-export type TestApp = Awaited<ReturnType<typeof startApp>>
-
-/** The wiki's version, as `GET /wikis/:wikiId` shows it to the person. */
-export async function versionOf(api: TestApp, user: TestUser, wikiId: string) {
-  return (await api.as(user).get(`/wikis/${wikiId}`)).json<{
-    version: number
-  }>().version
 }
