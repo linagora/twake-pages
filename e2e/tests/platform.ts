@@ -17,11 +17,13 @@ const provisionedWiki = `
 const { default: postgres } = await import('postgres')
 const sql = postgres(process.env.DATABASE_URL)
 const [row] = await sql\`
-  select event -> 'data' -> 'resource' ->> 'id' as id from outbox
+  select event -> 'data' -> 'resource' ->> 'id' as id,
+    event -> 'data' -> 'resource' ->> 'kind' as kind from outbox
   where event ->> 'type' = 'com.twake.pages.space.provisioned.v1'
-    and event -> 'data' ->> 'space_id' = \${process.argv[1]}\`
+    and event -> 'data' ->> 'space_id' = \${process.argv[1]}
+    and sent_at is not null\`
 await sql.end()
-process.stdout.write(row?.id ?? '')
+process.stdout.write(JSON.stringify(row ?? null))
 `
 
 function inBackend(script: string, ...args: string[]) {
@@ -62,7 +64,13 @@ export function publishPlatformEvent(
   )
 }
 
-/** The wiki id TwakeSpace learns from the space's provisioned event. */
+/**
+ * The resource TwakeSpace learns from the space's provisioned event, once
+ * RabbitMQ has confirmed it; null until then.
+ */
 export function wikiOfSpace(spaceId: string) {
-  return inBackend(provisionedWiki, spaceId)
+  return JSON.parse(inBackend(provisionedWiki, spaceId)) as {
+    id: string
+    kind: string
+  } | null
 }
