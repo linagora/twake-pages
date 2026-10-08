@@ -806,6 +806,8 @@ function signedIn(world: World, person: Person): FakePagesApi {
         const { wiki } = access(wikiId, 'admin')
         if (isManaged(wiki)) throw refuse('managed')
         wiki.deleted = true
+        // Its members reload it, and find it gone.
+        bump(wiki)
       })
     ),
     getTree: vi.fn<PagesApi['getTree']>(wikiId =>

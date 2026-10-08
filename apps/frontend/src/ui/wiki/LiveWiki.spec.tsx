@@ -12,6 +12,7 @@ import { renderRoute } from '@/testing/renderWithProviders'
 
 const BOB = 'bob@example.com'
 const PAGE_NOT_FOUND = "This page doesn't exist, or you can't open it."
+const WIKI_NOT_FOUND = "This wiki doesn't exist, or you can't open it."
 
 /** Alice's Handbook, with its Onboarding page, which Bob runs with her. */
 function sharedHandbook() {
@@ -92,6 +93,16 @@ describe('a wiki open in two places', () => {
     })
 
     expect(await findEmptyState(PAGE_NOT_FOUND)).toBeInTheDocument()
+  })
+
+  it('says the wiki is not found once deleted elsewhere', async () => {
+    const { pagesApi, bob, wiki } = sharedHandbook()
+    renderRoute(`/wikis/${wiki.id}`, { pagesApi })
+    await screen.findByRole('heading', { level: 1, name: 'Handbook' })
+
+    await act(() => bob.deleteWiki(wiki.id))
+
+    expect(await findEmptyState(WIKI_NOT_FOUND)).toBeInTheDocument()
   })
 
   it('catches up on a change missed while the stream was reconnecting', async () => {

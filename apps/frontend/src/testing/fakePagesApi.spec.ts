@@ -144,6 +144,17 @@ describe('fakePagesApi', () => {
 
       expect(versions).toEqual([wiki.version, wiki.version + 1])
     })
+
+    it('calls back as the wiki is deleted, for its members to see it go', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki()
+      const versions: number[] = []
+      api.watchWiki(wiki.id, version => versions.push(version))
+
+      await api.deleteWiki(wiki.id)
+
+      expect(versions).toEqual([wiki.version, wiki.version + 1])
+    })
   })
 
   describe('sharing', () => {
