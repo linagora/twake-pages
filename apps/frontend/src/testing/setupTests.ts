@@ -36,3 +36,7 @@ Object.defineProperty(window, 'ClipboardEvent', {
 })
 
 afterEach(cleanup)
+// The drafts of pages stay in the browser between two renders of a test only.
+afterEach(() => {
+  localStorage.clear()
+})

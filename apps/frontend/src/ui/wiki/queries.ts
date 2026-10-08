@@ -241,16 +241,20 @@ export function useSetFavorite(
 /**
  * The page shows its new version as soon as it is published, and the tree
  * its title once read again, before the caller opens the page.
+ * `onPublished` runs once the version is published, though the screen that
+ * published it is gone.
  */
 export function usePublish(
   wikiId: string,
-  pageId: string
+  pageId: string,
+  onPublished: () => void
 ): UseMutationResult<Page, Error, NewVersion> {
   const api = usePagesApi()
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (version: NewVersion) => api.publish(pageId, version),
     onSuccess: page => {
+      onPublished()
       // At the version of the wiki its last read knew, older than the one
       // publishing moved it to.
       queryClient.setQueryData<ReadPage>(pageKey(wikiId, pageId), read => ({

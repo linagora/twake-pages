@@ -182,7 +182,9 @@
     "back": "Retour à la page",
     "pageTitle": "Titre",
     "content": "Contenu",
-    "publish": "Publier"
+    "publish": "Publier",
+    "draftKept": "Voici votre brouillon, commencé à partir de la version %{number}. Il est conservé dans ce navigateur jusqu'à ce que vous le publiiez ou l'abandonniez.",
+    "discard": "Abandonner le brouillon"
   },
   "labels": {
     "title": "Pages avec l'étiquette %{name}"

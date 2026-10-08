@@ -1,5 +1,5 @@
 import { Icon, Left } from '@linagora/twake-icons'
-import { Button, TextField, Typography } from '@linagora/twake-mui'
+import { Alert, Button, TextField, Typography } from '@linagora/twake-mui'
 import { useState, type ReactElement } from 'react'
 import {
   Navigate,
@@ -9,10 +9,10 @@ import {
 } from 'react-router'
 
 import { BlocksEditor } from '@/ds/BlocksEditor'
-import { editableBlocks } from '@/ds/editorBlocks'
 import { PageHeader } from '@/ds/PageHeader'
 import type { Page } from '@/domain/page'
 import { useI18n } from '@/ui/i18n/useI18n'
+import { useDraft } from '@/ui/page/useDraft'
 import { useEditable } from '@/ui/page/useEditable'
 import { useWikiPage } from '@/ui/page/useWikiPage'
 import { UnavailableScreen } from '@/ui/shell/Problems'
@@ -24,6 +24,8 @@ export function EditPageScreen(): ReactElement {
   const { wikiId = '', pageId = '' } = useParams()
   const { page, missing } = useWikiPage(wikiId, pageId)
   const editable = useEditable(wikiId, pageId)
+  // Each start of the editor takes the page as it is then.
+  const [starts, setStarts] = useState(0)
 
   if (missing || !page.data) {
     return (
@@ -36,38 +38,48 @@ export function EditPageScreen(): ReactElement {
     )
   }
 
-  // The page as it is, for a person who does not write it. The wiki is read
-  // by now, as its layout waits for it.
+  // The page as it is, for a person who does not write it, with no draft.
+  // The wiki is read by now, as its layout waits for it.
   if (!editable) return <Navigate to={pathOf(page.data)} replace />
 
-  return <PageEditor key={pageId} wikiId={wikiId} page={page.data} />
+  return (
+    <PageEditor
+      key={`${pageId}.${String(starts)}`}
+      wikiId={wikiId}
+      page={page.data}
+      onRestart={() => {
+        setStarts(count => count + 1)
+      }}
+    />
+  )
 }
 
 // The home page shows under the name of its wiki.
 const pathOf = (page: Page) => (page.home ? '..' : `../pages/${page.id}`)
 
-/**
- * The title and the blocks of a page, written from the version it shows
- * first: a newer one, published meanwhile, does not move the draft.
- */
+/** The title and the blocks of a page, written in its draft. */
 function PageEditor({
   wikiId,
-  page
+  page,
+  onRestart
 }: {
   wikiId: string
   page: Page
+  /** Starts the editor again, from the page as it is then. */
+  onRestart: () => void
 }): ReactElement {
   const { t, lang } = useI18n()
   useDocumentTitle(t('page.edit'))
   const navigate = useNavigate()
-  const publish = usePublish(wikiId, page.id)
-  const [start] = useState(() => ({
-    ...page,
-    content: editableBlocks(page.content)
-  }))
-  const [title, setTitle] = useState(start.title)
-  const [blocks, setBlocks] = useState(start.content)
-  const path = pathOf(start)
+  const { kept, start, draft, change, drop } = useDraft(page)
+  // Dropped once published, though the person left the editor meanwhile.
+  const publish = usePublish(wikiId, page.id, drop)
+  const path = pathOf(page)
+
+  const restart = () => {
+    drop()
+    onRestart()
+  }
 
   return (
     <main className="u-p-2">
@@ -89,15 +101,16 @@ function PageEditor({
         }
         actions={
           <Button
-            disabled={publish.isPending || !title.trim()}
+            disabled={publish.isPending || !draft.title.trim()}
             onClick={() => {
               publish.mutate(
                 {
-                  baseVersion: start.version,
-                  title: title.trim(),
-                  content: blocks
+                  baseVersion: draft.baseVersion,
+                  title: draft.title.trim(),
+                  content: draft.content
                 },
                 {
+                  // Unless the person left the editor meanwhile.
                   onSuccess: () => {
                     void navigate(path)
                   }
@@ -109,11 +122,24 @@ function PageEditor({
           </Button>
         }
       />
+      {kept && (
+        <Alert
+          severity="info"
+          className="u-mb-1"
+          action={
+            <Button variant="text" onClick={restart}>
+              {t('editor.discard')}
+            </Button>
+          }
+        >
+          {t('editor.draftKept', { number: kept.baseVersion })}
+        </Alert>
+      )}
       <TextField
         label={t('editor.pageTitle')}
-        value={title}
+        value={draft.title}
         onChange={event => {
-          setTitle(event.target.value)
+          change({ title: event.target.value })
         }}
         required
         fullWidth
@@ -125,7 +151,9 @@ function PageEditor({
         label={t('editor.content')}
         lang={lang}
         loadingLabel={t('app.loading')}
-        onChange={setBlocks}
+        onChange={content => {
+          change({ content })
+        }}
       />
     </main>
   )

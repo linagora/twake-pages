@@ -182,7 +182,9 @@
     "back": "Back to the page",
     "pageTitle": "Title",
     "content": "Content",
-    "publish": "Publish"
+    "publish": "Publish",
+    "draftKept": "This is your draft, started from version %{number}. It is kept in this browser until you publish or discard it.",
+    "discard": "Discard draft"
   },
   "labels": {
     "title": "Pages labelled %{name}"

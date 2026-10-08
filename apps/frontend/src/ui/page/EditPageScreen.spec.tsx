@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
 import type { Block } from '@/domain/page'
@@ -12,6 +12,7 @@ import {
   paragraph,
   type FakePagesApi
 } from '@/testing/fakePagesApi'
+import { fakeSession, fakeUser } from '@/testing/fakeSession'
 import { typeIn } from '@/testing/forms'
 import { renderRoute } from '@/testing/renderWithProviders'
 
@@ -301,5 +302,163 @@ describe('the editor of a page', () => {
     typeIn(screen.getByRole('main'), 'Title', '  ')
 
     expect(screen.getByRole('button', { name: 'Publish' })).toBeDisabled()
+  })
+})
+
+const DRAFT_KEPT = /This is your draft, started from version 1/
+
+/** A page of a wiki, and the path of its editor. */
+function aPage(pagesApi: FakePagesApi) {
+  const wiki = pagesApi.withWiki({ members: { 'bob@example.com': 'editor' } })
+  const page = pagesApi.withPage(wiki.id, {
+    title: 'Onboarding',
+    content: [paragraph('Bring your badge')]
+  })
+  return { page, editor: `/wikis/${wiki.id}/pages/${page.id}/edit` }
+}
+
+/** Writes a title and a paragraph in the editor shown. */
+async function writeADraft() {
+  await screen.findByRole('textbox', { name: 'Title' })
+  typeIn(screen.getByRole('main'), 'Title', 'Onboarding guide')
+  await typeInBlocks(
+    await screen.findByRole('textbox', { name: 'Content' }),
+    'Ask for a laptop'
+  )
+}
+
+/** Writes a title and a paragraph in the editor, and leaves it unpublished. */
+async function leaveADraft(editor: string, pagesApi: FakePagesApi) {
+  const { unmount } = renderRoute(editor, { pagesApi })
+  await writeADraft()
+  unmount()
+}
+
+describe('the draft of a page', () => {
+  it('is offered back when the editor opens again, and stays in the browser', async () => {
+    const pagesApi = fakePagesApi()
+    const { editor } = aPage(pagesApi)
+    await leaveADraft(editor, pagesApi)
+
+    renderRoute(editor, { pagesApi })
+
+    expect(await screen.findByText(DRAFT_KEPT)).toBeVisible()
+    expect(screen.getByRole('textbox', { name: 'Title' })).toHaveValue(
+      'Onboarding guide'
+    )
+    expect(
+      await screen.findByRole('textbox', { name: 'Content' })
+    ).toHaveTextContent('Ask for a laptop')
+    expect(pagesApi.publish).not.toHaveBeenCalled()
+  })
+
+  it('is published from the version it started from, then dropped', async () => {
+    const pagesApi = fakePagesApi()
+    const { page, editor } = aPage(pagesApi)
+    await leaveADraft(editor, pagesApi)
+    renderRoute(editor, { pagesApi })
+
+    await screen.findByText(DRAFT_KEPT)
+    fireEvent.click(screen.getByRole('button', { name: 'Publish' }))
+    fireEvent.click(await screen.findByRole('link', { name: 'Edit page' }))
+
+    expect(await screen.findByRole('textbox', { name: 'Title' })).toHaveValue(
+      'Onboarding guide'
+    )
+    expect(screen.queryByText(DRAFT_KEPT)).not.toBeInTheDocument()
+    expect(pagesApi.publish).toHaveBeenCalledWith(page.id, {
+      baseVersion: 1,
+      title: 'Onboarding guide',
+      content: [expect.objectContaining(paragraph('Ask for a laptop')) as Block]
+    })
+  })
+
+  it('is dropped once published, though the person left the editor before', async () => {
+    const pagesApi = fakePagesApi()
+    const { editor } = aPage(pagesApi)
+    const publish = pagesApi.publish.getMockImplementation()
+    if (!publish) throw new Error('No publish to hold')
+    let answer = (): void => undefined
+    pagesApi.publish.mockImplementationOnce(async (pageId, draft) => {
+      await new Promise<void>(resolve => {
+        answer = resolve
+      })
+      return publish(pageId, draft)
+    })
+    renderRoute(editor, { pagesApi })
+    await writeADraft()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Publish' }))
+    fireEvent.click(screen.getByRole('link', { name: 'Back to the page' }))
+    await screen.findByRole('heading', { level: 1, name: 'Onboarding' })
+    act(() => {
+      answer()
+    })
+
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Onboarding guide' })
+    ).toBeVisible()
+    fireEvent.click(screen.getByRole('link', { name: 'Edit page' }))
+    await screen.findByRole('textbox', { name: 'Title' })
+    expect(screen.queryByText(DRAFT_KEPT)).not.toBeInTheDocument()
+  })
+
+  it('is dropped when discarded, for the page as it is', async () => {
+    const pagesApi = fakePagesApi()
+    const { editor } = aPage(pagesApi)
+    await leaveADraft(editor, pagesApi)
+    const { unmount } = renderRoute(editor, { pagesApi })
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Discard draft' })
+    )
+
+    expect(screen.getByRole('textbox', { name: 'Title' })).toHaveValue(
+      'Onboarding'
+    )
+    const content = await screen.findByRole('textbox', { name: 'Content' })
+    expect(content).toHaveTextContent('Bring your badge')
+    expect(content).not.toHaveTextContent('Ask for a laptop')
+    unmount()
+    renderRoute(editor, { pagesApi })
+    expect(await screen.findByRole('textbox', { name: 'Title' })).toHaveValue(
+      'Onboarding'
+    )
+    expect(screen.queryByText(DRAFT_KEPT)).not.toBeInTheDocument()
+  })
+
+  it('is offered to the person who wrote it only', async () => {
+    const pagesApi = fakePagesApi()
+    const { editor } = aPage(pagesApi)
+    await leaveADraft(editor, pagesApi)
+
+    renderRoute(editor, {
+      pagesApi: pagesApi.signedInAs('bob@example.com', 'Bob Durand'),
+      session: fakeSession(() =>
+        Promise.resolve({
+          ...fakeUser(),
+          name: 'Bob Durand',
+          email: 'bob@example.com'
+        })
+      )
+    })
+
+    expect(await screen.findByRole('textbox', { name: 'Title' })).toHaveValue(
+      'Onboarding'
+    )
+    expect(screen.queryByText(DRAFT_KEPT)).not.toBeInTheDocument()
+  })
+
+  it('is not kept while nothing is written', async () => {
+    const pagesApi = fakePagesApi()
+    const { editor } = aPage(pagesApi)
+    const { unmount } = renderRoute(editor, { pagesApi })
+    await screen.findByRole('textbox', { name: 'Content' })
+    unmount()
+
+    renderRoute(editor, { pagesApi })
+
+    await screen.findByRole('textbox', { name: 'Content' })
+    expect(screen.queryByText(DRAFT_KEPT)).not.toBeInTheDocument()
   })
 })
