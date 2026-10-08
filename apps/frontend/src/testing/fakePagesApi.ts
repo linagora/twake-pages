@@ -1,3 +1,4 @@
+import { generateKeyBetween } from 'fractional-indexing'
 import { vi, type Mock } from 'vitest'
 
 import {
@@ -28,7 +29,6 @@ import type {
   WikiKind,
   WikiSummary
 } from '@/domain/wiki'
-import { keyBetween } from '@/testing/fractionalKey'
 
 type Mocks = { [Key in keyof PagesApi]: Mock<PagesApi[Key]> }
 
@@ -322,7 +322,7 @@ function positionBetween(
     : beforeId
       ? siblings[before]
       : undefined
-  return keyBetween(lower?.position ?? null, upper?.position ?? null)
+  return generateKeyBetween(lower?.position ?? null, upper?.position ?? null)
 }
 
 const currentOf = (page: StoredPage) => {
