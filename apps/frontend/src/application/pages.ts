@@ -145,6 +145,7 @@ export type Refusal =
 
 /** Rejects with an ApiError when the backend refuses the request. */
 export interface PagesApi {
+  /** The person's common settings of Twake Workplace. */
   settings: () => Promise<UserSettings>
   /** Calls back with the settings' version now, then with each new one. */
   watchSettings: (onVersion: (version: number) => void) => () => void
@@ -153,11 +154,13 @@ export interface PagesApi {
   listWikis: () => Promise<WikiSummary[]>
   /** A shared wiki with the person as admin and an empty home page. */
   createWiki: (wiki: NewWiki) => Promise<Wiki>
+  /** A wiki of the person, with the person's role and its version. */
   getWiki: (wikiId: string) => Promise<Wiki>
   /** Admin only; a space wiki's name is `managed`. */
   renameWiki: (wikiId: string, changes: WikiChanges) => Promise<Wiki>
   /** Admin only; a personal or space wiki is `managed`. */
   deleteWiki: (wikiId: string) => Promise<void>
+  /** Its live pages, home page excluded, with the version they were read at. */
   getTree: (wikiId: string) => Promise<Tree>
   /** Calls back with the wiki's version now, then with each new one. */
   watchWiki: (
@@ -165,6 +168,7 @@ export interface PagesApi {
     onVersion: (version: number) => void
   ) => () => void
 
+  /** Its members and, for admins, its invitations. */
   getMembers: (wikiId: string) => Promise<Sharing>
   /** Admin of a shared wiki; the email joins when it signs in, as `role`. */
   invite: (wikiId: string, email: string, role: Role) => Promise<void>
@@ -185,6 +189,7 @@ export interface PagesApi {
   publish: (pageId: string, version: NewVersion) => Promise<Page>
   /** Newest first. */
   listVersions: (pageId: string) => Promise<VersionSummary[]>
+  /** A version with its title and content, as it was published. */
   getVersion: (pageId: string, number: number) => Promise<Version>
   /** Editor; publishes that version's title and content again. */
   restoreVersion: (pageId: string, number: number) => Promise<Page>
@@ -196,6 +201,7 @@ export interface PagesApi {
   setLabels: (pageId: string, names: string[]) => Promise<string[]>
   /** Whether the person is notified of the page's versions and comments. */
   setFollowing: (pageId: string, following: boolean) => Promise<void>
+  /** Marks the page to find it again in the person's favorites, or not. */
   setFavorite: (pageId: string, favorite: boolean) => Promise<void>
 
   /** The wiki's deleted branches, newest first. */
@@ -223,6 +229,7 @@ export interface PagesApi {
 
   /** About the pages the person follows or was mentioned on. */
   listNotifications: () => Promise<Notifications>
+  /** Marks the selected notifications read, those read already untouched. */
   markRead: (selection: ReadSelection) => Promise<void>
   /** The wikis with unread notifications, and how many. */
   badges: () => Promise<Badge[]>
