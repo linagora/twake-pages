@@ -10,6 +10,12 @@
     "name": "Twake Pages",
     "loading": "Loading"
   },
+  "home": {
+    "favorites": "Favorites",
+    "favoritesLoadFailed": "The favorites could not be loaded.",
+    "recent": "Recent",
+    "recentLoadFailed": "The recent pages could not be loaded."
+  },
   "session": {
     "signingIn": "Signing you in…",
     "opening": {

@@ -19,9 +19,15 @@ export function CardTile({
 }: {
   label: string
   badge: string
-  badgeLabel: string
+  /**
+   * What the badge stands for, such as a board's kind in Twake Tasks. A
+   * page's badge, the first letter of its title, stands for nothing more, so
+   * it goes without a label and is only drawn.
+   */
+  badgeLabel?: string
   title: ReactNode
-  tag: string
+  /** A board's key in Twake Tasks. A page has no key to show. */
+  tag?: string
   meta: string
   action?: ReactNode
 }): ReactElement {
@@ -54,8 +60,9 @@ export function CardTile({
         variant="rounded"
         size={40}
         color={nameToColor(label) ?? 'sunrise'}
-        role="img"
+        role={badgeLabel === undefined ? undefined : 'img'}
         aria-label={badgeLabel}
+        aria-hidden={badgeLabel === undefined ? true : undefined}
         sx={{ borderRadius: 2, fontWeight: 600 }}
       >
         {badge}
@@ -70,19 +77,21 @@ export function CardTile({
           {title}
         </Typography>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Typography
-            variant="caption"
-            sx={{
-              px: 0.75,
-              borderRadius: 1,
-              fontWeight: 600,
-              letterSpacing: '0.04em',
-              color: 'text.secondary',
-              bgcolor: 'action.hover'
-            }}
-          >
-            {tag}
-          </Typography>
+          {tag !== undefined && (
+            <Typography
+              variant="caption"
+              sx={{
+                px: 0.75,
+                borderRadius: 1,
+                fontWeight: 600,
+                letterSpacing: '0.04em',
+                color: 'text.secondary',
+                bgcolor: 'action.hover'
+              }}
+            >
+              {tag}
+            </Typography>
+          )}
           <Typography variant="caption" color="textSecondary" noWrap>
             {meta}
           </Typography>

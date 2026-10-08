@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 
 import { ApiError } from '@/application/pages'
 import { findEmptyState } from '@/testing/emptyState'
-import { fakePagesApi } from '@/testing/fakePagesApi'
+import { fakePagesApi, type FakePagesApi } from '@/testing/fakePagesApi'
 import { typeIn } from '@/testing/forms'
 import { renderRoute } from '@/testing/renderWithProviders'
 
@@ -11,6 +11,11 @@ async function openNewWiki(): Promise<HTMLElement> {
   fireEvent.click(await screen.findByRole('button', { name: 'New wiki' }))
   return screen.getByRole('dialog', { name: 'New wiki' })
 }
+
+const titlesIn = (list: HTMLElement) =>
+  within(list)
+    .getAllByRole('link')
+    .map(link => link.textContent)
 
 describe('HomeScreen', () => {
   it('welcomes to Twake Pages', async () => {
@@ -159,4 +164,136 @@ describe('a new wiki', () => {
     })
     expect(pagesApi.createWiki).not.toHaveBeenCalled()
   })
+})
+
+describe('favorites and recent pages', () => {
+  it('lists the favorites, the last marked first, each with its wiki', async () => {
+    const pagesApi = fakePagesApi()
+    const personal = pagesApi.withWiki({ kind: 'personal' })
+    const handbook = pagesApi.withWiki({ name: 'Handbook' })
+    const plans = pagesApi.withPage(handbook.id, { title: 'Plans' })
+    const ideas = pagesApi.withPage(personal.id, { title: 'Ideas' })
+    await pagesApi.setFavorite(plans.id, true)
+    await pagesApi.setFavorite(ideas.id, true)
+    renderRoute('/', { pagesApi })
+
+    const favorites = await screen.findByRole('list', { name: 'Favorites' })
+    expect(titlesIn(favorites)).toEqual(['Ideas', 'Plans'])
+    expect(
+      within(favorites).getByRole('listitem', { name: 'Plans' })
+    ).toHaveTextContent('Handbook')
+  })
+
+  it('lists the pages opened lately, the last one first, each with its wiki', async () => {
+    const pagesApi = fakePagesApi()
+    const handbook = pagesApi.withWiki({ name: 'Handbook' })
+    const plans = pagesApi.withPage(handbook.id, { title: 'Plans' })
+    const goals = pagesApi.withPage(handbook.id, { title: 'Goals' })
+    await pagesApi.getPage(plans.id)
+    await pagesApi.getPage(goals.id)
+    renderRoute('/', { pagesApi })
+
+    const recent = await screen.findByRole('list', { name: 'Recent' })
+    expect(titlesIn(recent)).toEqual(['Goals', 'Plans'])
+    expect(
+      within(recent).getByRole('listitem', { name: 'Goals' })
+    ).toHaveTextContent('Handbook')
+  })
+
+  it('names the personal wiki of a page in the language of the person', async () => {
+    const pagesApi = fakePagesApi()
+    const personal = pagesApi.withWiki({ kind: 'personal' })
+    const ideas = pagesApi.withPage(personal.id, { title: 'Idées' })
+    await pagesApi.setFavorite(ideas.id, true)
+    renderRoute('/', { lang: 'fr', pagesApi })
+
+    const favorites = await screen.findByRole('list', { name: 'Favoris' })
+    expect(
+      within(favorites).getByRole('listitem', { name: 'Idées' })
+    ).toHaveTextContent('Personnel')
+  })
+
+  it('shows a home page under the name of its wiki, which opens on it', async () => {
+    const pagesApi = fakePagesApi()
+    const personal = pagesApi.withWiki({ kind: 'personal' })
+    await pagesApi.getPage(personal.homePageId)
+    const { router } = renderRoute('/', { lang: 'fr', pagesApi })
+
+    const recent = await screen.findByRole('list', { name: 'Récents' })
+    expect(
+      within(recent).getByRole('listitem', { name: 'Personnel' })
+    ).toHaveTextContent("Page d'accueil")
+    fireEvent.click(within(recent).getByRole('link', { name: 'Personnel' }))
+
+    expect(router.state.location.pathname).toBe(`/wikis/${personal.id}`)
+  })
+
+  it('opens a page from its shelf', async () => {
+    const pagesApi = fakePagesApi()
+    const handbook = pagesApi.withWiki({ name: 'Handbook' })
+    const plans = pagesApi.withPage(handbook.id, { title: 'Plans' })
+    await pagesApi.setFavorite(plans.id, true)
+    const { router } = renderRoute('/', { pagesApi })
+
+    const favorites = await screen.findByRole('list', { name: 'Favorites' })
+    fireEvent.click(within(favorites).getByRole('link', { name: 'Plans' }))
+
+    expect(router.state.location.pathname).toBe(
+      `/wikis/${handbook.id}/pages/${plans.id}`
+    )
+  })
+
+  it.each([
+    {
+      none: 'Favorites',
+      shown: 'Recent',
+      keep: (pagesApi: FakePagesApi, pageId: string) => pagesApi.getPage(pageId)
+    },
+    {
+      none: 'Recent',
+      shown: 'Favorites',
+      keep: (pagesApi: FakePagesApi, pageId: string) =>
+        pagesApi.setFavorite(pageId, true)
+    }
+  ])('shows no $none while there is none', async ({ none, shown, keep }) => {
+    const pagesApi = fakePagesApi()
+    const handbook = pagesApi.withWiki({ name: 'Handbook' })
+    const plans = pagesApi.withPage(handbook.id, { title: 'Plans' })
+    await keep(pagesApi, plans.id)
+    renderRoute('/', { pagesApi })
+
+    await screen.findByRole('list', { name: shown })
+    expect(screen.queryByRole('list', { name: none })).not.toBeInTheDocument()
+  })
+
+  it.each([
+    {
+      what: 'favorites',
+      list: 'favorites',
+      alert: 'The favorites could not be loaded.',
+      shown: 'Recent'
+    },
+    {
+      what: 'recent pages',
+      list: 'recent',
+      alert: 'The recent pages could not be loaded.',
+      shown: 'Favorites'
+    }
+  ] as const)(
+    'says so when the $what cannot be loaded',
+    async ({ list, alert, shown }) => {
+      const pagesApi = fakePagesApi()
+      const handbook = pagesApi.withWiki({ name: 'Handbook' })
+      const plans = pagesApi.withPage(handbook.id, { title: 'Plans' })
+      await pagesApi.setFavorite(plans.id, true)
+      await pagesApi.getPage(plans.id)
+      pagesApi[list].mockRejectedValue(new ApiError(403, null))
+      renderRoute('/', { pagesApi })
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(alert)
+      expect(
+        titlesIn(await screen.findByRole('list', { name: shown }))
+      ).toEqual(['Plans'])
+    }
+  )
 })

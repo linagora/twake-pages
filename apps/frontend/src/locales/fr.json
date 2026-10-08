@@ -10,6 +10,12 @@
     "name": "Twake Pages",
     "loading": "Chargement"
   },
+  "home": {
+    "favorites": "Favoris",
+    "favoritesLoadFailed": "Les favoris n'ont pas pu être chargés.",
+    "recent": "Récents",
+    "recentLoadFailed": "Les pages récentes n'ont pas pu être chargées."
+  },
   "session": {
     "signingIn": "Connexion en cours…",
     "opening": {

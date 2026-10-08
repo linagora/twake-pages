@@ -8,12 +8,20 @@ import {
 } from '@tanstack/react-query'
 import { useEffect } from 'react'
 
-import type { NewPage, NewWiki, Tree, WikiChanges } from '@/application/pages'
-import type { Page } from '@/domain/page'
+import type {
+  NewPage,
+  NewWiki,
+  RecentPage,
+  Tree,
+  WikiChanges
+} from '@/application/pages'
+import type { Page, PageRef } from '@/domain/page'
 import type { Wiki, WikiSummary } from '@/domain/wiki'
 import { usePagesApi } from '@/ui/PagesApiProvider'
 
 export const wikisKey = ['wikis']
+const favoritesKey = ['favorites']
+const recentKey = ['recent']
 // What is shown of a wiki sits below its key, to reload it all at once.
 const wikiKey = (wikiId: string) => ['wikis', wikiId] as const
 const treeKey = (wikiId: string) => [...wikiKey(wikiId), 'tree'] as const
@@ -34,6 +42,16 @@ interface ReadPage {
 export function useWikis(): UseQueryResult<WikiSummary[]> {
   const api = usePagesApi()
   return useQuery({ queryKey: wikisKey, queryFn: api.listWikis })
+}
+
+export function useFavorites(): UseQueryResult<PageRef[]> {
+  const api = usePagesApi()
+  return useQuery({ queryKey: favoritesKey, queryFn: api.favorites })
+}
+
+export function useRecent(): UseQueryResult<RecentPage[]> {
+  const api = usePagesApi()
+  return useQuery({ queryKey: recentKey, queryFn: api.recent })
 }
 
 export function useWiki(wikiId: string): UseQueryResult<Wiki> {
@@ -170,6 +188,8 @@ export function usePage(wikiId: string, pageId: string): UseQueryResult<Page> {
 
 /**
  * The page shown changes in place: reading it again would count as a visit.
+ * The favorites are read again, as Twake Tasks reads its boards again, but
+ * only once the change went through: a refused one leaves them as they were.
  */
 export function useSetFavorite(
   page: Page
@@ -183,6 +203,10 @@ export function useSetFavorite(
         pageKey(page.wikiId, page.id),
         read => read && { ...read, page: { ...read.page, favorite } }
       )
+      return queryClient.invalidateQueries({
+        queryKey: favoritesKey,
+        exact: true
+      })
     }
   })
 }
