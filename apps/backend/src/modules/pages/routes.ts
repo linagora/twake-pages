@@ -22,7 +22,7 @@ const newPage = z.object({
 
 const wikiParams = z.object({ wikiId: z.uuid() })
 
-const pageParams = z.object({ pageId: z.uuid() })
+export const pageParams = z.object({ pageId: z.uuid() })
 
 // Every route that writes blocks gives its body room for 2 MiB of them and its
 // other fields. Over that, Fastify refuses the body before the route reads it,
