@@ -8,11 +8,12 @@ import {
   useParams
 } from 'react-router'
 
-import { ApiError } from '@/application/pages'
+import { ApiError, EditConflict } from '@/application/pages'
 import { BlocksEditor } from '@/ds/BlocksEditor'
 import { PageHeader } from '@/ds/PageHeader'
 import type { Page } from '@/domain/page'
 import { useI18n } from '@/ui/i18n/useI18n'
+import { ConflictNotice, PublishOverDialog } from '@/ui/page/ConflictNotice'
 import { useDraft } from '@/ui/page/useDraft'
 import { useEditable } from '@/ui/page/useEditable'
 import { useWikiPage } from '@/ui/page/useWikiPage'
@@ -48,6 +49,7 @@ export function EditPageScreen(): ReactElement {
       key={`${pageId}.${String(starts)}`}
       wikiId={wikiId}
       page={page.data}
+      reload={() => page.refetch({ throwOnError: true })}
       onRestart={() => {
         setStarts(count => count + 1)
       }}
@@ -62,10 +64,13 @@ const pathOf = (page: Page) => (page.home ? '..' : `../pages/${page.id}`)
 function PageEditor({
   wikiId,
   page,
+  reload,
   onRestart
 }: {
   wikiId: string
   page: Page
+  /** Reads the page again, to start from its current version. */
+  reload: () => Promise<unknown>
   /** Starts the editor again, from the page as it is then. */
   onRestart: () => void
 }): ReactElement {
@@ -75,11 +80,26 @@ function PageEditor({
   const { kept, start, draft, change, drop } = useDraft(page)
   // Dropped once published, though the person left the editor meanwhile.
   const publish = usePublish(wikiId, page.id, drop)
+  const [confirming, setConfirming] = useState(false)
+  const conflict =
+    publish.error instanceof EditConflict ? publish.error.current : null
   const path = pathOf(page)
 
   const restart = () => {
     drop()
     onRestart()
+  }
+
+  const publishFrom = (baseVersion: number) => {
+    publish.mutate(
+      { baseVersion, title: draft.title.trim(), content: draft.content },
+      {
+        // Unless the person left the editor meanwhile.
+        onSuccess: () => {
+          void navigate(path)
+        }
+      }
+    )
   }
 
   return (
@@ -104,26 +124,39 @@ function PageEditor({
           <Button
             disabled={publish.isPending || !draft.title.trim()}
             onClick={() => {
-              publish.mutate(
-                {
-                  baseVersion: draft.baseVersion,
-                  title: draft.title.trim(),
-                  content: draft.content
-                },
-                {
-                  // Unless the person left the editor meanwhile.
-                  onSuccess: () => {
-                    void navigate(path)
-                  }
-                }
-              )
+              publishFrom(draft.baseVersion)
             }}
           >
             {t('editor.publish')}
           </Button>
         }
       />
-      {publish.error && <PublishFailure error={publish.error} />}
+      {conflict ? (
+        <ConflictNotice
+          current={conflict}
+          onReload={() => {
+            // A failed read leaves the draft and the notice as they were.
+            void reload().then(restart, () => undefined)
+          }}
+          onPublishOver={() => {
+            setConfirming(true)
+          }}
+        />
+      ) : (
+        publish.error && <PublishFailure error={publish.error} />
+      )}
+      {conflict && confirming && (
+        <PublishOverDialog
+          current={conflict}
+          onConfirm={() => {
+            setConfirming(false)
+            publishFrom(conflict.number)
+          }}
+          onClose={() => {
+            setConfirming(false)
+          }}
+        />
+      )}
       {kept && (
         <Alert
           severity="info"

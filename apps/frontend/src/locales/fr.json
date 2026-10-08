@@ -186,7 +186,13 @@
     "draftKept": "Voici votre brouillon, commencé à partir de la version %{number}. Il est conservé dans ce navigateur jusqu'à ce que vous le publiiez ou l'abandonniez.",
     "discard": "Abandonner le brouillon",
     "failed": "La page n'a pas pu être publiée. Votre brouillon est conservé.",
-    "invalidContent": "La page n'a pas pu être publiée, car son contenu est refusé : plus de 2 Mo, un lien qui n'est pas en http, https ou mailto, une adresse d'image qui n'est pas en https, ou un caractère qui ne peut pas être enregistré. Votre brouillon est conservé."
+    "invalidContent": "La page n'a pas pu être publiée, car son contenu est refusé : plus de 2 Mo, un lien qui n'est pas en http, https ou mailto, une adresse d'image qui n'est pas en https, ou un caractère qui ne peut pas être enregistré. Votre brouillon est conservé.",
+    "conflict": "%{author} a publié la version %{number} le %{time}, après la version d'où part votre brouillon. Rechargez la page pour écrire à partir de cette version, ce qui abandonne votre brouillon, ou publiez votre brouillon par-dessus.",
+    "reload": "Recharger la page",
+    "publishOver": "Publier par-dessus",
+    "publishOverTitle": "Publier par-dessus la version %{number} ?",
+    "publishOverText": "Votre brouillon devient le contenu de la page pour tout le monde, à la place de la version publiée par %{author}, qui reste dans l'historique de la page.",
+    "cancel": "Annuler"
   },
   "labels": {
     "title": "Pages avec l'étiquette %{name}"

@@ -186,7 +186,13 @@
     "draftKept": "This is your draft, started from version %{number}. It is kept in this browser until you publish or discard it.",
     "discard": "Discard draft",
     "failed": "The page could not be published. Your draft is kept.",
-    "invalidContent": "The page could not be published, as its content is refused: over 2 MB, a link that is not http, https or mailto, an image address that is not https, or a character that cannot be stored. Your draft is kept."
+    "invalidContent": "The page could not be published, as its content is refused: over 2 MB, a link that is not http, https or mailto, an image address that is not https, or a character that cannot be stored. Your draft is kept.",
+    "conflict": "%{author} published version %{number} on %{time}, after the version your draft started from. Reload the page to write from that version, which drops your draft, or publish your draft over it.",
+    "reload": "Reload the page",
+    "publishOver": "Publish over it",
+    "publishOverTitle": "Publish over version %{number}?",
+    "publishOverText": "Your draft becomes the page's content for everyone, in place of the version %{author} published, which stays in the page's history.",
+    "cancel": "Cancel"
   },
   "labels": {
     "title": "Pages labelled %{name}"

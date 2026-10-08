@@ -1,5 +1,5 @@
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { Block } from '@/domain/page'
 import {
@@ -15,6 +15,7 @@ import {
 import { fakeSession, fakeUser } from '@/testing/fakeSession'
 import { typeIn } from '@/testing/forms'
 import { renderRoute } from '@/testing/renderWithProviders'
+import { followZone } from '@/ui/settings/zone'
 
 /** The types of the blocks and of the blocks under them, in order. */
 const typesOf = (blocks: Block[]): unknown[] =>
@@ -492,5 +493,92 @@ describe('a refused publish', () => {
     unmount()
     renderRoute(editor, { pagesApi })
     expect(await screen.findByText(DRAFT_KEPT)).toBeVisible()
+  })
+})
+
+describe('an edit conflict', () => {
+  afterEach(() => {
+    followZone(null)
+    vi.useRealTimers()
+  })
+
+  /**
+   * Alice writes a draft from version 1 of the page, in Tokyo, and Bob
+   * publishes version 2 before she publishes it.
+   */
+  async function aConflict(pagesApi: FakePagesApi) {
+    const { page, editor } = aPage(pagesApi)
+    followZone('Asia/Tokyo')
+    renderRoute(editor, { pagesApi })
+    await writeADraft()
+    // Later than any time the fake gave before, as its times only move on.
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2100-03-02T09:30:00Z'))
+    await pagesApi
+      .signedInAs('bob@example.com', 'Bob Durand')
+      .publish(page.id, {
+        baseVersion: 1,
+        title: 'First day',
+        content: [paragraph('Bring your badge and a pen')]
+      })
+    vi.useRealTimers()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Publish' }))
+    return page
+  }
+
+  it('shows who published the current version of the page, and when', async () => {
+    await aConflict(fakePagesApi())
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Bob Durand published version 2 on Mar 2, 2100, 6:30 PM'
+    )
+  })
+
+  it('publishes the draft over the current version, once confirmed', async () => {
+    const pagesApi = fakePagesApi()
+    const page = await aConflict(pagesApi)
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Publish over it' })
+    )
+    const confirmation = await screen.findByRole('dialog', {
+      name: 'Publish over version 2?'
+    })
+    expect(pagesApi.publish).toHaveBeenCalledOnce()
+    fireEvent.click(
+      within(confirmation).getByRole('button', { name: 'Publish over it' })
+    )
+
+    expect(await screen.findByText('Version 3')).toBeVisible()
+    expect(await screen.findByText('Ask for a laptop')).toBeVisible()
+    expect(pagesApi.publish).toHaveBeenLastCalledWith(page.id, {
+      baseVersion: 2,
+      title: 'Onboarding guide',
+      content: [expect.objectContaining(paragraph('Ask for a laptop')) as Block]
+    })
+  })
+
+  it('reloads the page at its current version, and drops the draft', async () => {
+    const pagesApi = fakePagesApi()
+    // As when live updates have not told of Bob's version yet.
+    pagesApi.watchWiki = vi.fn(() => () => undefined)
+    await aConflict(pagesApi)
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Reload the page' })
+    )
+
+    await waitFor(() => {
+      expect(screen.getByRole('textbox', { name: 'Title' })).toHaveValue(
+        'First day'
+      )
+    })
+    expect(
+      await screen.findByRole('textbox', { name: 'Content' })
+    ).toHaveTextContent('Bring your badge and a pen')
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Publish' }))
+    expect(await screen.findByText('Version 3')).toBeVisible()
   })
 })
