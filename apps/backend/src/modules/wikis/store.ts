@@ -39,7 +39,8 @@ const PERSONAL_WIKI_NAME = 'Personal'
 
 export const PURGE_WIKI_JOB = 'purge-wiki'
 
-const RETENTION_MS = 30 * 24 * 3600 * 1000
+/** How long a deleted wiki, or a deleted page, waits for its purge. */
+export const RETENTION_MS = 30 * 24 * 3600 * 1000
 
 const purgePayload = z.object({
   wikiId: z.uuid(),
