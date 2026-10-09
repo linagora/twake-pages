@@ -6,8 +6,10 @@ import {
   aSpaceWiki,
   aUser,
   aWikiOf,
+  backIn,
   createPage,
   favoritesAndRecentOf,
+  followingAndUnreadOf,
   invite,
   joinWiki,
   pageOf,
@@ -808,12 +810,6 @@ describe('DELETE /wikis/:wikiId/members/:userId', () => {
   })
 })
 
-/** Invites the person back into the wiki, which they join as they sign in. */
-async function backIn(admin: TestUser, member: TestUser, wikiId: string) {
-  await invite(api, admin, wikiId, member.email)
-  await wikisOf(api, member)
-}
-
 describe.each(someoneOfEachTenant)(
   'a member who leaves a wiki, %s',
   (_tenant, someone) => {
@@ -830,7 +826,7 @@ describe.each(someoneOfEachTenant)(
 
         await leave(api, alice, wiki.id, bob)
 
-        await backIn(alice, bob, wiki.id)
+        await backIn(api, alice, bob, wiki.id)
         expect({
           before,
           after: await favoritesAndRecentOf(api, bob)
@@ -853,14 +849,10 @@ describe.each(someoneOfEachTenant)(
 
         await leave(api, alice, wiki.id, bob)
 
-        await backIn(alice, bob, wiki.id)
-        const back = (await wikisOf(api, bob)).find(
-          listed => listed.id === wiki.id
-        )
-        expect({
-          following: (await pageOf(api, bob, notes.json<Page>().id)).following,
-          unread: back?.unread
-        }).toEqual({ following: true, unread: 1 })
+        await backIn(api, alice, bob, wiki.id)
+        expect(
+          await followingAndUnreadOf(api, bob, wiki.id, notes.json<Page>().id)
+        ).toEqual({ following: true, unread: 1 })
       }
     )
   }

@@ -582,6 +582,35 @@ export function invite(
   return app.as(admin).post(`/wikis/${wikiId}/invites`, { email, role })
 }
 
+/** Invites the person back into the wiki, which they join as they sign in. */
+export async function backIn(
+  app: Awaited<ReturnType<typeof startApp>>,
+  admin: TestUser,
+  member: TestUser,
+  wikiId: string
+) {
+  await invite(app, admin, wikiId, member.email)
+  await wikisOf(app, member)
+}
+
+/**
+ * Whether the person follows the page, as `GET /pages/:pageId` shows it, and
+ * how many of their notifications about its wiki are unread, as `GET /wikis`
+ * counts them.
+ */
+export async function followingAndUnreadOf(
+  app: Awaited<ReturnType<typeof startApp>>,
+  user: TestUser,
+  wikiId: string,
+  pageId: string
+) {
+  const wiki = (await wikisOf(app, user)).find(listed => listed.id === wikiId)
+  return {
+    following: (await pageOf(app, user, pageId)).following,
+    unread: wiki?.unread
+  }
+}
+
 /** What `createPage` sends, at the top of the tree unless it names a parent. */
 export interface PageToCreate {
   title: string
