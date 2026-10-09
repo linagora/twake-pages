@@ -426,12 +426,15 @@ export interface Page {
   trashRootId: string | null
 }
 
+/** The job planned under the key, or none. */
+export async function jobOf(db: Db, key: string) {
+  const [job] = await db.select().from(jobs).where(eq(jobs.key, key))
+  return job
+}
+
 /** The job planned to purge the deleted wiki. */
 export async function purgeJobOf(db: Db, wikiId: string) {
-  const [job] = await db
-    .select()
-    .from(jobs)
-    .where(eq(jobs.key, `${PURGE_WIKI_JOB}:${wikiId}`))
+  const job = await jobOf(db, `${PURGE_WIKI_JOB}:${wikiId}`)
   if (!job) throw new Error(`no purge job for wiki ${wikiId}`)
   return job
 }
