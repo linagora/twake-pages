@@ -6,11 +6,13 @@ import { asOrganization, createDb, inTenant } from '../../infra/db.ts'
 import { jobs } from '../../scheduler/schema.ts'
 import {
   aB2cUser,
+  aCommentOn,
   anEmail,
   aPageIn,
   aSpaceWiki,
   aUser,
   backIn,
+  commentsOf,
   createPage,
   follow,
   followingAndUnreadOf,
@@ -27,7 +29,6 @@ import {
   type TestUser,
   type WikiSummary
 } from '../../testing/app.ts'
-import { comments } from '../comments/schema.ts'
 import { notifications, pageFollowers } from '../notifications/schema.ts'
 import { notify } from '../notifications/testing.ts'
 import { pageFavorites, pageVersions, pageVisits } from '../pages/schema.ts'
@@ -134,27 +135,28 @@ const NOTHING_KEPT = {
 
 /**
  * What the reader finds written in the wiki: the titles in its tree, and the
- * versions of its home page and the comments on it, which no route shows yet.
+ * versions of its home page and the comments on it.
  */
 async function pagesVersionsAndCommentsIn(wiki: WikiSummary, reader: TestUser) {
   const tree = (await api.as(reader).get(`/wikis/${wiki.id}/tree`)).json<{
     pages: { title: string }[]
   }>()
+  const comments = await commentsOf(api, reader, wiki.homePageId)
   return {
     titles: tree.pages.map(page => page.title),
-    ...(await inTenant(db, reader, async tx => ({
-      versions: await tx
+    versions: await inTenant(db, reader, tx =>
+      tx
         .select({
           number: pageVersions.number,
           authorId: pageVersions.authorId
         })
         .from(pageVersions)
-        .where(eq(pageVersions.pageId, wiki.homePageId)),
-      comments: await tx
-        .select({ authorId: comments.authorId, body: comments.body })
-        .from(comments)
-        .where(eq(comments.pageId, wiki.homePageId))
-    })))
+        .where(eq(pageVersions.pageId, wiki.homePageId))
+    ),
+    comments: comments.map(comment => ({
+      authorId: comment.author.id,
+      body: comment.body
+    }))
   }
 }
 
@@ -392,15 +394,9 @@ describe.each(deletions)(
         title: 'Onboarding',
         position: 'a0'
       })
-      await inTenant(db, gone, tx =>
-        tx.insert(comments).values({
-          pageId: handedOn.homePageId,
-          organizationId: gone.organizationId,
-          authorId: gone.userId,
-          authorEmail: gone.email,
-          body: 'Welcome aboard'
-        })
-      )
+      await aCommentOn(api, gone, handedOn.homePageId, {
+        body: 'Welcome aboard'
+      })
 
       await deliver(routingKey, body(gone))
 
