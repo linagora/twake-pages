@@ -1,6 +1,9 @@
+import { randomUUID } from 'node:crypto'
 import { eq, sql } from 'drizzle-orm'
+import type { PlatformEvent } from '../../events/envelope.ts'
 import { inTenant, type Db } from '../../infra/db.ts'
 import type { TestUser } from '../../testing/app.ts'
+import { accountRoutes } from './accounts.ts'
 import { wikis } from './schema.ts'
 
 /** Waits until `count` transactions wait their turn, one behind the other. */
@@ -51,4 +54,12 @@ export async function behindAChange<T>(
     }
   })
   return Promise.all(sent)
+}
+
+/** Delivers the account event to its route, in a transaction of its own. */
+export function deliverAccountEvent(db: Db, routingKey: string, body: object) {
+  const handler = accountRoutes.get(routingKey)
+  if (!handler) throw new Error(`no handler for ${routingKey}`)
+  const event: PlatformEvent = { routingKey, messageId: randomUUID(), body }
+  return db.transaction(tx => handler(event, tx))
 }

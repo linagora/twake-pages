@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { asc, eq, sql as raw } from 'drizzle-orm'
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest'
-import type { PlatformEvent } from '../../events/envelope.ts'
 import { RejectedEventError } from '../../events/router.ts'
 import { asOrganization, createDb, inTenant } from '../../infra/db.ts'
 import { jobs } from '../../scheduler/schema.ts'
@@ -33,9 +32,8 @@ import { notify } from '../notifications/testing.ts'
 import { pageFavorites, pageVersions, pageVisits } from '../pages/schema.ts'
 import { keepSettings } from '../settings/events.ts'
 import type { Role } from './access.ts'
-import { accountRoutes } from './accounts.ts'
 import { inviteEmails, wikiMembers, wikis } from './schema.ts'
-import { behindAChange } from './testing.ts'
+import { behindAChange, deliverAccountEvent } from './testing.ts'
 
 let api: Awaited<ReturnType<typeof startApp>>
 const { sql, db } = createDb(inject('databaseUrl'))
@@ -49,12 +47,8 @@ afterAll(async () => {
   await sql.end()
 })
 
-function deliver(routingKey: string, body: object) {
-  const handler = accountRoutes.get(routingKey)
-  if (!handler) throw new Error(`no handler for ${routingKey}`)
-  const event: PlatformEvent = { routingKey, messageId: randomUUID(), body }
-  return db.transaction(tx => handler(event, tx))
-}
+const deliver = (routingKey: string, body: object) =>
+  deliverAccountEvent(db, routingKey, body)
 
 const sharedWikisOf = async (user: TestUser) =>
   (await wikisOf(api, user)).filter(wiki => wiki.kind === 'shared')
