@@ -26,6 +26,8 @@ The `workplaceFqdn` scope names the person's Twake Workplace platform, which sho
 
 The development server sends no Content Security Policy, so it shows images from any host. A deployment shows images from the hosts in its `CSP_IMG_SRC` only, and the editor warns of the others. To see the warnings of yours, put its hosts in `apps/frontend/public/.env.js` too: `var CSP_IMG_SRC = 'https://images.example.com'`.
 
+Pages frame Grist documents from the origins in the backend's `GRIST_ORIGINS` only. The frontend gets the same origins, space separated, in `GRIST_URL`: its image puts them in its Content Security Policy, and the app frames no other. To embed the documents of your Grist, put its origin in `apps/backend/.env` and in `apps/frontend/public/.env.js`: `var GRIST_URL = 'https://grist.example.com'`.
+
 Start the backend and the frontend, and open http://localhost:3400.
 
 ```bash

@@ -5,7 +5,7 @@ set -eu
 
 ME=$(basename "$0")
 OUT=/tmp/nginx
-RUNTIME_KEYS="SSO_BASE_URL SSO_CLIENT_ID SSO_SCOPE SSO_REDIRECT_URI SSO_POST_LOGOUT_REDIRECT POSTHOG_KEY POSTHOG_HOST CSP_IMG_SRC"
+RUNTIME_KEYS="SSO_BASE_URL SSO_CLIENT_ID SSO_SCOPE SSO_REDIRECT_URI SSO_POST_LOGOUT_REDIRECT POSTHOG_KEY POSTHOG_HOST CSP_IMG_SRC GRIST_URL"
 
 fail() {
   echo "$ME: error: $*" >&2
@@ -32,6 +32,8 @@ origin() {
 }
 
 # Stops unless $2 is a bare origin of http or https, named $1 in the messages.
+# Twake Tasks checks API_UPSTREAM in place; here the origins of GRIST_URL take
+# the same check.
 check_origin() {
   case "$2" in
     http://* | https://*) ;;
@@ -64,6 +66,23 @@ done
 # back to the sign-in callback inside that frame.
 frame_src="'self'"
 [ -n "${SSO_BASE_URL:-}" ] && frame_src="$frame_src $(origin "$SSO_BASE_URL")"
+# Pages frame Grist documents, on the origins in GRIST_URL: the same as the
+# backend's GRIST_ORIGINS, space separated, which /.env.js tells the app so
+# that it checks an address again before it frames it. Unlike CSP_FRAME_SRC,
+# which goes in as written, as in Twake Tasks, each must be a bare origin, as
+# the backend requires: a wildcard or a path would let frames in that the
+# backend refuses.
+set -f
+for grist in ${GRIST_URL:-}; do
+  check_origin "each origin of GRIST_URL" "$grist"
+  # Nor a wildcard, which widens a CSP source to many hosts, nor a user name,
+  # which the backend refuses.
+  case "$grist" in
+    *"*"* | *"@"*) fail "each origin of GRIST_URL must be a bare origin" ;;
+  esac
+  frame_src="$frame_src $(origin "$grist")"
+done
+set +f
 [ -n "${CSP_FRAME_SRC:-}" ] && frame_src="$frame_src $CSP_FRAME_SRC"
 frame_ancestors="'self'${CSP_FRAME_ANCESTORS:+ $CSP_FRAME_ANCESTORS}"
 # People's pictures come from Twake Workplace, on its own hosts, and the images

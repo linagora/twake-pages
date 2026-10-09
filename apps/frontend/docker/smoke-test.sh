@@ -17,6 +17,7 @@ docker run -d --name "$NAME" \
   -e POSTHOG_HOST='https://posthog.example.com' \
   -e CSP_FRAME_ANCESTORS='https://workplace.example.com' \
   -e CSP_IMG_SRC='https://avatars.example.com' \
+  -e GRIST_URL='https://grist.example.com http://grist.example.net:8484/' \
   -e API_UPSTREAM='http://127.0.0.1:9' \
   "$IMAGE" >/dev/null
 BASE="http://$(docker port "$NAME" 8080/tcp | head -1)"
@@ -51,13 +52,15 @@ expect '/api goes to the backend' "$(curl -s -o /dev/null -w '%{http_code}' "$BA
 expect 'index.html is revalidated' "$(header / Cache-Control)" 'no-cache'
 expect '/.env.js comes from the environment' "$(body "$BASE/.env.js")" '*var SSO_CLIENT_ID = "twakepages"*'
 expect '/.env.js tells the editor the image hosts' "$(body "$BASE/.env.js")" '*var CSP_IMG_SRC = "https://avatars.example.com"*'
+expect '/.env.js tells the pages the Grist origins' "$(body "$BASE/.env.js")" '*var GRIST_URL = "https://grist.example.com http://grist.example.net:8484/"*'
 expect '/.env.js is never cached' "$(header /.env.js Cache-Control)" 'no-store'
 script="$(body "$BASE/" | grep -o 'src="/static/js/index[^"]*"' | head -1 | cut -d'"' -f2)"
 expect 'hashed assets are cached for a year' "$(header "$script" Cache-Control)" '*immutable'
 csp="$(header / Content-Security-Policy)"
 expect 'CSP sent' "$csp" "default-src 'self'; script-src 'self';*"
 expect 'CSP: SSO and PostHog origins in connect-src' "$csp" "*connect-src 'self' https://sso.example.com https://posthog.example.com;*"
-expect 'CSP: the SSO may be framed, for the silent sign-in' "$csp" "*frame-src 'self' https://sso.example.com;*"
+expect 'CSP: the SSO may be framed, for the silent sign-in, and the Grist origins, for their documents' \
+  "$csp" "*frame-src 'self' https://sso.example.com https://grist.example.com http://grist.example.net:8484;*"
 expect 'CSP: pictures from the hosts in CSP_IMG_SRC' "$csp" "*img-src 'self' data: blob: https://avatars.example.com;*"
 expect 'CSP: pages refuse to be framed' "$csp" "*frame-ancestors 'none'"
 expect 'CSP: the embedded view may be framed by Pages and the host' \

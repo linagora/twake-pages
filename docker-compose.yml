@@ -66,6 +66,7 @@ services:
     tmpfs: [/tmp]
     environment:
       API_UPSTREAM: http://backend:8080
+      GRIST_URL: ${GRIST_ORIGINS:-}
     ports:
       - '127.0.0.1:3400:8080'
 
