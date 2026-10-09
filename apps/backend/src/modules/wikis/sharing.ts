@@ -165,6 +165,33 @@ function createSharingStore(db: Db) {
           .returning({ userId: wikiMembers.userId })
         if (changed.length === 0) throw new Refused('not_found')
       })
+    },
+
+    /**
+     * Takes the person out of the wiki, by its admin or by themself, whatever
+     * their role. Leaving a personal or space wiki is managed, as removing
+     * someone from it is.
+     */
+    removeMember(identity: Identity, wikiId: string, userId: string) {
+      return writeOrRefuse(db, identity, async tx => {
+        if (userId === identity.userId) {
+          if (!(await roleOn(tx, identity, wikiId))) {
+            throw new Refused('not_found')
+          }
+          const wiki = await bumpWiki(tx, wikiId)
+          if (wiki.kind !== 'shared') throw new Refused('managed')
+        } else {
+          await sharedWiki(tx, identity, wikiId)
+        }
+        await keepAnAdmin(tx, wikiId, userId)
+        const removed = await tx
+          .delete(wikiMembers)
+          .where(
+            and(eq(wikiMembers.wikiId, wikiId), eq(wikiMembers.userId, userId))
+          )
+          .returning({ userId: wikiMembers.userId })
+        if (removed.length === 0) throw new Refused('not_found')
+      })
     }
   }
 }
@@ -246,6 +273,24 @@ export function registerSharing(
         params.data.wikiId,
         params.data.userId,
         body.data.role
+      )
+      if (!result.ok) return refuse(reply, result.error)
+      return reply.code(204).send()
+    }
+  )
+
+  app.delete(
+    '/wikis/:wikiId/members/:userId',
+    { preHandler: deps.requireIdentity },
+    async (request, reply) => {
+      const identity = request.identity
+      if (!identity) return reply.code(401).send()
+      const params = memberParams.safeParse(request.params)
+      if (!params.success) return refuse(reply, 'not_found')
+      const result = await store.removeMember(
+        identity,
+        params.data.wikiId,
+        params.data.userId
       )
       if (!result.ok) return refuse(reply, result.error)
       return reply.code(204).send()

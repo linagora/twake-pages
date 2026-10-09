@@ -9,9 +9,11 @@ import {
   invite,
   joinWiki,
   personalWikiOf,
+  removeMember,
   someoneOfEachTenant,
   startApp,
   versionOf,
+  WAYS_TO_LEAVE,
   wikisOf,
   type TestUser
 } from '../../testing/app.ts'
@@ -603,6 +605,197 @@ describe('PATCH /wikis/:wikiId/members/:userId', () => {
     const wiki = await aWikiOf(api, alice)
 
     const response = await setRole(alice, wiki.id, userId(), 'viewer')
+
+    expect(response.statusCode).toBe(404)
+    expect(response.json()).toEqual({ error: 'not_found' })
+    expect(await versionOf(api, alice, wiki.id)).toBe(wiki.version)
+  })
+})
+
+/** The ids of the wiki's members, as its member sees them. */
+const memberIdsOf = async (member: TestUser, wikiId: string) =>
+  (await sharingOf(member, wikiId)).members.map(listed => listed.id).sort()
+
+describe('DELETE /wikis/:wikiId/members/:userId', () => {
+  it.each(WAYS_TO_LEAVE)(
+    'takes out a member %s, who no longer finds the wiki',
+    async (_case, leave) => {
+      const alice = aUser()
+      const bob = aColleagueOf(alice)
+      const wiki = await aWikiOf(api, alice)
+      await joinWiki(db, alice, wiki.id, bob, 'viewer')
+
+      const response = await leave(api, alice, wiki.id, bob)
+
+      expect(response.statusCode).toBe(204)
+      expect(await memberIdsOf(alice, wiki.id)).toEqual([alice.userId])
+      expect((await wikisOf(api, bob)).map(listed => listed.id)).not.toContain(
+        wiki.id
+      )
+    }
+  )
+
+  it.each(WAYS_TO_LEAVE)(
+    'moves the wiki’s version for a member %s',
+    async (_case, leave) => {
+      const alice = aUser()
+      const bob = aColleagueOf(alice)
+      const wiki = await aWikiOf(api, alice)
+      await joinWiki(db, alice, wiki.id, bob, 'viewer')
+      const before = await versionOf(api, alice, wiki.id)
+
+      await leave(api, alice, wiki.id, bob)
+
+      expect(await versionOf(api, alice, wiki.id)).toBeGreaterThan(before)
+    }
+  )
+
+  it('lets an admin leave once another admin is there', async () => {
+    const alice = aUser()
+    const bob = aColleagueOf(alice)
+    const wiki = await aWikiOf(api, alice)
+    await joinWiki(db, alice, wiki.id, bob, 'admin')
+
+    const response = await removeMember(api, alice, wiki.id, alice.userId)
+
+    expect(response.statusCode).toBe(204)
+    expect(await memberIdsOf(bob, wiki.id)).toEqual([bob.userId])
+  })
+
+  it('refuses to let the last admin leave', async () => {
+    const alice = aUser()
+    const bob = aColleagueOf(alice)
+    const wiki = await aWikiOf(api, alice)
+    await joinWiki(db, alice, wiki.id, bob, 'editor')
+    const before = await versionOf(api, alice, wiki.id)
+
+    const response = await removeMember(api, alice, wiki.id, alice.userId)
+
+    expect(response.statusCode).toBe(409)
+    expect(response.json()).toEqual({ error: 'last_admin' })
+    expect(await versionOf(api, alice, wiki.id)).toBe(before)
+    expect(await adminsOf(alice, wiki.id)).toBe(1)
+  })
+
+  // As for stepping down, each waits for the change before it to end.
+  it('keeps an admin when the last two leave at once', async () => {
+    const alice = aUser()
+    const bob = aColleagueOf(alice)
+    const carol = aColleagueOf(alice)
+    const wiki = await aWikiOf(api, alice)
+    await joinWiki(db, alice, wiki.id, bob, 'admin')
+    await joinWiki(db, alice, wiki.id, carol, 'viewer')
+
+    const [first, second] = await behindAChange(db, alice, wiki.id, [
+      () => removeMember(api, alice, wiki.id, alice.userId),
+      () => removeMember(api, bob, wiki.id, bob.userId)
+    ])
+
+    expect(first?.statusCode).toBe(204)
+    expect(second?.statusCode).toBe(409)
+    expect(second?.json()).toEqual({ error: 'last_admin' })
+    expect(await adminsOf(carol, wiki.id)).toBe(1)
+  })
+
+  it.each(['viewer', 'editor'] as const)(
+    'refuses %ss who remove someone else',
+    async role => {
+      const alice = aUser()
+      const bob = aColleagueOf(alice)
+      const carol = aColleagueOf(alice)
+      const wiki = await aWikiOf(api, alice)
+      await joinWiki(db, alice, wiki.id, bob, role)
+      await joinWiki(db, alice, wiki.id, carol, 'viewer')
+      const before = await versionOf(api, alice, wiki.id)
+
+      const response = await removeMember(api, bob, wiki.id, carol.userId)
+
+      expect(response.statusCode).toBe(403)
+      expect(response.json()).toEqual({ error: 'forbidden' })
+      expect(await versionOf(api, alice, wiki.id)).toBe(before)
+      expect(await memberIdsOf(alice, wiki.id)).toContain(carol.userId)
+    }
+  )
+
+  it.each([
+    ['removing a member', (alice: TestUser) => alice.userId],
+    ['leaving it', (_alice: TestUser, stranger: TestUser) => stranger.userId]
+  ])(
+    'hides the wiki from someone who is no member, %s',
+    async (_case, userIdOf) => {
+      const alice = aUser()
+      const stranger = aColleagueOf(alice)
+      const wiki = await aWikiOf(api, alice)
+
+      const response = await removeMember(
+        api,
+        stranger,
+        wiki.id,
+        userIdOf(alice, stranger)
+      )
+
+      expect(response.statusCode).toBe(404)
+      expect(response.json()).toEqual({ error: 'not_found' })
+      expect(await versionOf(api, alice, wiki.id)).toBe(wiki.version)
+    }
+  )
+
+  it.each(WIKIS_WITH_MANAGED_MEMBERS)(
+    'answers managed for %s',
+    async (_case, aWiki) => {
+      const alice = aUser()
+      const bob = aColleagueOf(alice)
+      const wikiId = await aWiki(alice, bob)
+      const before = await versionOf(api, alice, wikiId)
+
+      const response = await removeMember(api, alice, wikiId, bob.userId)
+
+      expect(response.statusCode).toBe(409)
+      expect(response.json()).toEqual({ error: 'managed' })
+      expect(await versionOf(api, alice, wikiId)).toBe(before)
+    }
+  )
+
+  it.each(WIKIS_WITH_MANAGED_MEMBERS)(
+    'answers managed to a member leaving %s',
+    async (_case, aWiki) => {
+      const alice = aUser()
+      const wikiId = await aWiki(alice, aColleagueOf(alice))
+      const before = await versionOf(api, alice, wikiId)
+
+      const response = await removeMember(api, alice, wikiId, alice.userId)
+
+      expect(response.statusCode).toBe(409)
+      expect(response.json()).toEqual({ error: 'managed' })
+      expect(await versionOf(api, alice, wikiId)).toBe(before)
+    }
+  )
+
+  it('keeps an editor who leaves a space wiki, as its space decides', async () => {
+    const alice = aUser()
+    const bob = aColleagueOf(alice)
+    const wikiId = await aSpaceWiki(db, [
+      [alice, 'admin'],
+      [bob, 'editor']
+    ])
+    const before = await versionOf(api, alice, wikiId)
+
+    const response = await removeMember(api, bob, wikiId, bob.userId)
+
+    expect(response.statusCode).toBe(409)
+    expect(response.json()).toEqual({ error: 'managed' })
+    expect(await versionOf(api, alice, wikiId)).toBe(before)
+    expect(await memberIdsOf(alice, wikiId)).toContain(bob.userId)
+  })
+
+  it.each([
+    ['someone who is no member of the wiki', () => randomUUID()],
+    ['an id that is no uuid', () => 'bob']
+  ])('answers not_found for %s', async (_case, userId) => {
+    const alice = aUser()
+    const wiki = await aWikiOf(api, alice)
+
+    const response = await removeMember(api, alice, wiki.id, userId())
 
     expect(response.statusCode).toBe(404)
     expect(response.json()).toEqual({ error: 'not_found' })

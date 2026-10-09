@@ -75,6 +75,41 @@ export async function removeFromWiki(
   )
 }
 
+/**
+ * `DELETE /wikis/:wikiId/members/:userId` by the person: an admin removing
+ * the member, or the member leaving.
+ */
+export function removeMember(
+  app: Awaited<ReturnType<typeof startApp>>,
+  someone: TestUser,
+  wikiId: string,
+  userId: string
+) {
+  return app.as(someone).delete(`/wikis/${wikiId}/members/${userId}`)
+}
+
+/** The ways a member leaves a shared wiki, with the answer to the request. */
+export const WAYS_TO_LEAVE: [
+  string,
+  (
+    app: Awaited<ReturnType<typeof startApp>>,
+    admin: TestUser,
+    wikiId: string,
+    member: TestUser
+  ) => ReturnType<typeof removeMember>
+][] = [
+  [
+    'removed by its admin',
+    (app, admin, wikiId, member) =>
+      removeMember(app, admin, wikiId, member.userId)
+  ],
+  [
+    'by themself',
+    (app, _admin, wikiId, member) =>
+      removeMember(app, member, wikiId, member.userId)
+  ]
+]
+
 /** What a wiki's admin does that takes a member out of the wiki. */
 export type TakeOut = (
   app: Awaited<ReturnType<typeof startApp>>,
@@ -84,7 +119,7 @@ export type TakeOut = (
   member: TestUser
 ) => Promise<unknown>
 
-const removeMember: TakeOut = (_app, db, admin, wikiId, member) =>
+const removeInTheDatabase: TakeOut = (_app, db, admin, wikiId, member) =>
   removeFromWiki(db, admin, wikiId, member)
 
 /**
@@ -92,8 +127,8 @@ const removeMember: TakeOut = (_app, db, admin, wikiId, member) =>
  * admin, in an organization or in B2C, or out with the deleted wiki.
  */
 export const waysOutOfAWiki: [string, () => TestUser, TakeOut][] = [
-  ['a wiki the person left', aUser, removeMember],
-  ['a wiki the person left, in B2C', aB2cUser, removeMember],
+  ['a wiki the person left', aUser, removeInTheDatabase],
+  ['a wiki the person left, in B2C', aB2cUser, removeInTheDatabase],
   [
     'a deleted wiki',
     aUser,
