@@ -1613,6 +1613,90 @@ describe('fakePagesApi', () => {
 
       await expect(api.listComments(page.id)).resolves.toEqual([])
     })
+
+    it('refuses a comment on a page in the trash after its body, before its parent', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki()
+      const page = api.withPage(wiki.id)
+      const question = await api.addComment(page.id, { body: 'Question' })
+      const answer = await api.addComment(page.id, {
+        body: 'Answer',
+        parentId: question.id
+      })
+      await api.deletePage(page.id)
+
+      await expect(api.addComment(page.id, { body: ' ' })).rejects.toEqual(
+        new ApiError(400, 'invalid_request')
+      )
+      await expect(
+        api.addComment(page.id, { body: 'Thanks', parentId: answer.id })
+      ).rejects.toEqual(new ApiError(409, 'in_trash'))
+    })
+
+    it('refuses to change a comment on a page in the trash after its body and who may change it', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki({
+        members: { 'bob@example.com': 'editor', 'carol@example.com': 'viewer' }
+      })
+      const page = api.withPage(wiki.id)
+      const bob = api.signedInAs('bob@example.com')
+      const carol = api.signedInAs('carol@example.com')
+      const draft = await bob.addComment(page.id, { body: 'Draft' })
+      await api.deletePage(page.id)
+      const forbidden = new ApiError(403, 'forbidden')
+      const inTrash = new ApiError(409, 'in_trash')
+
+      await expect(api.editComment(draft.id, ' ')).rejects.toEqual(
+        new ApiError(400, 'invalid_request')
+      )
+      await expect(api.editComment(draft.id, 'Final')).rejects.toEqual(
+        forbidden
+      )
+      await expect(carol.deleteComment(draft.id)).rejects.toEqual(forbidden)
+      await expect(bob.editComment(draft.id, 'Final')).rejects.toEqual(inTrash)
+      await expect(bob.deleteComment(draft.id)).rejects.toEqual(inTrash)
+      await expect(api.deleteComment(draft.id)).rejects.toEqual(inTrash)
+      await expect(api.listComments(page.id)).resolves.toMatchObject([
+        { id: draft.id, body: 'Draft' }
+      ])
+    })
+
+    it('refuses a malformed body before a page out of reach, keeping the version', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki()
+      const page = api.withPage(wiki.id)
+      const draft = await api.addComment(page.id, { body: 'Draft' })
+      const dan = api.signedInAs('dan@example.com')
+      const invalid = new ApiError(400, 'invalid_request')
+      const before = (await api.getWiki(wiki.id)).version
+
+      await expect(dan.addComment(page.id, { body: ' ' })).rejects.toEqual(
+        invalid
+      )
+      await expect(dan.editComment(draft.id, ' ')).rejects.toEqual(invalid)
+      expect((await api.getWiki(wiki.id)).version).toBe(before)
+    })
+
+    it('refuses a malformed edit, and someone who is no member, before a page in the trash, keeping the version', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki()
+      const page = api.withPage(wiki.id)
+      const draft = await api.addComment(page.id, { body: 'Draft' })
+      await api.deletePage(page.id)
+      const dan = api.signedInAs('dan@example.com')
+      const notFound = new ApiError(404, 'not_found')
+      const before = (await api.getWiki(wiki.id)).version
+
+      await expect(api.editComment(draft.id, ' ')).rejects.toEqual(
+        new ApiError(400, 'invalid_request')
+      )
+      await expect(dan.addComment(page.id, { body: 'Thanks' })).rejects.toEqual(
+        notFound
+      )
+      await expect(dan.editComment(draft.id, 'Mine')).rejects.toEqual(notFound)
+      await expect(dan.deleteComment(draft.id)).rejects.toEqual(notFound)
+      expect((await api.getWiki(wiki.id)).version).toBe(before)
+    })
   })
 
   describe('notifications', () => {

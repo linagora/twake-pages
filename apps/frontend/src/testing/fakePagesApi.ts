@@ -1421,10 +1421,11 @@ function signedIn(world: World, person: Person): FakePagesApi {
     ),
     deleteComment: vi.fn<PagesApi['deleteComment']>(commentId =>
       answer(() => {
-        const { comment, wiki, role } = commentAccess(commentId)
+        const { comment, page, wiki, role } = commentAccess(commentId)
         if (comment.author.id !== person.id && role !== 'admin') {
           throw refuse('forbidden')
         }
+        if (page.deletion) throw refuse('in_trash')
         for (const each of world.comments.values()) {
           if (each === comment || each.parentId === comment.id) {
             world.comments.delete(each.id)
