@@ -709,18 +709,26 @@ describe('the draft of a page', () => {
   })
 })
 
-/** Puts an image in the blocks by its address, from the block menu. */
-async function embedImage(url: string) {
+/**
+ * Puts a block in the blocks by its address, from the block menu: the
+ * `item` of the menu, then the `button` that takes the address.
+ */
+async function embedFromMenu(item: string, button: string, url: string) {
   await typeInBlocks(
     await screen.findByRole('textbox', { name: 'Content' }),
     '/'
   )
   // By their text: hidden, the menu and the panel name nothing.
-  fireEvent.click(await screen.findByText('Image'))
+  fireEvent.click(await screen.findByText(item))
   fireEvent.change(await screen.findByPlaceholderText('Enter URL'), {
     target: { value: url }
   })
-  fireEvent.click(screen.getByText('Embed image'))
+  fireEvent.click(screen.getByText(button))
+}
+
+/** Puts an image in the blocks by its address, from the block menu. */
+async function embedImage(url: string) {
+  await embedFromMenu('Image', 'Embed image', url)
 }
 
 describe('a refused publish', () => {
