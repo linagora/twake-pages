@@ -173,6 +173,14 @@ async function addVersion(
   })
 }
 
+/** Puts the page in the trash on its own, as `DELETE /pages/:pageId` will. */
+export async function putInTheTrash(tx: Tx, user: TestUser, pageId: string) {
+  await tx
+    .update(pages)
+    .set({ deletedAt: new Date(), deletedBy: user.userId, trashRootId: pageId })
+    .where(eq(pages.id, pageId))
+}
+
 /**
  * A page written straight into the wiki, as the pages routes will write it,
  * with its first version, in the trash on its own when `deleted`. Given a
@@ -213,16 +221,7 @@ export async function aPageIn(
       title: page.title,
       gristUrl
     })
-    if (page.deleted) {
-      await tx
-        .update(pages)
-        .set({
-          deletedAt: new Date(),
-          deletedBy: author.userId,
-          trashRootId: written.id
-        })
-        .where(eq(pages.id, written.id))
-    }
+    if (page.deleted) await putInTheTrash(tx, author, written.id)
     return written.id
   })
 }
@@ -620,6 +619,16 @@ export function publish(
   draft: DraftToPublish
 ) {
   return app.as(user).post(`/pages/${pageId}/versions`, draft)
+}
+
+/** `PUT /pages/:pageId/labels` by the person. */
+export function setLabels(
+  app: Awaited<ReturnType<typeof startApp>>,
+  user: TestUser,
+  pageId: string,
+  names: string[]
+) {
+  return app.as(user).put(`/pages/${pageId}/labels`, { names })
 }
 
 /** BlockNote's styled text, here with no style. */

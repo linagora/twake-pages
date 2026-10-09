@@ -63,7 +63,8 @@ async function summaryOf(tx: Tx, pageId: string, number: number) {
 
 export type VersionSummary = Awaited<ReturnType<typeof summaryOf>>
 
-async function labelsOf(tx: Tx, pageId: string) {
+/** The names of the page's labels, sorted. */
+export async function labelsOf(tx: Tx, pageId: string) {
   const rows = await tx
     .select({ name: labels.name })
     .from(pageLabels)

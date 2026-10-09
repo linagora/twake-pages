@@ -21,7 +21,7 @@ A refusal answers `{ error: <Refusal> }` with its status:
 | `in_trash` | 409 | publishing, moving, labelling or commenting a deleted page |
 | `last_admin` | 409 | removing or demoting the last admin of a shared wiki |
 | `not_same_organization` | 400 | sharing outside the organization (B2B), or with a B2B email from B2C |
-| `invalid_label` | 400 | a label name that is not 1 to 50 letters, digits, `-` or `_` |
+| `invalid_label` | 400 | a label name that is not 1 to 50 letters with their marks, decimal digits, `-` or `_` |
 
 ## Types
 
@@ -176,7 +176,7 @@ The personal wiki is stored with the name `Personal`. Clients show a translated 
 | `POST /pages/:pageId/versions/:number/restore` | | `201 Page`, a new version with `restoredFrom` | editor |
 | `POST /pages/:pageId/move` | `{ parentId, afterId?, beforeId? }` | `{ parentId, position }` | editor |
 | `DELETE /pages/:pageId` | | `204`, the page and its live descendants go to the trash | editor |
-| `PUT /pages/:pageId/labels` | `{ names: string[] }` | `{ labels: string[] }`, creating missing labels in the wiki | editor |
+| `PUT /pages/:pageId/labels` | `{ names: string[] }`, at most 50 | `{ labels: string[] }`, creating missing labels in the wiki | editor |
 | `PUT /pages/:pageId/follow` / `DELETE` | | `204` | member |
 | `PUT /pages/:pageId/favorite` / `DELETE` | | `204` | member |
 
@@ -212,7 +212,7 @@ A move takes the page with its child pages, which keep their places under it. It
 | `GET /wikis/:wikiId/labels` | `{ labels: { name: string; pages: number }[] }`, by name | member |
 | `GET /wikis/:wikiId/labels/:name/pages` | `{ pages: { id, title, updatedAt }[] }`, live pages, by title | member |
 
-A label name is trimmed and lowercased, 1 to 50 letters, digits, `-` or `_`. The list shows the labels that live pages carry, and `pages` counts those live pages; a name no live page carries answers `{ pages: [] }`. A label no page uses any more, in the tree or in the trash, is deleted.
+A label name is trimmed, lowercased and put in Unicode's composed form (NFC), so that an `é` typed in one character or in two makes one label; it then holds 1 to 50 letters with their marks, decimal digits, `-` or `_`. The list shows the labels that live pages carry, and `pages` counts those live pages; a name no live page carries answers `{ pages: [] }`. A label no page uses any more, in the tree or in the trash, is deleted.
 
 ## Comments
 
