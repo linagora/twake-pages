@@ -44,6 +44,14 @@ export interface Page {
   deletedAt: string | null
 }
 
+/**
+ * A text as the backend reads a label name: trimmed, lowercased, then composed
+ * (NFC), so that an "é" typed in one character or in two makes one label.
+ */
+export function normalizeLabelName(text: string): string {
+  return text.trim().toLowerCase().normalize('NFC')
+}
+
 export interface VersionSummary {
   number: number
   title: string

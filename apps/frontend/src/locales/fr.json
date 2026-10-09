@@ -209,7 +209,9 @@
     "none": "Aucune étiquette",
     "edit": "Modifier les étiquettes",
     "picker": "Étiquettes de %{title}",
-    "search": "Rechercher une étiquette"
+    "search": "Rechercher une étiquette",
+    "create": "Créer « %{name} »",
+    "hint": "Saisissez un nom pour créer une étiquette."
   },
   "search": {
     "title": "Recherche",

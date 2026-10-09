@@ -189,6 +189,91 @@ describe('the labels picker', () => {
     expect(pagesApi.setLabels).toHaveBeenLastCalledWith(onboarding.id, ['hr'])
   })
 
+  it('creates a label from the search, trimmed and lowercased, and gives it to the page', async () => {
+    const { pagesApi, wiki, onboarding } = await handbookWithHowTo()
+    renderRoute(`/wikis/${wiki.id}/pages/${onboarding.id}`, { pagesApi })
+
+    const dialog = await openLabels()
+    const picker = within(dialog)
+    await picker.findByRole('menuitemcheckbox', { name: 'howto' })
+    typeIn(dialog, 'Search labels', ' Release ')
+    expect(
+      picker.queryByRole('menuitemcheckbox', { name: 'howto' })
+    ).not.toBeInTheDocument()
+    fireEvent.click(picker.getByRole('menuitem', { name: 'Create “release”' }))
+
+    expect(await shownLabels()).toEqual(['release'])
+    expect(pagesApi.setLabels).toHaveBeenLastCalledWith(onboarding.id, [
+      'release'
+    ])
+    expect(picker.getByRole('textbox', { name: 'Search labels' })).toHaveValue(
+      ''
+    )
+    expect(
+      picker.getByRole('menuitemcheckbox', { name: 'release' })
+    ).toBeChecked()
+  })
+
+  it('keeps the Create entry disabled, and the name off the labels, while the label is made', async () => {
+    const { pagesApi, wiki, onboarding } = await handbookWithHowTo()
+    // The label is never made, so that its request stays pending.
+    pagesApi.setLabels.mockImplementationOnce(
+      () => new Promise(() => undefined)
+    )
+    renderRoute(`/wikis/${wiki.id}/pages/${onboarding.id}`, { pagesApi })
+
+    const dialog = await openLabels()
+    typeIn(dialog, 'Search labels', 'release')
+    fireEvent.click(
+      within(dialog).getByRole('menuitem', { name: 'Create “release”' })
+    )
+
+    await waitFor(() => {
+      expect(
+        within(dialog).getByRole('menuitem', { name: 'Create “release”' })
+      ).toHaveAttribute('aria-disabled', 'true')
+    })
+    expect(
+      within(dialog).queryByRole('menuitemcheckbox', { name: 'release' })
+    ).not.toBeInTheDocument()
+  })
+
+  it('offers to create only a name no label has', async () => {
+    const { pagesApi, wiki, onboarding } = await handbookWithHowTo()
+    renderRoute(`/wikis/${wiki.id}/pages/${onboarding.id}`, { pagesApi })
+
+    const dialog = await openLabels()
+    await within(dialog).findByRole('menuitemcheckbox', { name: 'howto' })
+    typeIn(dialog, 'Search labels', 'HowTo')
+
+    expect(
+      within(dialog).getByRole('menuitemcheckbox', { name: 'howto' })
+    ).toBeInTheDocument()
+    expect(
+      within(dialog).queryByRole('menuitem', { name: /^Create/ })
+    ).not.toBeInTheDocument()
+  })
+
+  it('offers the label a name typed with its accent apart makes, not to create it', async () => {
+    const { pagesApi, wiki, onboarding } = await onboardingLabelled([
+      '\u00e9quipe'
+    ])
+    renderRoute(`/wikis/${wiki.id}/pages/${onboarding.id}`, { pagesApi })
+
+    const dialog = await openLabels()
+    await within(dialog).findByRole('menuitemcheckbox', {
+      name: '\u00e9quipe'
+    })
+    typeIn(dialog, 'Search labels', 'e\u0301quipe')
+
+    expect(
+      within(dialog).getByRole('menuitemcheckbox', { name: '\u00e9quipe' })
+    ).toBeChecked()
+    expect(
+      within(dialog).queryByRole('menuitem', { name: /^Create/ })
+    ).not.toBeInTheDocument()
+  })
+
   it('highlights the searched part of each label', async () => {
     const { pagesApi, wiki, onboarding } = await handbookWithHowTo()
     renderRoute(`/wikis/${wiki.id}/pages/${onboarding.id}`, { pagesApi })
@@ -203,5 +288,16 @@ describe('the labels picker', () => {
     expect(
       [...option.querySelectorAll('mark')].map(mark => mark.textContent)
     ).toEqual(['ow'])
+  })
+
+  it('tells how to create a label in a wiki that has none', async () => {
+    const { pagesApi, wiki, onboarding } = await onboardingLabelled([])
+    renderRoute(`/wikis/${wiki.id}/pages/${onboarding.id}`, { pagesApi })
+
+    const dialog = await openLabels()
+
+    expect(
+      await within(dialog).findByText('Type a name to create a label.')
+    ).toBeVisible()
   })
 })

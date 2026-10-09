@@ -209,7 +209,9 @@
     "none": "No labels",
     "edit": "Edit labels",
     "picker": "Labels of %{title}",
-    "search": "Search labels"
+    "search": "Search labels",
+    "create": "Create “%{name}”",
+    "hint": "Type a name to create a label."
   },
   "search": {
     "title": "Search",

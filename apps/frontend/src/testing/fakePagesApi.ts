@@ -12,15 +12,16 @@ import {
 import { isFields, isList, type Fields } from '@/domain/blocks'
 import { mentionsIn, type Comment } from '@/domain/comment'
 import type { Notification, NotificationReason } from '@/domain/notification'
-import type {
-  Block,
-  Page,
-  PageKind,
-  PageRef,
-  TrashEntry,
-  TreePage,
-  Version,
-  VersionSummary
+import {
+  normalizeLabelName,
+  type Block,
+  type Page,
+  type PageKind,
+  type PageRef,
+  type TrashEntry,
+  type TreePage,
+  type Version,
+  type VersionSummary
 } from '@/domain/page'
 import type { Person } from '@/domain/person'
 import { FOUND_END, FOUND_START } from '@/domain/search'
@@ -198,7 +199,7 @@ const LABEL = /^[\p{L}\p{M}\p{Nd}_-]{1,50}$/u
 
 /** The label name the text makes, as the backend reads it, or null for none. */
 function labelNameOf(text: string) {
-  const name = text.trim().toLowerCase().normalize('NFC')
+  const name = normalizeLabelName(text)
   return LABEL.test(name) ? name : null
 }
 
