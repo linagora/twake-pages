@@ -276,6 +276,21 @@ export function useSetFavorite(
   })
 }
 
+// The answer is the page at its new version, which the tree shows by title.
+function cachePageAndInvalidateTree(
+  queryClient: QueryClient,
+  wikiId: string,
+  page: Page
+): Promise<void> {
+  // At the version of the wiki its last read knew, older than the one
+  // publishing moved it to.
+  queryClient.setQueryData<ReadPage>(pageKey(wikiId, page.id), read => ({
+    page,
+    version: read?.version
+  }))
+  return queryClient.invalidateQueries({ queryKey: treeKey(wikiId) })
+}
+
 /**
  * The page shows its new version as soon as it is published, and the tree
  * its title once read again, before the caller opens the page.
@@ -293,13 +308,7 @@ export function usePublish(
     mutationFn: (version: NewVersion) => api.publish(pageId, version),
     onSuccess: page => {
       onPublished()
-      // At the version of the wiki its last read knew, older than the one
-      // publishing moved it to.
-      queryClient.setQueryData<ReadPage>(pageKey(wikiId, pageId), read => ({
-        page,
-        version: read?.version
-      }))
-      return queryClient.invalidateQueries({ queryKey: treeKey(wikiId) })
+      return cachePageAndInvalidateTree(queryClient, wikiId, page)
     }
   })
 }
