@@ -355,6 +355,9 @@ describe('tenant foreign keys', () => {
     wiki_invites: ({ wikiId }) =>
       statement`insert into wiki_invites (wiki_id, org_id, email, role, invited_by)
          values (${wikiId}, null, 'stray@example.com', 'viewer', uuidv7())`,
+    invite_emails: ({ wikiId }) =>
+      statement`insert into invite_emails (wiki_id, org_id, email, invited_by)
+         values (${wikiId}, null, 'stray@example.com', uuidv7())`,
     pages: ({ wikiId }) =>
       statement`insert into pages (wiki_id, org_id, kind, title, position, created_by, updated_by)
          values (${wikiId}, null, 'document', 'Stray', 'z0', uuidv7(), uuidv7())`,

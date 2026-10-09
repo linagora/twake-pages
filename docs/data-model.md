@@ -35,6 +35,10 @@ Same columns, keys and policies as `project_members` and `project_invites` of Tw
 
 An invite's email has the domain of the person who made it. Twake Workplace gives an organization one mail domain, and B2C users that of their provider: the domain thus gives an email's tenant without saying whether it has an account.
 
+### invite_emails
+
+As in Twake Tasks, with `wiki_id` for `project_id`: `id, wiki_id (cascade), org_id, email, invited_by, sent_at, tenant`; indexes `(wiki_id, email, sent_at)` and `(invited_by, sent_at)`; tenant policy on the wiki. A row per invitation email scheduled, which limits them to one a day per address and wiki, and 20 an hour per person inviting; an invitation over the limits is recorded without an email. The next invitation in the tenant deletes the rows older than a day that row level security shows it, and a deleted account loses the rows it sent or received, in B2C those of the wikis it still sees.
+
 ### pages
 
 | Column | Type | Notes |

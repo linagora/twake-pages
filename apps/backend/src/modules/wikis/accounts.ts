@@ -1,4 +1,14 @@
-import { and, asc, eq, inArray, isNull, ne, notExists, sql } from 'drizzle-orm'
+import {
+  and,
+  asc,
+  eq,
+  inArray,
+  isNull,
+  ne,
+  notExists,
+  or,
+  sql
+} from 'drizzle-orm'
 import { alias } from 'drizzle-orm/pg-core'
 import { z } from 'zod'
 import type { PlatformEvent } from '../../events/envelope.ts'
@@ -11,7 +21,7 @@ import { asOrganization, asTenant, type Tx } from '../../infra/db.ts'
 import { jobs } from '../../scheduler/schema.ts'
 import { userSettings } from '../settings/schema.ts'
 import { bumpWiki } from './live.ts'
-import { wikiMembers, wikis } from './schema.ts'
+import { inviteEmails, wikiMembers, wikis } from './schema.ts'
 
 // ldap-rest names B2B users by email until it sends their entryUUID.
 const b2bDeleted = z.looseObject({
@@ -122,24 +132,35 @@ async function bumpWikisOf(tx: Tx, userId: string) {
   for (const { wikiId } of left) await bumpWiki(tx, wikiId)
 }
 
+// The emails the person signed in with, lowercased as settings and
+// invitations keep them.
+const emailsOf = (tx: Tx, userId: string) =>
+  tx
+    .select({ email: sql<string>`lower(${wikiMembers.email})` })
+    .from(wikiMembers)
+    .where(eq(wikiMembers.userId, userId))
+
 // Runs as the person, so a B2C tenant shows the wikis they belong to; their
 // memberships go last, since they are what makes those wikis visible. The
 // wikis it deletes go for good, as Twake Tasks deletes the projects of a
 // deleted account, rather than for the 30 days a wiki its admin deletes is kept.
 async function forget(tx: Tx, organizationId: string | null, userId: string) {
   await asTenant(tx, { organizationId, userId, email: '' })
-  // First: a removal from one of the person's wikis locks it before it
-  // deletes rows this deletes too.
+  // First: a removal from one of the person's wikis, or an invitation to it,
+  // locks it before it deletes rows this deletes too.
   await bumpWikisOf(tx, userId)
-  await tx.delete(userSettings).where(
-    inArray(
-      userSettings.email,
-      tx
-        .select({ email: sql<string>`lower(${wikiMembers.email})` })
-        .from(wikiMembers)
-        .where(eq(wikiMembers.userId, userId))
+  await tx
+    .delete(userSettings)
+    .where(inArray(userSettings.email, emailsOf(tx, userId)))
+  // The invitation emails they sent and received, as Twake Tasks forgets them.
+  await tx
+    .delete(inviteEmails)
+    .where(
+      or(
+        eq(inviteEmails.invitedBy, userId),
+        inArray(inviteEmails.email, emailsOf(tx, userId))
+      )
     )
-  )
   // Their favorites, visits, follows and notifications, those of the wikis
   // they left too, which a B2C tenant hides from them. Unlike Twake Tasks,
   // which keeps them, the person's follows and notifications go as their

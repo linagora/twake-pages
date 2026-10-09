@@ -1,6 +1,6 @@
 import { pino } from 'pino'
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest'
-import { createDb } from '../../infra/db.ts'
+import { createDb, inTenant } from '../../infra/db.ts'
 import type { Mail } from '../../infra/mail.ts'
 import { createScheduler } from '../../scheduler/scheduler.ts'
 import {
@@ -12,11 +12,14 @@ import {
   cancelInvitation,
   invite,
   joinWiki,
+  sharingOf,
   startApp,
-  wikisOf
+  wikisOf,
+  type TestUser
 } from '../../testing/app.ts'
 import { userSettings } from '../settings/schema.ts'
 import { emailInvite, INVITE_EMAIL_JOB } from './inviteEmails.ts'
+import { inviteEmails } from './schema.ts'
 
 let api: Awaited<ReturnType<typeof startApp>>
 const { sql, db } = createDb(inject('databaseUrl'))
@@ -205,3 +208,129 @@ describe('invitation emails', () => {
     expect(mailbox.sentAbout(wiki.id)).toEqual([])
   })
 })
+
+describe('the limits of invitation emails', () => {
+  it('sends one a day per address and wiki, whatever the role or a cancel', async ({
+    signal
+  }) => {
+    const alice = aUser()
+    const wiki = await aWikiOf(api, alice)
+    const mailbox = aMailbox(signal)
+    const again = anEmail('again')
+    await invite(api, alice, wiki.id, again, 'viewer')
+    await mailbox.deliver()
+
+    const invitation = await anInvitation(api, alice, wiki.id, again)
+    await cancelInvitation(api, alice, wiki.id, invitation)
+    await invite(api, alice, wiki.id, again, 'admin')
+    await mailbox.deliver()
+
+    expect(mailbox.sentAbout(wiki.id)).toHaveLength(1)
+    expect((await sharingOf(api, alice, wiki.id)).invites).toMatchObject([
+      { email: again, role: 'admin' }
+    ])
+  })
+
+  it('sends 20 an hour at most per person inviting', async ({ signal }) => {
+    const alice = aUser()
+    const wiki = await aWikiOf(api, alice)
+    const mailbox = aMailbox(signal)
+
+    for (let n = 1; n <= 21; n++) {
+      await invite(api, alice, wiki.id, anEmail(`bulk-${String(n)}`), 'viewer')
+    }
+    await mailbox.deliver()
+
+    expect(mailbox.sentAbout(wiki.id)).toHaveLength(20)
+    expect((await sharingOf(api, alice, wiki.id)).invites).toHaveLength(21)
+  })
+
+  it('forgets an email sent more than a day ago', async ({ signal }) => {
+    const alice = aUser()
+    const wiki = await aWikiOf(api, alice)
+    const old = anEmail('old')
+    await sentEarlier(alice, wiki.id, [old], 25 * 60)
+    const mailbox = aMailbox(signal)
+
+    await invite(api, alice, wiki.id, old, 'viewer')
+    await mailbox.deliver()
+
+    expect(mailbox.sentAbout(wiki.id)).toHaveLength(1)
+  })
+
+  it('counts no more the emails of the hour sent 61 minutes ago', async ({
+    signal
+  }) => {
+    const alice = aUser()
+    const wiki = await aWikiOf(api, alice)
+    await sentEarlier(alice, wiki.id, someEmails('past', 20), 61)
+    const mailbox = aMailbox(signal)
+
+    await invite(api, alice, wiki.id, anEmail('now'), 'viewer')
+    await mailbox.deliver()
+
+    expect(mailbox.sentAbout(wiki.id)).toHaveLength(1)
+  })
+
+  it('still counts the emails of the hour sent 59 minutes ago', async ({
+    signal
+  }) => {
+    const alice = aUser()
+    const wiki = await aWikiOf(api, alice)
+    await sentEarlier(alice, wiki.id, someEmails('recent', 20), 59)
+    const mailbox = aMailbox(signal)
+
+    await invite(api, alice, wiki.id, anEmail('now'), 'viewer')
+    await mailbox.deliver()
+
+    expect(mailbox.sentAbout(wiki.id)).toEqual([])
+  })
+
+  it('sends 20 an hour at most when the invitations come at once', async ({
+    signal
+  }) => {
+    const alice = aUser()
+    // The invitations to one wiki take turns, since each moves its version.
+    const wikis = await Promise.all(
+      Array.from({ length: 10 }, () => aWikiOf(api, alice))
+    )
+    const mailbox = aMailbox(signal)
+
+    await Promise.all(
+      wikis.flatMap(wiki =>
+        someEmails('rush', 4).map(email =>
+          invite(api, alice, wiki.id, email, 'viewer')
+        )
+      )
+    )
+    await mailbox.deliver()
+
+    expect(wikis.flatMap(wiki => mailbox.sentAbout(wiki.id))).toHaveLength(20)
+  })
+})
+
+const someEmails = (name: string, howMany: number) =>
+  Array.from({ length: howMany }, (_, n) => anEmail(`${name}-${String(n)}`))
+
+/**
+ * Invitation emails the person sent from the wiki some minutes ago, which the
+ * routes cannot backdate.
+ */
+async function sentEarlier(
+  inviter: TestUser,
+  wikiId: string,
+  emails: string[],
+  minutesAgo: number
+) {
+  await inTenant(db, inviter, tx =>
+    tx.insert(inviteEmails).values(
+      emails.map(email => ({
+        wikiId,
+        organizationId: inviter.organizationId,
+        email,
+        invitedBy: inviter.userId,
+        sentAt: new Date(Date.now() - minutesAgo * 60_000)
+      }))
+    )
+  )
+}

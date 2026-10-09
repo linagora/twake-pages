@@ -1,4 +1,4 @@
-import { and, asc, eq, ilike, ne, or, sql } from 'drizzle-orm'
+import { and, asc, count, eq, gt, ilike, lte, ne, or, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { inTenant, type Db, type Tx } from '../../infra/db.ts'
 import type { HttpServer } from '../../infra/http.ts'
@@ -10,7 +10,7 @@ import { INVITE_EMAIL_JOB, type InviteEmail } from './inviteEmails.ts'
 import { bumpWiki } from './live.ts'
 import { takeOutOfWiki } from './members.ts'
 import { wikiParams } from './routes.ts'
-import { wikiInvites, wikiMembers, wikis } from './schema.ts'
+import { inviteEmails, wikiInvites, wikiMembers, wikis } from './schema.ts'
 
 const role = z.enum(['viewer', 'editor', 'admin'])
 
@@ -46,6 +46,35 @@ function checkSameOrganization(identity: Identity, email: string) {
   if (domainOf(email) !== domainOf(identity.email)) {
     throw new Refused('not_same_organization')
   }
+}
+
+const EMAILS_AN_HOUR = 20
+
+// Anyone can make a wiki and invite any address of their domain, so as in
+// Twake Tasks, the email goes once a day per address and wiki, and 20 times an
+// hour per person inviting. The invitation is recorded either way. What is
+// older than a day counts no more: forgotten. Unlike Twake Tasks, the windows
+// run on the database's clock, which stamps sent_at.
+async function mayEmail(tx: Tx, wikiId: string, email: string, by: string) {
+  await tx
+    .delete(inviteEmails)
+    .where(lte(inviteEmails.sentAt, sql`now() - interval '1 day'`))
+  const [sameAddress] = await tx
+    .select({ id: inviteEmails.id })
+    .from(inviteEmails)
+    .where(and(eq(inviteEmails.wikiId, wikiId), eq(inviteEmails.email, email)))
+    .limit(1)
+  if (sameAddress) return false
+  const [lastHour] = await tx
+    .select({ sent: count() })
+    .from(inviteEmails)
+    .where(
+      and(
+        eq(inviteEmails.invitedBy, by),
+        gt(inviteEmails.sentAt, sql`now() - interval '1 hour'`)
+      )
+    )
+  return (lastHour?.sent ?? 0) < EMAILS_AN_HOUR
 }
 
 // Every sharing change moves the wiki's version first, so the row lock makes
@@ -101,9 +130,22 @@ function createSharingStore(db: Db) {
             target: [wikiInvites.wikiId, wikiInvites.email],
             set: { role }
           })
-        // An email goes out for a new invitation or a change of role. Its job
-        // reads the invitation when it runs, so it tells the role current then.
+        // An email goes out for a new invitation or a change of role, within
+        // the limits of mayEmail. Its job reads the invitation when it runs,
+        // so it tells the role current then.
         if (existing?.role === role) return
+        // The person's invitations to other wikis take turns here, so the
+        // limit holds when they come at once.
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(hashtextextended(${identity.userId}, 0))`
+        )
+        if (!(await mayEmail(tx, wikiId, email, identity.userId))) return
+        await tx.insert(inviteEmails).values({
+          wikiId,
+          organizationId: wiki.organizationId,
+          email,
+          invitedBy: identity.userId
+        })
         const job: InviteEmail = {
           wikiId,
           email,

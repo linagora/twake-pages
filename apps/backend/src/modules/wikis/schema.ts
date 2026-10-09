@@ -124,3 +124,30 @@ export const wikiInvites = pgTable.withRLS(
     )
   ]
 )
+
+// Every invitation email scheduled, to limit them as Twake Tasks does: an
+// invitation can be canceled and made again, and the job queue forgets a job
+// once it ran.
+export const inviteEmails = pgTable.withRLS(
+  'invite_emails',
+  {
+    id: id(),
+    wikiId: uuid('wiki_id')
+      .notNull()
+      .references(() => wikis.id, { onDelete: 'cascade' }),
+    organizationId: organizationId(),
+    email: text().notNull(),
+    invitedBy: uuid('invited_by').notNull(),
+    sentAt: timestamptz('sent_at').notNull().defaultNow(),
+    tenant: tenant()
+  },
+  table => [
+    index().on(table.wikiId, table.email, table.sentAt),
+    index().on(table.invitedBy, table.sentAt),
+    foreignKey({
+      columns: [table.tenant, table.wikiId],
+      foreignColumns: [wikis.tenant, wikis.id]
+    }),
+    tenantPolicy(table.organizationId, visibleWiki(table.wikiId))
+  ]
+)

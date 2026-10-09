@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { eq, sql as raw } from 'drizzle-orm'
+import { asc, eq, sql as raw } from 'drizzle-orm'
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest'
 import type { PlatformEvent } from '../../events/envelope.ts'
 import { RejectedEventError } from '../../events/router.ts'
@@ -7,12 +7,14 @@ import { asOrganization, createDb, inTenant } from '../../infra/db.ts'
 import { jobs } from '../../scheduler/schema.ts'
 import {
   aB2cUser,
+  anEmail,
   aPageIn,
   aSpaceWiki,
   aUser,
   backIn,
   createPage,
   followingAndUnreadOf,
+  invite,
   joinWiki,
   personalWikiOf,
   purgeJobOf,
@@ -32,7 +34,7 @@ import { pageFavorites, pageVersions, pageVisits } from '../pages/schema.ts'
 import { keepSettings } from '../settings/events.ts'
 import type { Role } from './access.ts'
 import { accountRoutes } from './accounts.ts'
-import { wikiMembers, wikis } from './schema.ts'
+import { inviteEmails, wikiMembers, wikis } from './schema.ts'
 import { behindAChange } from './testing.ts'
 
 let api: Awaited<ReturnType<typeof startApp>>
@@ -158,6 +160,21 @@ async function pagesVersionsAndCommentsIn(wiki: WikiSummary, reader: TestUser) {
     })))
   }
 }
+
+/**
+ * The addresses of the invitation emails sent from the wiki, in their order,
+ * which no route lists.
+ */
+const invitationEmailsOf = async (reader: TestUser, wikiId: string) =>
+  (
+    await inTenant(db, reader, tx =>
+      tx
+        .select({ email: inviteEmails.email })
+        .from(inviteEmails)
+        .where(eq(inviteEmails.wikiId, wikiId))
+        .orderBy(asc(inviteEmails.sentAt))
+    )
+  ).map(row => row.email)
 
 /** What `GET /settings` answers a person whose settings Pages does not keep. */
 const NO_SETTINGS = {
@@ -307,6 +324,37 @@ describe.each(deletions)(
       expect(await keptFor(gone)).toEqual(NOTHING_KEPT)
     })
 
+    // As a removal, an invitation locks the wiki, then deletes the invitation
+    // emails older than a day, those the account sent among them.
+    it('takes its turn behind an admin inviting someone to one of its wikis', async () => {
+      const gone = makeUser()
+      const admin = aPeerOf(gone)
+      const wiki = await aWiki(admin, 'Roadmap', [[gone, 'admin']])
+      const newcomer = anEmail('newcomer')
+      // Sent by the account two days ago, which no route can backdate.
+      await inTenant(db, gone, tx =>
+        tx.insert(inviteEmails).values({
+          wikiId: wiki.id,
+          organizationId: gone.organizationId,
+          email: anEmail('third'),
+          invitedBy: gone.userId,
+          sentAt: new Date(Date.now() - 2 * 24 * 60 * 60_000)
+        })
+      )
+
+      const done = await behindAChange<number | string>(db, admin, wiki.id, [
+        async () =>
+          (await invite(api, admin, wiki.id, newcomer, 'viewer')).statusCode,
+        async () => {
+          await deliver(routingKey, body(gone))
+          return 'deleted'
+        }
+      ])
+
+      expect(done).toEqual([202, 'deleted'])
+      expect(await invitationEmailsOf(admin, wiki.id)).toEqual([newcomer])
+    })
+
     it('leaves a wiki its admin deleted to its purge', async () => {
       const gone = makeUser()
       const admin = aPeerOf(gone)
@@ -415,6 +463,27 @@ describe.each(deletions)(
       expect(await sharedWikisOf(editor)).toEqual([
         expect.objectContaining({ name: 'Handbook', unread: 1 })
       ])
+    })
+
+    it('loses the invitation emails it sent and received', async () => {
+      const gone = makeUser()
+      const admin = aPeerOf(gone)
+      const wiki = await aWiki(admin, 'Roadmap', [])
+      const third = anEmail('third')
+      const other = anEmail('other')
+      await invite(api, admin, wiki.id, gone.email, 'admin')
+      await wikisOf(api, gone)
+      await invite(api, gone, wiki.id, third, 'viewer')
+      await invite(api, admin, wiki.id, other, 'viewer')
+      expect(await invitationEmailsOf(admin, wiki.id)).toEqual([
+        gone.email,
+        third,
+        other
+      ])
+
+      await deliver(routingKey, body(gone))
+
+      expect(await invitationEmailsOf(admin, wiki.id)).toEqual([other])
     })
 
     it('loses its Twake Workplace settings', async () => {
