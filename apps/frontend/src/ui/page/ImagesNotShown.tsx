@@ -1,6 +1,7 @@
 import { Alert } from '@linagora/twake-mui'
 import type { ReactElement } from 'react'
 
+import { listed } from '@/ui/i18n/listed'
 import { useI18n } from '@/ui/i18n/useI18n'
 
 /**
@@ -16,17 +17,16 @@ export function ImagesNotShown({
   added: string[]
 }): ReactElement {
   const { t, lang } = useI18n()
-  const list = new Intl.ListFormat(lang, { type: 'conjunction' })
   // As written, without keywords such as 'self'.
   const allowed = added.filter(source => !source.startsWith("'"))
   return (
     <Alert severity="warning" role="status" className="u-mb-1">
       {allowed.length > 0
         ? t('editor.imagesNotShown', {
-            hosts: list.format(hosts),
-            allowed: list.format(allowed)
+            hosts: listed(hosts, lang),
+            allowed: listed(allowed, lang)
           })
-        : t('editor.noImagesShown', { hosts: list.format(hosts) })}
+        : t('editor.noImagesShown', { hosts: listed(hosts, lang) })}
     </Alert>
   )
 }
