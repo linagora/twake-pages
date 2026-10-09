@@ -1594,6 +1594,50 @@ describe('fakePagesApi', () => {
       expect(edited.editedAt).not.toBeNull()
     })
 
+    it('makes only the members an edit mentions anew follow the page', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki({
+        members: { 'bob@example.com': 'viewer', 'carol@example.com': 'viewer' }
+      })
+      const page = api.withPage(wiki.id)
+      const bob = api.signedInAs('bob@example.com')
+      const carol = api.signedInAs('carol@example.com')
+      const comment = await api.addComment(page.id, {
+        body: 'Ask @bob@example.com'
+      })
+      await api.setFollowing(page.id, false)
+      await bob.setFollowing(page.id, false)
+
+      await api.editComment(
+        comment.id,
+        'Ask @Bob@example.com, @carol@example.com'
+      )
+
+      await expect(carol.getPage(page.id)).resolves.toMatchObject({
+        following: true
+      })
+      await expect(bob.getPage(page.id)).resolves.toMatchObject({
+        following: false
+      })
+      await expect(api.getPage(page.id)).resolves.toMatchObject({
+        following: false
+      })
+    })
+
+    it('makes the author an edit mentions for the first time follow the page again', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki()
+      const page = api.withPage(wiki.id)
+      const comment = await api.addComment(page.id, { body: 'Plan' })
+      await api.setFollowing(page.id, false)
+
+      await api.editComment(comment.id, 'Plan, @alice@example.com?')
+
+      await expect(api.getPage(page.id)).resolves.toMatchObject({
+        following: true
+      })
+    })
+
     it('deletes a comment with its replies, for its author or an admin', async () => {
       const api = fakePagesApi()
       const wiki = api.withWiki({

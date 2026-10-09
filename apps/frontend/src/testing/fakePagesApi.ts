@@ -605,8 +605,11 @@ function signedIn(world: World, person: Person): FakePagesApi {
     return { comment, ...pageAccess(comment.pageId) }
   }
 
-  const mentionedIn = (wiki: StoredWiki, body: string) => {
-    const emails = mentionsIn(body)
+  // The members the body mentions that `before` did not, as the backend finds
+  // them: those a new comment mentions, or those its edit mentions anew.
+  const mentionedIn = (wiki: StoredWiki, body: string, before = '') => {
+    const known = mentionsIn(before)
+    const emails = mentionsIn(body).filter(email => !known.includes(email))
     return [...wiki.members.values()]
       .map(member => member.person)
       .filter(member => emails.includes(member.email))
@@ -1413,6 +1416,9 @@ function signedIn(world: World, person: Person): FakePagesApi {
         const { comment, page, wiki } = commentAccess(commentId)
         if (comment.author.id !== person.id) throw refuse('forbidden')
         if (page.deletion) throw refuse('in_trash')
+        for (const member of mentionedIn(wiki, edited, comment.body)) {
+          page.followers.add(member.id)
+        }
         comment.body = edited
         comment.editedAt = now()
         bump(wiki)
