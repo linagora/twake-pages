@@ -1,5 +1,5 @@
 import { eq } from 'drizzle-orm'
-import type { Db, Tx } from '../../infra/db.ts'
+import type { Db } from '../../infra/db.ts'
 import { positionBetween } from '../../infra/order.ts'
 import { Refused, writeOrRefuse } from '../../infra/refusals.ts'
 import type { Identity } from '../auth/index.ts'
@@ -10,25 +10,10 @@ import { pages } from './schema.ts'
 import {
   ancestorsOf,
   checkParent,
+  pageAt,
   siblingsUnder,
   type PageMove
 } from './store.ts'
-
-async function pageAt(tx: Tx, pageId: string) {
-  const [page] = await tx
-    .select({
-      id: pages.id,
-      wikiId: pages.wikiId,
-      organizationId: pages.organizationId,
-      parentId: pages.parentId,
-      title: pages.title,
-      home: pages.home,
-      deletedAt: pages.deletedAt
-    })
-    .from(pages)
-    .where(eq(pages.id, pageId))
-  return page
-}
 
 export function createMoveStore(db: Db) {
   return {

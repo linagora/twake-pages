@@ -303,6 +303,23 @@ export async function addPage(
   return added
 }
 
+/** The page as a change to it reads it, in the trash or not. */
+export async function pageAt(tx: Tx, pageId: string) {
+  const [page] = await tx
+    .select({
+      id: pages.id,
+      wikiId: pages.wikiId,
+      organizationId: pages.organizationId,
+      parentId: pages.parentId,
+      title: pages.title,
+      home: pages.home,
+      deletedAt: pages.deletedAt
+    })
+    .from(pages)
+    .where(eq(pages.id, pageId))
+  return page
+}
+
 /**
  * The live page the person publishes to, behind its wiki's row lock:
  * `not_found` out of their reach, `forbidden` to a viewer, `in_trash` in the
