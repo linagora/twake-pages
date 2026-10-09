@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { ApiError, EditConflict, type NewPage } from '@/application/pages'
+import type { Block } from '@/domain/page'
 import { FOUND_END, FOUND_START } from '@/domain/search'
 import { buildTree, byPosition, type TreeNode } from '@/domain/tree'
 import {
@@ -874,10 +875,10 @@ describe('fakePagesApi', () => {
           'an image whose address is not https',
           anAddressed('image', 'http://example.com/desk.png')
         ],
-        [
-          'a Grist embed outside the Grist origin',
-          anAddressed('gristEmbed', 'https://evil.example.com/o/docs/budget')
-        ],
+        ...OFF_GRIST_ORIGINS.map(([where, url]): [string, Block] => [
+          `a Grist embed ${where}`,
+          anAddressed('gristEmbed', url)
+        ]),
         ['a NUL character in a text', paragraph('Steps\u0000')],
         [
           'a lone surrogate in a key',

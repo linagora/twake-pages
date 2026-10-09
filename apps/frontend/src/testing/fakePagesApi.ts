@@ -78,7 +78,10 @@ export const GRIST_ORIGIN = 'https://grist.example.com'
 
 const gristHost = new URL(GRIST_ORIGIN).host
 
-/** Addresses off `GRIST_ORIGIN`, the ones the backend's tests refuse. */
+/**
+ * Addresses off `GRIST_ORIGIN`, or on it but not over http or https, the
+ * ones the backend's tests refuse.
+ */
 export const OFF_GRIST_ORIGINS: [string, string][] = [
   ['on another origin', 'https://docs.example.com/o/docs/4kq2'],
   ['on a look-alike origin', `${GRIST_ORIGIN}.example.net/o/docs/4kq2`],
@@ -87,6 +90,7 @@ export const OFF_GRIST_ORIGINS: [string, string][] = [
     'on another origin behind a user name',
     `https://${gristHost}@docs.example.com/`
   ],
+  ['at a blob: address of the Grist origin', `blob:${GRIST_ORIGIN}/4kq2`],
   ['at no address at all', 'Tasks']
 ]
 
@@ -371,11 +375,15 @@ function gristUrlOf(value: string | undefined) {
   return value
 }
 
-/** The address as sent, or `invalid_grist_url` off the Grist origin. */
+// Over http or https only, as the backend: the address of a blob takes the
+// origin of the page that made it, which does not serve it.
+const servedByGrist = (url: URL) =>
+  ['http:', 'https:'].includes(url.protocol) && url.origin === GRIST_ORIGIN
+
+/** The address as sent, or `invalid_grist_url` unless Grist serves it. */
 function checkGristUrl(value: string) {
-  if (URL.parse(value)?.origin !== GRIST_ORIGIN) {
-    throw refuse('invalid_grist_url')
-  }
+  const url = URL.parse(value)
+  if (url === null || !servedByGrist(url)) throw refuse('invalid_grist_url')
   return value
 }
 
@@ -419,7 +427,7 @@ function addressAllowed(fields: Fields) {
     case 'file':
       return urlAllowed(fields, url => url.protocol === 'https:')
     case 'gristEmbed':
-      return urlAllowed(fields, url => url.origin === GRIST_ORIGIN)
+      return urlAllowed(fields, servedByGrist)
     default:
       return true
   }
