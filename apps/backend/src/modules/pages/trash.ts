@@ -1,10 +1,12 @@
-import { sql } from 'drizzle-orm'
-import type { Db, Tx } from '../../infra/db.ts'
+import { and, desc, eq, sql } from 'drizzle-orm'
+import { alias } from 'drizzle-orm/pg-core'
+import { inTenant, type Db, type Tx } from '../../infra/db.ts'
 import type { HttpServer } from '../../infra/http.ts'
 import { Refused, refuse, writeOrRefuse } from '../../infra/refusals.ts'
 import type { Identity, RequireIdentity } from '../auth/index.ts'
+import { roleOn } from '../wikis/access.ts'
 import { queuePageEvent } from './events.ts'
-import { pageParams } from './routes.ts'
+import { pageParams, wikiParams } from './routes.ts'
 import { pages } from './schema.ts'
 import { pageToChange } from './store.ts'
 
@@ -45,6 +47,35 @@ function createTrashStore(db: Db) {
         await queuePageEvent(tx, identity, 'deleted', page, { descendants })
         return null
       })
+    },
+
+    /**
+     * The wiki's deleted branches, newest first, each by its root, or null
+     * for a wiki out of the person's reach.
+     */
+    trash(identity: Identity, wikiId: string) {
+      return inTenant(db, identity, async tx => {
+        if (!(await roleOn(tx, identity, wikiId))) return null
+        const branch = alias(pages, 'branch')
+        return tx
+          .select({
+            id: pages.id,
+            title: pages.title,
+            deletedAt: pages.deletedAt,
+            deletedBy: {
+              id: pages.deletedBy,
+              email: pages.deletedByEmail,
+              name: pages.deletedByName
+            },
+            // The pages of the branch but its root.
+            descendants: sql<number>`count(*)::int - 1`
+          })
+          .from(pages)
+          .innerJoin(branch, eq(branch.trashRootId, pages.id))
+          .where(and(eq(pages.wikiId, wikiId), eq(pages.trashRootId, pages.id)))
+          .groupBy(pages.id)
+          .orderBy(desc(pages.deletedAt), desc(pages.id))
+      })
     }
   }
 }
@@ -54,6 +85,19 @@ export function registerTrash(
   deps: { db: Db; requireIdentity: RequireIdentity }
 ): void {
   const store = createTrashStore(deps.db)
+
+  app.get(
+    '/wikis/:wikiId/trash',
+    { preHandler: deps.requireIdentity },
+    async (request, reply) => {
+      const identity = request.identity
+      if (!identity) return reply.code(401).send()
+      const params = wikiParams.safeParse(request.params)
+      if (!params.success) return refuse(reply, 'not_found')
+      const listed = await store.trash(identity, params.data.wikiId)
+      return listed ? { pages: listed } : refuse(reply, 'not_found')
+    }
+  )
 
   app.delete(
     '/pages/:pageId',
