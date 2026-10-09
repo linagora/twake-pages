@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { publishText } from './editor.ts'
-import { pagePublishedEvents } from './platform.ts'
+import { pageEvents } from './platform.ts'
 import { aliceSpaceWiki } from './space.ts'
 
 test('puts page.published on the activity exchange, with the wiki as container, for a page published in a space wiki', async ({
@@ -18,7 +18,7 @@ test('puts page.published on the activity exchange, with the wiki as container, 
   await publishText(page, 'Sprint goals')
 
   await expect(() => {
-    expect(pagePublishedEvents(pageId)).toEqual([
+    expect(pageEvents('published', pageId)).toEqual([
       expect.objectContaining({
         data: {
           object: {

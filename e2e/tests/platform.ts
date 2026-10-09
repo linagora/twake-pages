@@ -26,13 +26,14 @@ await sql.end()
 process.stdout.write(JSON.stringify(row ?? null))
 `
 
-const sentPagePublished = `
+const sentPageEvents = `
 const { default: postgres } = await import('postgres')
 const sql = postgres(process.env.DATABASE_URL)
+const [type, pageId] = process.argv.slice(1)
 const rows = await sql\`
   select event from outbox
-  where event ->> 'type' = 'com.twake.pages.page.published.v1'
-    and event -> 'data' -> 'object' ->> 'id' = \${process.argv[1]}
+  where event ->> 'type' = \${type}
+    and event -> 'data' -> 'object' ->> 'id' = \${pageId}
     and sent_at is not null
   order by id\`
 await sql.end()
@@ -99,11 +100,13 @@ export function wikiOfSpace(spaceId: string) {
 }
 
 /**
- * The `page.published` events of a page, once RabbitMQ has confirmed them on
+ * The `page.<action>` events of a page, once RabbitMQ has confirmed them on
  * the activity exchange, the first one first.
  */
-export function pagePublishedEvents(pageId: string) {
-  return JSON.parse(inBackend(sentPagePublished, pageId)) as {
+export function pageEvents(action: string, pageId: string) {
+  return JSON.parse(
+    inBackend(sentPageEvents, `com.twake.pages.page.${action}.v1`, pageId)
+  ) as {
     type: string
     data: Record<string, unknown>
   }[]
