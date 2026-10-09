@@ -28,7 +28,7 @@ const newVersion = z.object({
   content: pageBlocks
 })
 
-const wikiParams = z.object({ wikiId: z.uuid() })
+export const wikiParams = z.object({ wikiId: z.uuid() })
 
 export const pageParams = z.object({ pageId: z.uuid() })
 

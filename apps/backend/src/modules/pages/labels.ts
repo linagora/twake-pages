@@ -1,12 +1,21 @@
-import { and, eq, inArray, notExists, notInArray } from 'drizzle-orm'
+import {
+  and,
+  asc,
+  count,
+  eq,
+  inArray,
+  isNull,
+  notExists,
+  notInArray
+} from 'drizzle-orm'
 import { z } from 'zod'
-import type { Db, Tx } from '../../infra/db.ts'
+import { inTenant, type Db, type Tx } from '../../infra/db.ts'
 import type { HttpServer } from '../../infra/http.ts'
 import { Refused, refuse, writeOrRefuse } from '../../infra/refusals.ts'
 import type { Identity, RequireIdentity } from '../auth/index.ts'
-import { checkRole } from '../wikis/access.ts'
+import { checkRole, roleOn } from '../wikis/access.ts'
 import { bumpWiki } from '../wikis/live.ts'
-import { pageParams } from './routes.ts'
+import { pageParams, wikiParams } from './routes.ts'
 import { labels, pageLabels, pages } from './schema.ts'
 import { labelsOf } from './store.ts'
 
@@ -62,6 +71,13 @@ async function ensureLabels(
     .where(and(eq(labels.wikiId, wiki.id), inArray(labels.name, names)))
   return named.map(({ id }) => id)
 }
+
+// A page in the trash still carries its labels, but the wiki lists only its
+// live pages, and the labels they carry.
+const toItsLivePage = and(
+  eq(pages.id, pageLabels.pageId),
+  isNull(pages.deletedAt)
+)
 
 function createLabelStore(db: Db) {
   return {
@@ -134,6 +150,24 @@ function createLabelStore(db: Db) {
         }
         return labelsOf(tx, pageId)
       })
+    },
+
+    /**
+     * The labels the wiki's live pages carry, by name, with how many carry
+     * each, or null for a wiki out of the person's reach.
+     */
+    wikiLabels(identity: Identity, wikiId: string) {
+      return inTenant(db, identity, async tx => {
+        if (!(await roleOn(tx, identity, wikiId))) return null
+        return tx
+          .select({ name: labels.name, pages: count() })
+          .from(labels)
+          .innerJoin(pageLabels, eq(pageLabels.labelId, labels.id))
+          .innerJoin(pages, toItsLivePage)
+          .where(eq(labels.wikiId, wikiId))
+          .groupBy(labels.name)
+          .orderBy(asc(labels.name))
+      })
     }
   }
 }
@@ -163,6 +197,19 @@ export function registerLabels(
       )
       if (!result.ok) return refuse(reply, result.error)
       return { labels: result.value }
+    }
+  )
+
+  app.get(
+    '/wikis/:wikiId/labels',
+    { preHandler: deps.requireIdentity },
+    async (request, reply) => {
+      const identity = request.identity
+      if (!identity) return reply.code(401).send()
+      const params = wikiParams.safeParse(request.params)
+      if (!params.success) return refuse(reply, 'not_found')
+      const listed = await store.wikiLabels(identity, params.data.wikiId)
+      return listed ? { labels: listed } : refuse(reply, 'not_found')
     }
   )
 }
