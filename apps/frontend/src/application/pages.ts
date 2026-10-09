@@ -194,8 +194,8 @@ export interface PagesApi {
   /** Editor; the page and its live descendants go to the trash as one branch. */
   deletePage: (pageId: string) => Promise<void>
   /**
-   * Editor; at most 50 names, trimmed and lowercased. Answers the page's
-   * labels.
+   * Editor; at most 50 names, trimmed, lowercased and composed (NFC). Answers
+   * the page's labels.
    */
   setLabels: (pageId: string, names: string[]) => Promise<string[]>
   /** Whether the person is notified of the page's versions and comments. */
@@ -214,7 +214,10 @@ export interface PagesApi {
 
   /** The labels that live pages carry, by name. */
   listLabels: (wikiId: string) => Promise<Label[]>
-  /** The live pages carrying the label, by title; none for an unknown name. */
+  /**
+   * The live pages carrying the label, its name read as `setLabels` reads
+   * one, by title; none for an unknown name.
+   */
   pagesWithLabel: (wikiId: string, name: string) => Promise<LabelledPage[]>
 
   /** Oldest first, replies among them. */
