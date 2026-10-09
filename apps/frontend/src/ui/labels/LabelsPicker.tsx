@@ -1,9 +1,12 @@
+import { Typography } from '@linagora/twake-mui'
 import { useState, type ReactElement } from 'react'
 
+import { ApiError } from '@/application/pages'
 import { LabelChip } from '@/ds/LabelChip'
 import {
   PickerCreate,
   PickerEmpty,
+  PickerError,
   PickerOption,
   PickerPopover
 } from '@/ds/Picker'
@@ -26,9 +29,13 @@ export function LabelsPicker({
 }): ReactElement {
   const { t } = useI18n()
   const labels = useWikiLabels(page.wikiId)
-  const save = useSetLabels(page)
   const [search, setSearch] = useState('')
   const [chosen, setChosen] = useState(() => new Set(page.labels))
+  // Making a label saves the page's labels too, but on its own, as making a
+  // label is in Twake Tasks, so that what it says of a name goes as the name
+  // changes.
+  const create = useSetLabels(page)
+  const save = useSetLabels(page)
   // The search read as the backend reads a label name, so that a name the wiki
   // has, in capitals or with an accent typed apart, is not offered to create.
   const query = normalizeLabelName(search)
@@ -36,10 +43,16 @@ export function LabelsPicker({
   const names = (labels.data ?? []).map(label => label.name)
   const shown = names.filter(name => name.includes(query))
   const creatable = query !== '' && !names.includes(query)
+  const invalid =
+    create.error instanceof ApiError && create.error.code === 'invalid_label'
 
-  const apply = (next: Set<string>, onSaved?: () => void) => {
+  const apply = (
+    change: typeof save,
+    next: Set<string>,
+    onSaved?: () => void
+  ) => {
     setChosen(next)
-    save.mutate([...next], {
+    change.mutate([...next], {
       onSuccess: () => {
         onSaved?.()
       },
@@ -51,7 +64,7 @@ export function LabelsPicker({
   const toggle = (name: string) => {
     const next = new Set(chosen)
     if (!next.delete(name)) next.add(name)
-    apply(next)
+    apply(save, next)
   }
 
   return (
@@ -61,7 +74,31 @@ export function LabelsPicker({
       onClose={onClose}
       searchLabel={t('labels.search')}
       search={search}
-      onSearch={setSearch}
+      onSearch={value => {
+        setSearch(value)
+        create.reset()
+      }}
+      footer={
+        (labels.isError || create.isError || save.isError) && (
+          <>
+            {labels.isError && (
+              <PickerError
+                retryLabel={t('labels.retry')}
+                onRetry={() => {
+                  void labels.refetch()
+                }}
+              >
+                {t('labels.loadFailed')}
+              </PickerError>
+            )}
+            {(create.isError || save.isError) && (
+              <Typography role="alert" variant="caption" color="error">
+                {invalid ? t('labels.invalid') : t('labels.saveFailed')}
+              </Typography>
+            )}
+          </>
+        )
+      }
     >
       {shown.map(name => (
         <PickerOption
@@ -76,9 +113,9 @@ export function LabelsPicker({
       ))}
       {creatable && (
         <PickerCreate
-          disabled={save.isPending}
+          disabled={create.isPending}
           onCreate={() => {
-            apply(new Set(chosen).add(query), () => {
+            apply(create, new Set(chosen).add(query), () => {
               setSearch('')
             })
           }}

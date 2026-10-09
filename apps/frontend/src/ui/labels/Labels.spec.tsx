@@ -1,6 +1,7 @@
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
+import { ApiError } from '@/application/pages'
 import { fakePagesApi } from '@/testing/fakePagesApi'
 import { typeIn } from '@/testing/forms'
 import { renderRoute, WIKI_BASES } from '@/testing/renderWithProviders'
@@ -299,5 +300,101 @@ describe('the labels picker', () => {
     expect(
       await within(dialog).findByText('Type a name to create a label.')
     ).toBeVisible()
+  })
+
+  it.each([
+    ['a name with a blank', 'how to', 'how to'],
+    [
+      'a name of 50 characters that makes 51 once lowercased',
+      '\u0130' + 'a'.repeat(49),
+      'i\u0307' + 'a'.repeat(49)
+    ]
+  ])(
+    'says why %s cannot be a label, and keeps the search',
+    async (_, typed, name) => {
+      const { pagesApi, wiki, onboarding } = await onboardingLabelled(['hr'])
+      renderRoute(`/wikis/${wiki.id}/pages/${onboarding.id}`, { pagesApi })
+
+      const dialog = await openLabels()
+      typeIn(dialog, 'Search labels', typed)
+      fireEvent.click(
+        within(dialog).getByRole('menuitem', { name: `Create “${name}”` })
+      )
+
+      expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+        'A label is 1 to 50 letters, digits, hyphens or underscores.'
+      )
+      expect(
+        within(dialog).getByRole('menuitem', { name: `Create “${name}”` })
+      ).toBeVisible()
+      expect(await shownLabels()).toEqual(['hr'])
+    }
+  )
+
+  it('takes back why a name cannot be a label once the name changes', async () => {
+    const { pagesApi, wiki, onboarding } = await onboardingLabelled(['hr'])
+    renderRoute(`/wikis/${wiki.id}/pages/${onboarding.id}`, { pagesApi })
+
+    const dialog = await openLabels()
+    typeIn(dialog, 'Search labels', 'how to')
+    fireEvent.click(
+      within(dialog).getByRole('menuitem', { name: 'Create “how to”' })
+    )
+    await within(dialog).findByRole('alert')
+    typeIn(dialog, 'Search labels', 'how-to')
+
+    expect(within(dialog).queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('says when the labels could not be saved, and shows those the page carries', async () => {
+    const { pagesApi, wiki, onboarding } = await handbookWithHowTo()
+    pagesApi.setLabels.mockRejectedValueOnce(new ApiError(500, null))
+    renderRoute(`/wikis/${wiki.id}/pages/${onboarding.id}`, { pagesApi })
+
+    const picker = within(await openLabels())
+    fireEvent.click(
+      await picker.findByRole('menuitemcheckbox', { name: 'howto' })
+    )
+
+    expect(await picker.findByRole('alert')).toHaveTextContent(
+      'The labels could not be saved.'
+    )
+    expect(
+      picker.getByRole('menuitemcheckbox', { name: 'howto' })
+    ).not.toBeChecked()
+  })
+
+  it('keeps saying the labels could not be saved as the person searches', async () => {
+    const { pagesApi, wiki, onboarding } = await handbookWithHowTo()
+    pagesApi.setLabels.mockRejectedValueOnce(new ApiError(500, null))
+    renderRoute(`/wikis/${wiki.id}/pages/${onboarding.id}`, { pagesApi })
+
+    const dialog = await openLabels()
+    fireEvent.click(
+      await within(dialog).findByRole('menuitemcheckbox', { name: 'howto' })
+    )
+    await within(dialog).findByRole('alert')
+    typeIn(dialog, 'Search labels', 'how')
+
+    expect(within(dialog).getByRole('alert')).toHaveTextContent(
+      'The labels could not be saved.'
+    )
+  })
+
+  it('says when the labels of the wiki could not be loaded, and loads them again', async () => {
+    const { pagesApi, wiki, onboarding } = await handbookWithHowTo()
+    pagesApi.listLabels.mockRejectedValueOnce(new ApiError(403, null))
+    renderRoute(`/wikis/${wiki.id}/pages/${onboarding.id}`, { pagesApi })
+
+    const picker = within(await openLabels())
+    expect(await picker.findByRole('alert')).toHaveTextContent(
+      'The labels of the wiki could not be loaded.'
+    )
+    fireEvent.click(picker.getByRole('button', { name: 'Retry' }))
+
+    expect(
+      await picker.findByRole('menuitemcheckbox', { name: 'howto' })
+    ).toBeVisible()
+    expect(picker.queryByRole('alert')).not.toBeInTheDocument()
   })
 })
