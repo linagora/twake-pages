@@ -191,6 +191,22 @@ describe('the labels picker', () => {
     expect(pagesApi.setLabels).toHaveBeenLastCalledWith(onboarding.id, ['hr'])
   })
 
+  it('keeps offering a label taken off, though no page carries it any more', async () => {
+    const { pagesApi, wiki, onboarding } = await onboardingLabelled(['howto'])
+    renderRoute(`/wikis/${wiki.id}/pages/${onboarding.id}`, { pagesApi })
+
+    const picker = within(await openLabels())
+    fireEvent.click(
+      await picker.findByRole('menuitemcheckbox', { name: 'howto' })
+    )
+    // The sidebar reads the wiki's labels again, through the picker's query.
+    await screen.findByText('No labels yet')
+
+    expect(
+      picker.getByRole('menuitemcheckbox', { name: 'howto' })
+    ).not.toBeChecked()
+  })
+
   it('creates a label from the search, trimmed and lowercased, and gives it to the page', async () => {
     const { pagesApi, wiki, onboarding } = await handbookWithHowTo()
     renderRoute(`/wikis/${wiki.id}/pages/${onboarding.id}`, { pagesApi })

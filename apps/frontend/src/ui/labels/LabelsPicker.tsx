@@ -14,9 +14,14 @@ import { MAX_LABELS, normalizeLabelName, type Page } from '@/domain/page'
 import { useI18n } from '@/ui/i18n/useI18n'
 import { useSetLabels, useWikiLabels } from '@/ui/wiki/queries'
 
+const byName = (a: string, b: string) => a.localeCompare(b)
+
 /**
  * As Twake Tasks' picker of a task's labels, but a label is made by giving it
- * to the page, as the backend makes a label it is given the name of.
+ * to the page, as the backend makes a label it is given the name of. And
+ * where Twake Tasks keeps a label no task carries, the backend deletes a
+ * label no page carries, so the picker keeps offering the labels the page
+ * carried while it is open.
  */
 export function LabelsPicker({
   page,
@@ -31,6 +36,8 @@ export function LabelsPicker({
   const labels = useWikiLabels(page.wikiId)
   const [search, setSearch] = useState('')
   const [chosen, setChosen] = useState(() => new Set(page.labels))
+  // A label taken off is given back in one click, though the wiki lost it.
+  const [offered, setOffered] = useState(() => new Set(page.labels))
   // Twake Tasks says only that the save failed: the picker says why, without
   // asking the backend, which takes at most MAX_LABELS names.
   const [tooMany, setTooMany] = useState(false)
@@ -43,7 +50,9 @@ export function LabelsPicker({
   // has, in capitals or with an accent typed apart, is not offered to create.
   const query = normalizeLabelName(search)
   // A name searched for shows among the labels once the backend has made it one.
-  const names = (labels.data ?? []).map(label => label.name)
+  const names = [
+    ...new Set([...(labels.data ?? []).map(label => label.name), ...offered])
+  ].sort(byName)
   const shown = names.filter(name => name.includes(query))
   const creatable = query !== '' && !names.includes(query)
   const invalid =
@@ -59,6 +68,7 @@ export function LabelsPicker({
     setChosen(next)
     change.mutate([...next], {
       onSuccess: () => {
+        setOffered(current => new Set([...current, ...next]))
         onSaved?.()
       },
       onError: () => {
