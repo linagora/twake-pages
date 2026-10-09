@@ -37,13 +37,15 @@ export const versionSummary = {
   restoredFrom: pageVersions.restoredFrom
 }
 
+/** The page's version of that number, among the versions of all pages. */
+export const versionOfPage = (pageId: string, number: number) =>
+  and(eq(pageVersions.pageId, pageId), eq(pageVersions.number, number))
+
 async function authorOf(tx: Tx, pageId: string, number: number) {
   const [author] = await tx
     .select(versionAuthor)
     .from(pageVersions)
-    .where(
-      and(eq(pageVersions.pageId, pageId), eq(pageVersions.number, number))
-    )
+    .where(versionOfPage(pageId, number))
   if (!author) {
     throw new Error(`page ${pageId} has no version ${String(number)}`)
   }
@@ -55,9 +57,7 @@ async function summaryOf(tx: Tx, pageId: string, number: number) {
   const [version] = await tx
     .select(versionSummary)
     .from(pageVersions)
-    .where(
-      and(eq(pageVersions.pageId, pageId), eq(pageVersions.number, number))
-    )
+    .where(versionOfPage(pageId, number))
   if (!version) {
     throw new Error(`page ${pageId} has no version ${String(number)}`)
   }
