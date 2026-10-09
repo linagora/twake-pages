@@ -15,8 +15,8 @@ A refusal answers `{ error: <Refusal> }` with its status:
 | `invalid_parent` | 400 | the parent is not a live page of the same wiki, is its home page, or is the page itself or one of its descendants |
 | `stale_neighbours` | 409 | `afterId` or `beforeId` is not a live sibling under the given parent |
 | `edit_conflict` | 409 | publishing from a version older than the current one (body below) |
-| `invalid_content` | 400 | blocks too large (over 2 MiB of JSON), a link that is not `http:`, `https:` or `mailto:`, an image, video, audio or file address that is not `https:`, a Grist embed outside `GRIST_ORIGINS`, or a NUL character or a lone surrogate in any key or string of the blocks |
-| `invalid_grist_url` | 400 | a database page address outside `GRIST_ORIGINS` |
+| `invalid_content` | 400 | blocks too large (over 2 MiB of JSON), a link that is not `http:`, `https:` or `mailto:`, an image, video, audio or file address that is not `https:`, a Grist embed address that is not `http:` or `https:` on `GRIST_ORIGINS`, or a NUL character or a lone surrogate in any key or string of the blocks |
+| `invalid_grist_url` | 400 | a database page address that is not `http:` or `https:` on `GRIST_ORIGINS` |
 | `not_in_trash` | 409 | restoring or purging a page that is not the root of a deleted branch |
 | `in_trash` | 409 | publishing, moving, labelling, commenting or deleting a deleted page |
 | `last_admin` | 409 | removing or demoting the last admin of a shared wiki |

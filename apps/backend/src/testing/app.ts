@@ -546,8 +546,9 @@ export const GRIST_ORIGIN = 'https://grist.example.com'
 const gristHost = new URL(GRIST_ORIGIN).host
 
 /**
- * Addresses off the Grist origins of the app the tests start, which it refuses
- * for a Grist embed as for a database page.
+ * Addresses off the Grist origins of the app the tests start, or on one but
+ * not over http or https, which it refuses for a Grist embed as for a
+ * database page.
  */
 export const OFF_GRIST_ORIGINS: [string, string][] = [
   ['on another origin', 'https://docs.example.com/o/docs/4kq2'],
@@ -557,6 +558,7 @@ export const OFF_GRIST_ORIGINS: [string, string][] = [
     'on another origin behind a user name',
     `https://${gristHost}@docs.example.com/`
   ],
+  ['at a blob: address of the Grist origin', `blob:${GRIST_ORIGIN}/4kq2`],
   ['at no address at all', 'Tasks']
 ]
 

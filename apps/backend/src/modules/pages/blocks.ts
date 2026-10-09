@@ -43,10 +43,15 @@ const urlAllowed = (block: Fields, allowed: (url: URL) => boolean) => {
 const httpsOnly = (block: Fields) =>
   urlAllowed(block, url => url.protocol === 'https:')
 
-// The page frames a Grist embed, so only a Grist origin of the deployment may
-// serve it.
+// The page frames a Grist document, so only a Grist origin of the deployment
+// may serve it, over http or https: the address of a blob takes the origin of
+// the page that made it, which does not serve it.
+const servedByGrist = (url: URL, gristOrigins: readonly string[]) =>
+  (url.protocol === 'http:' || url.protocol === 'https:') &&
+  gristOrigins.includes(url.origin)
+
 const onGristOrigin = (embed: Fields, gristOrigins: readonly string[]) =>
-  urlAllowed(embed, url => gristOrigins.includes(url.origin))
+  urlAllowed(embed, url => servedByGrist(url, gristOrigins))
 
 type Rule = (fields: Fields, gristOrigins: readonly string[]) => boolean
 
@@ -148,14 +153,14 @@ export function checkBlocks(
 
 /**
  * A database page's Grist address as the store keeps it, or
- * `invalid_grist_url` off the Grist origins of the deployment.
+ * `invalid_grist_url` unless a Grist origin of the deployment serves it.
  */
 export function checkGristUrl(
   gristUrl: string,
   gristOrigins: readonly string[]
 ): string {
   const address = addressOf(gristUrl)
-  if (address === null || !gristOrigins.includes(address.origin)) {
+  if (address === null || !servedByGrist(address, gristOrigins)) {
     throw new Refused('invalid_grist_url')
   }
   return gristUrl

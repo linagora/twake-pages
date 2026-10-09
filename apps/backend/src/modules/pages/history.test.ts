@@ -459,6 +459,25 @@ describe('POST /pages/:pageId/versions/:number/restore', () => {
     expect(await versionOf(api, alice, wiki.id)).toBe(before)
   })
 
+  it('answers invalid_grist_url for a version at a blob: address of a Grist origin, and leaves the wiki as it was', async () => {
+    const alice = aUser()
+    const wiki = await aWikiOf(api, alice)
+    // Written straight into the wiki, as kept before such an address was
+    // refused.
+    const pageId = await aPageIn(db, alice, wiki.id, {
+      title: 'Budget',
+      position: 'a0',
+      gristUrl: `blob:${GRIST_ORIGIN}/4kq2`
+    })
+    const before = await versionOf(api, alice, wiki.id)
+
+    const response = await restoreVersion(api, alice, pageId, 1)
+
+    expect(response.statusCode).toBe(400)
+    expect(response.json()).toEqual({ error: 'invalid_grist_url' })
+    expect(await versionOf(api, alice, wiki.id)).toBe(before)
+  })
+
   it('answers in_trash for a page in the trash, and leaves the wiki as it was', async () => {
     const alice = aUser()
     const wiki = await aWikiOf(api, alice)
