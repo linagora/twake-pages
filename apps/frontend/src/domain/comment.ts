@@ -13,9 +13,14 @@ export interface Comment {
 
 export type CommentPart = { text: string } | { mention: string }
 
-// @ and an email, at the start of a word: the address in "bob@example.com"
-// alone mentions no one.
-const MENTION = /(?<=^|[\s([{"'])@([\w.+-]+@[\w-]+(?:\.[\w-]+)+)/u
+// As the backend reads a mention (docs/api.md): @ and an email, at the start
+// of the text or after a space, an opening bracket or a quote, so that the
+// address in "bob@example.com" alone mentions no one. The email takes the
+// characters Twake Tasks takes, though Tasks reads a mention after a space
+// alone: plain text has no editor to set a mention apart, and prose writes
+// brackets and quotes around one.
+const MENTION =
+  /(?<=^|[\s([{"'])@([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]*[A-Za-z0-9])/u
 
 export function commentParts(body: string): CommentPart[] {
   return body
