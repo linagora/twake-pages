@@ -24,8 +24,9 @@ import type {
 } from '@/application/pages'
 import type { Page, PageRef, Version, VersionSummary } from '@/domain/page'
 import type { SearchResult } from '@/domain/search'
-import type { Wiki, WikiSummary } from '@/domain/wiki'
+import type { Member, Wiki, WikiSummary } from '@/domain/wiki'
 import { usePagesApi } from '@/ui/PagesApiProvider'
+import { useSession } from '@/ui/session/SessionGate'
 
 export const wikisKey = ['wikis']
 const favoritesKey = ['favorites']
@@ -210,10 +211,20 @@ export function useSharing(wikiId: string): UseQueryResult<Sharing> {
 }
 
 /**
+ * After a change of the wiki's members, they are read again, with the wiki
+ * and the role it gives the person, as Twake Tasks' useBoardChange reads the
+ * board again: refused or not, since a refusal may come from a list behind
+ * the wiki.
+ */
+const reloadSharing = (queryClient: QueryClient, wikiId: string) =>
+  Promise.all([
+    queryClient.invalidateQueries({ queryKey: wikiKey(wikiId), exact: true }),
+    queryClient.invalidateQueries({ queryKey: sharingKey(wikiId) })
+  ])
+
+/**
  * Changes the wiki's members or invitations, each change made through the
- * API it is given. They are read again after it, with the wiki and the role
- * it gives the person, as Twake Tasks' useBoardChange reads the board again:
- * refused or not, since a refusal may come from a list behind the wiki.
+ * API it is given.
  */
 export function useSharingChange(
   wikiId: string
@@ -222,14 +233,36 @@ export function useSharingChange(
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (change: (api: PagesApi) => Promise<void>) => change(api),
-    onSettled: () =>
-      Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: wikiKey(wikiId),
-          exact: true
-        }),
-        queryClient.invalidateQueries({ queryKey: sharingKey(wikiId) })
-      ])
+    onSettled: () => reloadSharing(queryClient, wikiId)
+  })
+}
+
+/**
+ * Takes the member out of the wiki. The person who takes themself out goes
+ * where `onLeft` leads, with their wikis listing it no more, as after
+ * deleting it: from here, not from the callbacks given to mutate, since the
+ * stream may tell the wiki is out of reach before the answer does, and the
+ * screen it closes would drop them. Unlike Twake Tasks, which leaves the
+ * person on the board they left.
+ */
+export function useRemoveMember(
+  wikiId: string,
+  onLeft: () => void
+): UseMutationResult<void, Error, Member> {
+  const api = usePagesApi()
+  const queryClient = useQueryClient()
+  const { user } = useSession()
+  return useMutation({
+    mutationFn: (member: Member) => api.removeMember(wikiId, member.id),
+    onSuccess: (_answer, member) => {
+      if (member.email.toLowerCase() !== user.email?.toLowerCase()) return
+      queryClient.setQueryData<WikiSummary[]>(wikisKey, shown =>
+        shown?.filter(wiki => wiki.id !== wikiId)
+      )
+      onLeft()
+      return queryClient.invalidateQueries({ queryKey: wikisKey, exact: true })
+    },
+    onSettled: () => reloadSharing(queryClient, wikiId)
   })
 }
 

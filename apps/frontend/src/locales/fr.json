@@ -91,6 +91,7 @@
     "invited": "%{email} a été invité.",
     "people": "Personnes ayant accès",
     "invitation": "Invitation",
+    "remove": "Retirer",
     "close": "Fermer"
   },
   "tree": {

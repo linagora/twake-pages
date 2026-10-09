@@ -6,6 +6,7 @@ import {
   Dialog,
   DialogContent,
   DialogTitle,
+  Divider,
   DropdownButton,
   IconButton,
   List,
@@ -17,20 +18,28 @@ import {
   Typography
 } from '@linagora/twake-mui'
 import { useId, useState, type ReactElement } from 'react'
+import { useNavigate } from 'react-router'
 
 import { InviteRow, PersonRow } from '@/ds/PeopleList'
+import { displayName } from '@/domain/person'
 import { ROLES, type Role, type Wiki } from '@/domain/wiki'
 import { useI18n } from '@/ui/i18n/useI18n'
 import { PersonAvatar } from '@/ui/people/PersonAvatar'
-import { useSharing, useSharingChange } from '@/ui/wiki/queries'
+import {
+  useRemoveMember,
+  useSharing,
+  useSharingChange
+} from '@/ui/wiki/queries'
 import { useWikiName } from '@/ui/wiki/useWikiName'
 
 function RoleMenu({
   value,
-  onChange
+  onChange,
+  action
 }: {
   value: Role
   onChange?: (role: Role) => void
+  action?: { label: string; run: () => void }
 }): ReactElement {
   const { t } = useI18n()
   const [anchor, setAnchor] = useState<HTMLElement | null>(null)
@@ -75,6 +84,17 @@ function RoleMenu({
               <ListItemText>{t(`sharing.roles.${role}`)}</ListItemText>
             </MenuItem>
           ))}
+        {onChange && action && <Divider />}
+        {action && (
+          <MenuItem
+            onClick={() => {
+              close()
+              action.run()
+            }}
+          >
+            <ListItemText className="u-error">{action.label}</ListItemText>
+          </MenuItem>
+        )}
       </Menu>
     </>
   )
@@ -95,7 +115,11 @@ export function ShareWikiDialog({
   const [email, setEmail] = useState('')
   const [role, setRole] = useState<Role>('viewer')
   const [invited, setInvited] = useState<string | null>(null)
+  const navigate = useNavigate()
   const change = useSharingChange(wiki.id)
+  const remove = useRemoveMember(wiki.id, () => {
+    void navigate('/')
+  })
 
   return (
     <Dialog open onClose={onClose} aria-labelledby={titleId}>
@@ -161,6 +185,37 @@ export function ShareWikiDialog({
           {t('sharing.people')}
         </Typography>
         <List dense>
+          {sharing.data?.members.map(member => (
+            <PersonRow
+              key={member.id}
+              label={displayName(member)}
+              detail={
+                displayName(member) === member.email ? undefined : member.email
+              }
+              avatar={
+                <PersonAvatar
+                  email={member.email}
+                  name={member.name}
+                  size={32}
+                />
+              }
+            >
+              <RoleMenu
+                value={member.role}
+                onChange={next => {
+                  change.mutate(api =>
+                    api.setMemberRole(wiki.id, member.id, next)
+                  )
+                }}
+                action={{
+                  label: t('sharing.remove'),
+                  run: () => {
+                    remove.mutate(member)
+                  }
+                }}
+              />
+            </PersonRow>
+          ))}
           {sharing.data?.invites.map(invitation => (
             <PersonRow
               key={invitation.id}
