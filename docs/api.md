@@ -216,6 +216,8 @@ A move takes the page with its child pages, which keep their places under it. It
 
 Refusals come in this order: deleting a page `not_found`, `forbidden`, `in_trash`, `home_page`; restoring it `not_found`, `forbidden`, `not_in_trash`.
 
+A branch deleted before its parent stays in the trash when the parent's branch is purged, to come back at the top.
+
 ## Labels
 
 | Method and path | Answer | Who |

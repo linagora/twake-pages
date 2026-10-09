@@ -13,6 +13,7 @@ import {
   startPublisher
 } from './infra/rabbitmq.ts'
 import { connectIdentityProvider } from './modules/auth/index.ts'
+import { PURGE_PAGE_JOB, purgePage } from './modules/pages/trash.ts'
 import { settingsRoutes } from './modules/settings/events.ts'
 import { SETTINGS_CHANNEL } from './modules/settings/routes.ts'
 import { knowsAnySpace, spaceRoutes } from './modules/spaces/events.ts'
@@ -102,7 +103,8 @@ const stopScheduler = createScheduler({
   logger,
   handlers: {
     [PURGE_WIKI_JOB]: purgeWiki,
-    [INVITE_EMAIL_JOB]: emailInvite({ appUrl: config.APP_URL, send })
+    [INVITE_EMAIL_JOB]: emailInvite({ appUrl: config.APP_URL, send }),
+    [PURGE_PAGE_JOB]: purgePage
   }
 }).start(5000)
 const stopRelay = createRelay({
