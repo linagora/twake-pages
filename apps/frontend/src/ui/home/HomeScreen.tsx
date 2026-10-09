@@ -16,6 +16,7 @@ import {
   useRecent,
   useWikis
 } from '@/ui/wiki/queries'
+import { usePageEntry, type PageEntry } from '@/ui/wiki/usePageEntry'
 import { useWikiName } from '@/ui/wiki/useWikiName'
 import { WikiDialog } from '@/ui/wiki/WikiDialog'
 
@@ -96,11 +97,10 @@ export function HomeScreen(): ReactElement {
  */
 function PageShelves(): ReactElement | null {
   const { t } = useI18n()
-  const wikis = useWikis()
+  const entryOf = usePageEntry()
   const favorites = useFavorites()
   const recent = useRecent()
-  if (wikis.isPending) return null
-  const homePageIds = new Set(wikis.data?.map(wiki => wiki.homePageId))
+  if (!entryOf) return null
   const shelves = [
     {
       name: t('home.favorites'),
@@ -127,7 +127,7 @@ function PageShelves(): ReactElement | null {
               key={name}
               name={name}
               pages={list.data ?? []}
-              homePageIds={homePageIds}
+              entryOf={entryOf}
             />
           )
         )}
@@ -139,38 +139,27 @@ function PageShelves(): ReactElement | null {
 function PageShelf({
   name,
   pages,
-  homePageIds
+  entryOf
 }: {
   name: string
   pages: PageRef[]
-  homePageIds: Set<string>
+  entryOf: (page: PageRef) => PageEntry
 }): ReactElement {
-  const { t } = useI18n()
-  const wikiName = useWikiName()
   return (
     <TileShelf name={name}>
       {pages.map(page => {
-        // A wiki opens on its home page, which shows under the wiki's name.
-        const home = homePageIds.has(page.id)
-        const title = home ? wikiName(page.wiki) : page.title
+        const { title, path, place } = entryOf(page)
         return (
           <CardTile
             key={page.id}
             label={title}
             badge={(Array.from(title)[0] ?? '').toUpperCase()}
             title={
-              <Link
-                component={RouterLink}
-                to={
-                  home
-                    ? `/wikis/${page.wiki.id}`
-                    : `/wikis/${page.wiki.id}/pages/${page.id}`
-                }
-              >
+              <Link component={RouterLink} to={path}>
                 {title}
               </Link>
             }
-            meta={home ? t('wiki.home') : wikiName(page.wiki)}
+            meta={place}
           />
         )
       })}
