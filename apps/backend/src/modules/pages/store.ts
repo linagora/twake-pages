@@ -281,6 +281,86 @@ export async function addPage(
   return added
 }
 
+/**
+ * The live page the person publishes to, behind its wiki's row lock:
+ * `not_found` out of their reach, `forbidden` to a viewer, `in_trash` in the
+ * trash.
+ */
+async function pageToPublish(tx: Tx, identity: Identity, pageId: string) {
+  const [found] = await tx
+    .select({ wikiId: pages.wikiId })
+    .from(pages)
+    .where(eq(pages.id, pageId))
+  if (!found) throw new Refused('not_found')
+  await checkRole(tx, identity, found.wikiId, 'editor')
+  await bumpWiki(tx, found.wikiId)
+  // Read after the lock, which every change to the wiki's pages takes,
+  // as Twake Tasks reads a task's description version after its board's.
+  const [page] = await tx
+    .select({
+      id: pages.id,
+      wikiId: pages.wikiId,
+      organizationId: pages.organizationId,
+      kind: pages.kind,
+      version: pages.version,
+      deletedAt: pages.deletedAt
+    })
+    .from(pages)
+    .where(eq(pages.id, pageId))
+  if (!page) throw new Refused('not_found')
+  if (page.deletedAt) throw new Refused('in_trash')
+  return page
+}
+
+/**
+ * Publishes the page's next version, by the person, who then follows the
+ * page, and answers the page as they see it.
+ */
+async function publishVersion(
+  tx: Tx,
+  identity: Identity,
+  page: Awaited<ReturnType<typeof pageToPublish>>,
+  version: { title: string; content: Blocks; text: string }
+) {
+  const number = page.version + 1
+  await writeVersion(tx, identity, {
+    pageId: page.id,
+    organizationId: page.organizationId,
+    number,
+    ...version
+  })
+  await tx
+    .update(pages)
+    .set({
+      ...version,
+      version: number,
+      updatedBy: identity.userId,
+      updatedAt: sql`now()`
+    })
+    .where(eq(pages.id, page.id))
+  await tx
+    .insert(pageFollowers)
+    .values({
+      pageId: page.id,
+      organizationId: page.organizationId,
+      userId: identity.userId
+    })
+    .onConflictDoNothing()
+  await queuePageEvent(
+    tx,
+    identity,
+    'published',
+    {
+      id: page.id,
+      wikiId: page.wikiId,
+      organizationId: page.organizationId,
+      title: version.title
+    },
+    { version: number, preview: previewOf(version.text) }
+  )
+  return changedPage(tx, identity, page.id)
+}
+
 /** Where a page goes: under its parent, or at the top, between neighbours. */
 export interface PageMove {
   parentId: string | null
@@ -349,26 +429,7 @@ export function createPageStore(db: Db, gristOrigins: readonly string[]) {
       return writeOrRefuse(db, identity, async tx => {
         // Before the wiki's row lock, as for a new page.
         const blocks = checkBlocks(input.content, gristOrigins)
-        const [found] = await tx
-          .select({ wikiId: pages.wikiId })
-          .from(pages)
-          .where(eq(pages.id, pageId))
-        if (!found) throw new Refused('not_found')
-        await checkRole(tx, identity, found.wikiId, 'editor')
-        await bumpWiki(tx, found.wikiId)
-        // Read after the lock, which every change to the wiki's pages takes,
-        // as Twake Tasks reads a task's description version after its board's.
-        const [page] = await tx
-          .select({
-            organizationId: pages.organizationId,
-            kind: pages.kind,
-            version: pages.version,
-            deletedAt: pages.deletedAt
-          })
-          .from(pages)
-          .where(eq(pages.id, pageId))
-        if (!page) throw new Refused('not_found')
-        if (page.deletedAt) throw new Refused('in_trash')
+        const page = await pageToPublish(tx, identity, pageId)
         // Blocks fit a page of blocks only: a database page's version takes
         // its Grist address instead (api.md).
         if (page.kind !== 'document') throw new Refused('invalid_request')
@@ -377,45 +438,10 @@ export function createPageStore(db: Db, gristOrigins: readonly string[]) {
             current: await summaryOf(tx, pageId, page.version)
           })
         }
-        const number = page.version + 1
-        await writeVersion(tx, identity, {
-          pageId,
-          organizationId: page.organizationId,
-          number,
+        return publishVersion(tx, identity, page, {
           title: input.title,
           ...blocks
         })
-        await tx
-          .update(pages)
-          .set({
-            title: input.title,
-            ...blocks,
-            version: number,
-            updatedBy: identity.userId,
-            updatedAt: sql`now()`
-          })
-          .where(eq(pages.id, pageId))
-        await tx
-          .insert(pageFollowers)
-          .values({
-            pageId,
-            organizationId: page.organizationId,
-            userId: identity.userId
-          })
-          .onConflictDoNothing()
-        await queuePageEvent(
-          tx,
-          identity,
-          'published',
-          {
-            id: pageId,
-            wikiId: found.wikiId,
-            organizationId: page.organizationId,
-            title: input.title
-          },
-          { version: number, preview: previewOf(blocks.text) }
-        )
-        return changedPage(tx, identity, pageId)
       })
     }
   }
