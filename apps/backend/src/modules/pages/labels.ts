@@ -22,6 +22,8 @@ import { labelsOf } from './store.ts'
 // At most 50 names, as Twake Tasks takes at most 50 label ids.
 const labelling = z.object({ names: z.array(z.string()).max(50) })
 
+const labelParams = wikiParams.extend({ name: z.string() })
+
 // The contract's letters and digits, in every alphabet: a letter keeps the
 // marks written with it, such as the vowel signs of Hindi, an accent typed
 // apart or the dot of "İ" once lowercased, and a digit is a decimal one,
@@ -168,6 +170,32 @@ function createLabelStore(db: Db) {
           .groupBy(labels.name)
           .orderBy(asc(labels.name))
       })
+    },
+
+    /**
+     * The wiki's live pages that carry the label, by title, or null for a
+     * wiki out of the person's reach.
+     */
+    labelledPages(identity: Identity, wikiId: string, name: string) {
+      return inTenant(db, identity, async tx => {
+        if (!(await roleOn(tx, identity, wikiId))) return null
+        // Read as labelling reads it, so that "HowTo" finds the pages of
+        // "howto". A text that makes no label name is never sent, as it may
+        // hold a NUL character, which PostgreSQL refuses in a query.
+        const label = labelNameOf(name)
+        if (label === null) return []
+        return tx
+          .select({
+            id: pages.id,
+            title: pages.title,
+            updatedAt: pages.updatedAt
+          })
+          .from(labels)
+          .innerJoin(pageLabels, eq(pageLabels.labelId, labels.id))
+          .innerJoin(pages, toItsLivePage)
+          .where(and(eq(labels.wikiId, wikiId), eq(labels.name, label)))
+          .orderBy(asc(pages.title), asc(pages.id))
+      })
     }
   }
 }
@@ -210,6 +238,23 @@ export function registerLabels(
       if (!params.success) return refuse(reply, 'not_found')
       const listed = await store.wikiLabels(identity, params.data.wikiId)
       return listed ? { labels: listed } : refuse(reply, 'not_found')
+    }
+  )
+
+  app.get(
+    '/wikis/:wikiId/labels/:name/pages',
+    { preHandler: deps.requireIdentity },
+    async (request, reply) => {
+      const identity = request.identity
+      if (!identity) return reply.code(401).send()
+      const params = labelParams.safeParse(request.params)
+      if (!params.success) return refuse(reply, 'not_found')
+      const listed = await store.labelledPages(
+        identity,
+        params.data.wikiId,
+        params.data.name
+      )
+      return listed ? { pages: listed } : refuse(reply, 'not_found')
     }
   )
 }

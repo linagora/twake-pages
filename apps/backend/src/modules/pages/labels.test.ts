@@ -6,6 +6,7 @@ import {
   aPageIn,
   aUser,
   aWikiOf,
+  createPage,
   joinWiki,
   malformedOrUnknownIds,
   pageOf,
@@ -49,6 +50,19 @@ const listedLabels = async (user: TestUser, wikiId: string) =>
   (await api.as(user).get(`/wikis/${wikiId}/labels`)).json<{
     labels: { name: string; pages: number }[]
   }>().labels
+
+/** The titles of the wiki's pages with the label, as the person reads them. */
+const titlesLabelled = async (user: TestUser, wikiId: string, name: string) =>
+  (await api.as(user).get(`/wikis/${wikiId}/labels/${name}/pages`))
+    .json<{ pages: { title: string }[] }>()
+    .pages.map(page => page.title)
+
+/** A page made through the API by the person, as it answers it. */
+const pageMadeBy = async (user: TestUser, wikiId: string, title: string) =>
+  (await createPage(api, user, wikiId, { title })).json<{
+    id: string
+    updatedAt: string
+  }>()
 
 /** A page labelled through the API, then put in the trash, by its id. */
 const aLabelledPageInTheTrash = async (
@@ -395,6 +409,150 @@ describe('GET /wikis/:wikiId/labels', () => {
     'answers not_found for a wiki with %s',
     async (_case, wikiId) => {
       const response = await api.as(aUser()).get(`/wikis/${wikiId}/labels`)
+
+      expect(response.statusCode).toBe(404)
+      expect(response.json()).toEqual({ error: 'not_found' })
+    }
+  )
+})
+
+describe('GET /wikis/:wikiId/labels/:name/pages', () => {
+  it.each(someoneOfEachTenant)(
+    'lists the live pages with the label by title, %s',
+    async (_case, someone) => {
+      const alice = someone()
+      const wiki = await aWikiOf(api, alice)
+      const onboarding = await pageMadeBy(alice, wiki.id, 'Onboarding')
+      const holidays = await pageMadeBy(alice, wiki.id, 'Holidays')
+      await aPage(api, alice, wiki.id, { title: 'Budget' })
+      await setLabels(api, alice, onboarding.id, ['howto'])
+      await setLabels(api, alice, holidays.id, ['howto', 'hr'])
+
+      const response = await api
+        .as(alice)
+        .get(`/wikis/${wiki.id}/labels/howto/pages`)
+
+      expect(response.statusCode).toBe(200)
+      expect(response.json()).toEqual({
+        pages: [
+          {
+            id: holidays.id,
+            title: 'Holidays',
+            updatedAt: holidays.updatedAt
+          },
+          {
+            id: onboarding.id,
+            title: 'Onboarding',
+            updatedAt: onboarding.updatedAt
+          }
+        ]
+      })
+    }
+  )
+
+  it('leaves out the pages in the trash, and answers none for a label only they carry', async () => {
+    const alice = aUser()
+    const wiki = await aWikiOf(api, alice)
+    await aLabelledPageInTheTrash(alice, wiki.id, ['howto', 'old'])
+    const onboarding = await aPage(api, alice, wiki.id, { title: 'Onboarding' })
+
+    await setLabels(api, alice, onboarding, ['howto'])
+
+    expect({
+      howto: await titlesLabelled(alice, wiki.id, 'howto'),
+      old: await titlesLabelled(alice, wiki.id, 'old')
+    }).toEqual({ howto: ['Onboarding'], old: [] })
+  })
+
+  it('lists none of the pages of another wiki', async () => {
+    const alice = aUser()
+    const handbook = await aWikiOf(api, alice, 'Handbook')
+    const other = await aWikiOf(api, alice, 'Other')
+    await setLabels(api, alice, handbook.homePageId, ['howto'])
+    await setLabels(api, alice, other.homePageId, ['howto'])
+
+    expect(await titlesLabelled(alice, handbook.id, 'howto')).toEqual([
+      'Handbook'
+    ])
+  })
+
+  it.each([
+    ['in capitals', 'howto', 'HowTo'],
+    ['with blanks around it', 'howto', '%20howto%20'],
+    ['with an "é" written in two characters', '\u00e9quipe', 'e%CC%81quipe']
+  ])('finds the pages of a label named %s', async (_case, label, name) => {
+    const alice = aUser()
+    const wiki = await aWikiOf(api, alice)
+    await setLabels(api, alice, wiki.homePageId, [label])
+
+    expect(await titlesLabelled(alice, wiki.id, name)).toEqual(['Handbook'])
+  })
+
+  it.each([
+    ['a name no page carries', 'unknown'],
+    ['a name no label can have', 'how%00to']
+  ])('answers no pages for %s', async (_case, name) => {
+    const alice = aUser()
+    const wiki = await aWikiOf(api, alice)
+    await setLabels(api, alice, wiki.homePageId, ['howto'])
+
+    const response = await api
+      .as(alice)
+      .get(`/wikis/${wiki.id}/labels/${name}/pages`)
+
+    expect(response.statusCode).toBe(200)
+    expect(response.json()).toEqual({ pages: [] })
+  })
+
+  it('lists the pages to a viewer of the wiki', async () => {
+    const alice = aUser()
+    const bob = aUser({ organizationId: alice.organizationId })
+    const wiki = await aWikiOf(api, alice)
+    await joinWiki(db, alice, wiki.id, bob, 'viewer')
+    await setLabels(api, alice, wiki.homePageId, ['howto'])
+
+    expect(await titlesLabelled(bob, wiki.id, 'howto')).toEqual(['Handbook'])
+  })
+
+  it('answers not_found to someone who is no member', async () => {
+    const alice = aUser()
+    const outsider = aUser({ organizationId: alice.organizationId })
+    const wiki = await aWikiOf(api, alice)
+    await setLabels(api, alice, wiki.homePageId, ['howto'])
+
+    const response = await api
+      .as(outsider)
+      .get(`/wikis/${wiki.id}/labels/howto/pages`)
+
+    expect(response.statusCode).toBe(404)
+    expect(response.json()).toEqual({ error: 'not_found' })
+  })
+
+  it.each(waysOutOfAWiki)(
+    'answers not_found for %s',
+    async (_case, someone, takeOut) => {
+      const alice = someone()
+      const carol = aUser({ organizationId: alice.organizationId })
+      const wiki = await aWikiOf(api, carol)
+      await joinWiki(db, carol, wiki.id, alice, 'viewer')
+      await setLabels(api, carol, wiki.homePageId, ['howto'])
+
+      await takeOut(api, db, carol, wiki.id, alice)
+      const response = await api
+        .as(alice)
+        .get(`/wikis/${wiki.id}/labels/howto/pages`)
+
+      expect(response.statusCode).toBe(404)
+      expect(response.json()).toEqual({ error: 'not_found' })
+    }
+  )
+
+  it.each(malformedOrUnknownIds)(
+    'answers not_found for a wiki with %s',
+    async (_case, wikiId) => {
+      const response = await api
+        .as(aUser())
+        .get(`/wikis/${wikiId}/labels/howto/pages`)
 
       expect(response.statusCode).toBe(404)
       expect(response.json()).toEqual({ error: 'not_found' })
