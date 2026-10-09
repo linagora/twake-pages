@@ -64,6 +64,21 @@ describe('a page', () => {
     expect(await screen.findByText('Version 2')).toBeVisible()
   })
 
+  it.each(WIKI_BASES)(
+    'leads from %s/<wiki>/pages/<page> to its history, by the number of its version',
+    async base => {
+      const { pagesApi, wiki, checklist } = handbook()
+      renderRoute(`${base}/${wiki.id}/pages/${checklist.id}`, { pagesApi })
+
+      expect(
+        await screen.findByRole('link', { name: 'Version 1' })
+      ).toHaveAttribute(
+        'href',
+        `${base}/${wiki.id}/pages/${checklist.id}/history`
+      )
+    }
+  )
+
   it('shows its blocks, read only', async () => {
     openChecklistOf([
       { type: 'heading', content: 'Before the release' },

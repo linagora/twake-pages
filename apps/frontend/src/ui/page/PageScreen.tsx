@@ -14,6 +14,7 @@ import { PageVersion } from '@/ui/page/PageVersion'
 import { useWikiPage } from '@/ui/page/useWikiPage'
 import { UnavailableScreen } from '@/ui/shell/Problems'
 import { useDocumentTitle } from '@/ui/useDocumentTitle'
+import { historyInItsWiki } from '@/ui/wiki/pathInItsWiki'
 import { useWiki } from '@/ui/wiki/queries'
 import { useWikiName } from '@/ui/wiki/useWikiName'
 
@@ -43,7 +44,11 @@ export function PageScreen(): ReactElement {
             <Typography variant="h3" component="h1">
               {page.data.title}
             </Typography>
-            <PageVersion wikiId={wikiId} pageId={pageId} />
+            <PageVersion
+              wikiId={wikiId}
+              pageId={pageId}
+              to={historyInItsWiki(page.data)}
+            />
             <PageLabels page={page.data} />
           </>
         }

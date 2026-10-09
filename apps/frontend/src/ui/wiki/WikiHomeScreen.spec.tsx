@@ -101,6 +101,22 @@ describe('WikiHomeScreen', () => {
 
     expect(await screen.findByText('Version 2')).toBeVisible()
   })
+
+  it.each(WIKI_BASES)(
+    'leads from %s/<wiki> to the history of its home page, by the number of its version',
+    async base => {
+      const pagesApi = fakePagesApi()
+      const wiki = pagesApi.withWiki({ name: 'Handbook' })
+      renderRoute(`${base}/${wiki.id}`, { pagesApi })
+
+      expect(
+        await screen.findByRole('link', { name: 'Version 1' })
+      ).toHaveAttribute(
+        'href',
+        `${base}/${wiki.id}/pages/${wiki.homePageId}/history`
+      )
+    }
+  )
 })
 
 describe('the admin of a wiki', () => {

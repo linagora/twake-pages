@@ -203,6 +203,14 @@
       "other": "%{type} block"
     }
   },
+  "history": {
+    "title": "History of %{title}",
+    "back": "Back to the page",
+    "versions": "Versions",
+    "loadFailed": "The history could not be loaded.",
+    "published": "Published by %{author} on %{time}",
+    "restoredFrom": "Restored from version %{number}"
+  },
   "labels": {
     "title": "Pages labelled %{name}",
     "ofPage": "Page labels",

@@ -203,6 +203,14 @@
       "other": "Bloc %{type}"
     }
   },
+  "history": {
+    "title": "Historique de la page %{title}",
+    "back": "Retour à la page",
+    "versions": "Versions",
+    "loadFailed": "L'historique n'a pas pu être chargé.",
+    "published": "Publiée par %{author} le %{time}",
+    "restoredFrom": "Restaurée depuis la version %{number}"
+  },
   "labels": {
     "title": "Pages avec l'étiquette %{name}",
     "ofPage": "Étiquettes de la page",

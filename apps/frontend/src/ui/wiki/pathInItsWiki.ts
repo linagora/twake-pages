@@ -5,3 +5,11 @@
  */
 export const pathInItsWiki = (page: { id: string }, home: boolean): string =>
   home ? '..' : `../pages/${page.id}`
+
+/**
+ * The path to a page's history from a screen of its wiki, as pathInItsWiki.
+ * The wiki's home screen sits at the wiki's own address, which `..` would
+ * leave: it leads below that address instead.
+ */
+export const historyInItsWiki = (page: { id: string }): string =>
+  `../pages/${page.id}/history`

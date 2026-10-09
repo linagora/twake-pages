@@ -19,7 +19,7 @@ import type {
   Tree,
   WikiChanges
 } from '@/application/pages'
-import type { Page, PageRef } from '@/domain/page'
+import type { Page, PageRef, VersionSummary } from '@/domain/page'
 import type { SearchResult } from '@/domain/search'
 import type { Wiki, WikiSummary } from '@/domain/wiki'
 import { usePagesApi } from '@/ui/PagesApiProvider'
@@ -39,6 +39,11 @@ const pageKey = (wikiId: string, pageId: string) =>
 const wikiSearchKey = (wikiId: string, text: string) =>
   [...wikiKey(wikiId), 'search', text] as const
 const labelsKey = (wikiId: string) => [...wikiKey(wikiId), 'labels'] as const
+// Unlike Twake Tasks, which keeps a task's history below the task, a page's
+// history is not below the pages' key: useLiveWiki takes every query there
+// for a read page, with its version of the wiki.
+const historyKey = (wikiId: string, pageId: string) =>
+  [...wikiKey(wikiId), 'history', pageId] as const
 
 /**
  * A page carries no version of its wiki, so it keeps the one known as its
@@ -355,5 +360,17 @@ export function useSetLabels(
         queryKey: labelsKey(page.wikiId)
       })
     }
+  })
+}
+
+/** The versions of a page, newest first. */
+export function useHistory(
+  wikiId: string,
+  pageId: string
+): UseQueryResult<VersionSummary[]> {
+  const api = usePagesApi()
+  return useQuery({
+    queryKey: historyKey(wikiId, pageId),
+    queryFn: () => api.listVersions(pageId)
   })
 }

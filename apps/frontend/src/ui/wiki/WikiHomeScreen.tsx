@@ -42,7 +42,11 @@ export function WikiHomeScreen(): ReactElement {
                     {wiki.data.description}
                   </Typography>
                 )}
-                <PageVersion wikiId={wikiId} pageId={wiki.data.homePageId} />
+                <PageVersion
+                  wikiId={wikiId}
+                  pageId={wiki.data.homePageId}
+                  to={`pages/${wiki.data.homePageId}/history`}
+                />
               </>
             }
             actions={
