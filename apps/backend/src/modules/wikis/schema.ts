@@ -16,6 +16,7 @@ import {
 import {
   currentUser,
   id,
+  leavingUser,
   organizationId,
   tenant,
   tenantPolicy,
@@ -148,6 +149,13 @@ export const inviteEmails = pgTable.withRLS(
       columns: [table.tenant, table.wikiId],
       foreignColumns: [wikis.tenant, wikis.id]
     }),
-    tenantPolicy(table.organizationId, visibleWiki(table.wikiId))
+    // In USING, the rows app_forget_user deletes for a deleted account: those
+    // it sent, or that hold one of its emails, which in B2C may be of wikis it
+    // left or never joined (see its migration).
+    tenantPolicy(
+      table.organizationId,
+      sql`${visibleWiki(table.wikiId)} or ${table.invitedBy} = ${leavingUser} or ${table.email} in (select lower(${wikiMembers.email}) from ${wikiMembers} where ${wikiMembers.userId} = ${leavingUser})`,
+      visibleWiki(table.wikiId)
+    )
   ]
 )

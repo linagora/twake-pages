@@ -37,7 +37,7 @@ An invite's email has the domain of the person who made it. Twake Workplace give
 
 ### invite_emails
 
-As in Twake Tasks, with `wiki_id` for `project_id`: `id, wiki_id (cascade), org_id, email, invited_by, sent_at, tenant`; indexes `(wiki_id, email, sent_at)` and `(invited_by, sent_at)`; tenant policy on the wiki. A row per invitation email scheduled, which limits them to one a day per address and wiki, and 20 an hour per person inviting; an invitation over the limits is recorded without an email. The next invitation in the tenant deletes the rows older than a day that row level security shows it, and a deleted account loses the rows it sent or received, in B2C those of the wikis it still sees.
+As in Twake Tasks, with `wiki_id` for `project_id`: `id, wiki_id (cascade), org_id, email, invited_by, sent_at, tenant`; indexes `(wiki_id, email, sent_at)` and `(invited_by, sent_at)`; tenant policy on the wiki. A row per invitation email scheduled, which limits them to one a day per address and wiki, and 20 an hour per person inviting; an invitation over the limits is recorded without an email. The next invitation in the tenant deletes the rows older than a day that row level security shows it. A deleted account loses the rows it sent, or that hold an email of its memberships, through `app_forget_user(person)`: those of the B2C wikis it left or never joined too, which the tenant policy shows in `USING` only under `app.leaving_user`. Unlike Twake Tasks, which deletes them as the tenant, and so keeps those.
 
 ### pages
 
@@ -111,7 +111,7 @@ As in Twake Tasks, about pages: `id, page_id (cascade), wiki_id, org_id, user_id
 
 A member who leaves a wiki, removed by its admin or its space, or by themself, loses their favorites and visits of its pages in the same transaction: `app_leave_wiki(wiki, person)` deletes them under `app.leaving_user`, which the `own` policy honors in `USING` only, before the membership goes. Every way out of a wiki goes through `takeOutOfWiki()`, which calls it, but the deletion of an account, which forgets the person's favorites and visits of every wiki at once.
 
-Their follows and notifications of the wiki stay, out of their sight in B2C until they are a member again. A deleted account loses them with the rest, through `app_forget_user(person)` rather than `takeOutOfWiki()`: it deletes the account's favorites, visits, follows and notifications under the same flag, which the B2C scope of the `page_followers` and `notifications` tenant policies honors in `USING` only.
+Their follows and notifications of the wiki stay, out of their sight in B2C until they are a member again. A deleted account loses them with the rest, through `app_forget_user(person)` rather than `takeOutOfWiki()`: it deletes the account's favorites, visits, follows, notifications and invitation emails under the same flag, which the B2C scope of the `page_followers`, `notifications` and `invite_emails` tenant policies honors in `USING` only.
 
 ### Platform tables
 

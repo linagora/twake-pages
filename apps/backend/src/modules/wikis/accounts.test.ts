@@ -486,6 +486,45 @@ describe.each(deletions)(
       expect(await invitationEmailsOf(admin, wiki.id)).toEqual([other])
     })
 
+    // In B2C, those of a wiki it is no member of are out of its sight.
+    it('loses the invitation emails to it of a wiki it never joined', async () => {
+      const gone = makeUser()
+      const admin = aPeerOf(gone)
+      // Signed in, so Pages knows its email, before the invitation it never
+      // claims.
+      await wikisOf(api, gone)
+      const wiki = await aWiki(admin, 'Roadmap', [])
+      const other = anEmail('other')
+      await invite(api, admin, wiki.id, gone.email, 'viewer')
+      await invite(api, admin, wiki.id, other, 'viewer')
+      expect(await invitationEmailsOf(admin, wiki.id)).toEqual([
+        gone.email,
+        other
+      ])
+
+      await deliver(routingKey, body(gone))
+
+      expect(await invitationEmailsOf(admin, wiki.id)).toEqual([other])
+    })
+
+    it('loses the invitation emails it sent from a wiki it left', async () => {
+      const gone = makeUser()
+      const admin = aPeerOf(gone)
+      // Signed in, so a deletion by email finds it once out of the wiki.
+      await wikisOf(api, gone)
+      const wiki = await aWiki(admin, 'Roadmap', [[gone, 'admin']])
+      const third = anEmail('third')
+      const other = anEmail('other')
+      await invite(api, gone, wiki.id, third, 'viewer')
+      await invite(api, admin, wiki.id, other, 'viewer')
+      await removeMember(api, gone, wiki.id, gone.userId)
+      expect(await invitationEmailsOf(admin, wiki.id)).toEqual([third, other])
+
+      await deliver(routingKey, body(gone))
+
+      expect(await invitationEmailsOf(admin, wiki.id)).toEqual([other])
+    })
+
     it('loses its Twake Workplace settings', async () => {
       const gone = makeUser()
       await wikisOf(api, gone)
