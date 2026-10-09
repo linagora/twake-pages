@@ -15,7 +15,9 @@ const SSO = 'https://oidc:8543'
 export async function signIn(page: Page, person: Person, path = '/') {
   await page.goto(path)
   await page.getByRole('button', { name: `Sign in as ${person}` }).click()
-  await expect(page.getByRole('navigation')).toBeVisible()
+  // The first: at a wiki's address, the wiki's navigation shows beside the
+  // app's.
+  await expect(page.getByRole('navigation').first()).toBeVisible()
 }
 
 /** A browser of its own, so each person has their own SSO session. */
