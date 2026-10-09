@@ -562,6 +562,16 @@ export const OFF_GRIST_ORIGINS: [string, string][] = [
   ['at no address at all', 'Tasks']
 ]
 
+/**
+ * Grist addresses no body holds, which creating a database page and
+ * publishing its version answer invalid_request for, as for a title.
+ */
+export const MALFORMED_GRIST_URLS: [string, unknown][] = [
+  ['that is no text', 12],
+  ['with a NUL character', `${GRIST_ORIGIN}/o/docs/4kq2\u0000`],
+  ['with a lone surrogate', `${GRIST_ORIGIN}/o/docs/4kq2\ud83d`]
+]
+
 export async function startApp() {
   const { sql, db } = createDb(inject('databaseUrl'))
   const settingsChanges = await listenToChanges(sql, SETTINGS_CHANNEL)

@@ -12,6 +12,7 @@ import {
   GRIST_ORIGIN,
   INVALID_PARENTS,
   joinWiki,
+  MALFORMED_GRIST_URLS,
   malformedOrUnknownIds,
   neighbourPagesIn,
   OFF_GRIST_ORIGINS,
@@ -994,16 +995,7 @@ describe('POST /wikis/:wikiId/pages', () => {
         { kind: 'database', gristUrl, content: [] }
       ],
       ['a Grist address with a document', { kind: 'document', gristUrl }],
-      ['a database page with no Grist address', { kind: 'database' }],
-      ['a Grist address that is no text', { kind: 'database', gristUrl: 12 }],
-      [
-        'a NUL character in the Grist address',
-        { kind: 'database', gristUrl: `${gristUrl}\u0000` }
-      ],
-      [
-        'a lone surrogate in the Grist address',
-        { kind: 'database', gristUrl: `${gristUrl}\ud83d` }
-      ]
+      ['a database page with no Grist address', { kind: 'database' }]
     ])(
       'answers invalid_request for %s, and leaves the wiki as it was',
       async (_case, fields) => {
@@ -1015,6 +1007,26 @@ describe('POST /wikis/:wikiId/pages', () => {
           title: 'Budget',
           parentId: null,
           ...fields
+        })
+
+        expect(response.statusCode).toBe(400)
+        expect(response.json()).toEqual({ error: 'invalid_request' })
+        expect(await versionOf(api, alice, wiki.id)).toBe(before)
+      }
+    )
+
+    it.each(MALFORMED_GRIST_URLS)(
+      'answers invalid_request for a Grist address %s, and leaves the wiki as it was',
+      async (_case, url) => {
+        const alice = aUser()
+        const wiki = await aWikiOf(api, alice)
+        const before = await versionOf(api, alice, wiki.id)
+
+        const response = await api.as(alice).post(`/wikis/${wiki.id}/pages`, {
+          title: 'Budget',
+          kind: 'database',
+          parentId: null,
+          gristUrl: url
         })
 
         expect(response.statusCode).toBe(400)
