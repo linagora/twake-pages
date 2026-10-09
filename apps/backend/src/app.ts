@@ -14,6 +14,7 @@ import { registerLabels } from './modules/pages/labels.ts'
 import { registerRecent } from './modules/pages/recent.ts'
 import { registerPages } from './modules/pages/routes.ts'
 import { registerSearch } from './modules/pages/search.ts'
+import { registerTrash } from './modules/pages/trash.ts'
 import { registerSettings } from './modules/settings/routes.ts'
 import { registerLive } from './modules/wikis/live.ts'
 import { registerWikis } from './modules/wikis/routes.ts'
@@ -47,6 +48,7 @@ export async function buildApp(deps: {
         gristOrigins: deps.gristOrigins
       })
       registerLabels(api, { db: deps.db, requireIdentity })
+      registerTrash(api, { db: deps.db, requireIdentity })
       registerFavorites(api, { db: deps.db, requireIdentity })
       registerRecent(api, { db: deps.db, requireIdentity })
       registerSearch(api, { db: deps.db, requireIdentity })

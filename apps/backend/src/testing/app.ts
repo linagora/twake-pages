@@ -215,7 +215,10 @@ async function addVersion(
   })
 }
 
-/** Puts the page in the trash on its own, as `DELETE /pages/:pageId` will. */
+/**
+ * Puts the page in the trash as `DELETE /pages/:pageId` does, but on its own,
+ * without its child pages.
+ */
 export async function putInTheTrash(tx: Tx, user: TestUser, pageId: string) {
   await tx
     .update(pages)
@@ -699,6 +702,15 @@ export function movePage(
   to: PageMove
 ) {
   return app.as(user).post(`/pages/${pageId}/move`, to)
+}
+
+/** `DELETE /pages/:pageId` by the person, which puts the page in the trash. */
+export function deletePage(
+  app: Awaited<ReturnType<typeof startApp>>,
+  user: TestUser,
+  pageId: string
+) {
+  return app.as(user).delete(`/pages/${pageId}`)
 }
 
 /** A parent the test makes in or beside the person's wiki, by its id. */

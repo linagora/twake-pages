@@ -18,7 +18,7 @@ A refusal answers `{ error: <Refusal> }` with its status:
 | `invalid_content` | 400 | blocks too large (over 2 MiB of JSON), a link that is not `http:`, `https:` or `mailto:`, an image, video, audio or file address that is not `https:`, a Grist embed outside `GRIST_ORIGINS`, or a NUL character or a lone surrogate in any key or string of the blocks |
 | `invalid_grist_url` | 400 | a database page address outside `GRIST_ORIGINS` |
 | `not_in_trash` | 409 | restoring or purging a page that is not the root of a deleted branch |
-| `in_trash` | 409 | publishing, moving, labelling or commenting a deleted page |
+| `in_trash` | 409 | publishing, moving, labelling, commenting or deleting a deleted page |
 | `last_admin` | 409 | removing or demoting the last admin of a shared wiki |
 | `not_same_organization` | 400 | inviting an email of another domain than the person's: outside the organization (B2B), or a B2B email from B2C |
 | `invalid_label` | 400 | a label name that is not 1 to 50 letters with their marks, decimal digits, `-` or `_` |
@@ -212,6 +212,8 @@ A move takes the page with its child pages, which keep their places under it. It
 | `POST /pages/:pageId/restore` | `{ parentId, position }`: under its parent if live, else at the top, last | editor |
 | `DELETE /wikis/:wikiId/trash/:pageId` | `204`, the branch is deleted for good | admin |
 | `DELETE /wikis/:wikiId/trash` | `204`, every branch is deleted for good | admin |
+
+Refusals come in this order: deleting a page `not_found`, `forbidden`, `in_trash`, `home_page`.
 
 ## Labels
 
