@@ -214,9 +214,9 @@ A move takes the page with its child pages, which keep their places under it. It
 | `DELETE /wikis/:wikiId/trash/:pageId` | `204`, the branch is deleted for good | admin |
 | `DELETE /wikis/:wikiId/trash` | `204`, every branch is deleted for good | admin |
 
-Refusals come in this order: deleting a page `not_found`, `forbidden`, `in_trash`, `home_page`; restoring it `not_found`, `forbidden`, `not_in_trash`.
+Refusals come in this order: deleting a page `not_found`, `forbidden`, `in_trash`, `home_page`; restoring it `not_found`, `forbidden`, `not_in_trash`; deleting it for good the wiki's `not_found`, `forbidden`, then the page's `not_found`, `not_in_trash`.
 
-A branch deleted before its parent stays in the trash when the parent's branch is purged, to come back at the top.
+A branch deleted before its parent stays in the trash when the parent's branch is deleted for good or purged, to come back at the top.
 
 ## Labels
 

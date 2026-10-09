@@ -11,7 +11,7 @@ import {
   type Handler
 } from '../../scheduler/scheduler.ts'
 import type { Identity, RequireIdentity } from '../auth/index.ts'
-import { roleOn } from '../wikis/access.ts'
+import { checkRole, roleOn } from '../wikis/access.ts'
 import { bumpWiki } from '../wikis/live.ts'
 import { wikis } from '../wikis/schema.ts'
 import { RETENTION_MS } from '../wikis/store.ts'
@@ -31,6 +31,8 @@ const purgePayload = z.object({
   organizationId: z.string().nullable(),
   createdBy: z.uuid()
 })
+
+const trashPageParams = wikiParams.extend({ pageId: z.uuid() })
 
 // The page and its live descendants go to the trash with one stamp, the page
 // as the root of their branch, as Twake Tasks hides a task with its shown
@@ -232,6 +234,24 @@ function createTrashStore(db: Db) {
       })
     },
 
+    /** The branch goes for good, without waiting for its purge. */
+    deleteForGood(identity: Identity, wikiId: string, pageId: string) {
+      return writeOrRefuse(db, identity, async tx => {
+        await checkRole(tx, identity, wikiId, 'admin')
+        // Dropped before the wiki's row lock is taken, as in restorePage.
+        await unschedule(tx, purgeKeyOf(pageId))
+        await bumpWiki(tx, wikiId)
+        const [page] = await tx
+          .select({ id: pages.id, trashRootId: pages.trashRootId })
+          .from(pages)
+          .where(and(eq(pages.id, pageId), eq(pages.wikiId, wikiId)))
+        if (!page) throw new Refused('not_found')
+        if (page.trashRootId !== page.id) throw new Refused('not_in_trash')
+        await purgeBranches(tx, wikiId, [page.id])
+        return null
+      })
+    },
+
     /**
      * The wiki's deleted branches, newest first, each by its root, or null
      * for a wiki out of the person's reach.
@@ -307,6 +327,21 @@ export function registerTrash(
       const result = await store.restorePage(identity, params.data.pageId)
       if (!result.ok) return refuse(reply, result.error)
       return result.value
+    }
+  )
+
+  app.delete(
+    '/wikis/:wikiId/trash/:pageId',
+    { preHandler: deps.requireIdentity },
+    async (request, reply) => {
+      const identity = request.identity
+      if (!identity) return reply.code(401).send()
+      const params = trashPageParams.safeParse(request.params)
+      if (!params.success) return refuse(reply, 'not_found')
+      const { wikiId, pageId } = params.data
+      const result = await store.deleteForGood(identity, wikiId, pageId)
+      if (!result.ok) return refuse(reply, result.error)
+      return reply.code(204).send()
     }
   )
 }
