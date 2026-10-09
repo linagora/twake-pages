@@ -1,13 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 import { publishPlatformEvent } from './platform.ts'
-import { asPerson } from './signIn.ts'
+import { asPerson, BOB } from './signIn.ts'
 import { aliceSpaceWiki, ORGANIZATION } from './space.ts'
-
-// As the mock SSO has him
-const BOB = {
-  uuid: '0b0b0000-0000-4000-8000-000000000002',
-  email: 'bob@acme.e2e.test'
-}
 
 const wikis = (page: Page) => page.getByRole('list', { name: 'Wikis' })
 

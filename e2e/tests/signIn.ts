@@ -3,6 +3,12 @@ import { revokeAtBackend } from './platform.ts'
 
 export type Person = 'alice' | 'bob'
 
+// As the mock SSO has him
+export const BOB = {
+  uuid: '0b0b0000-0000-4000-8000-000000000002',
+  email: 'bob@acme.e2e.test'
+}
+
 // As the browser reaches the mock SSO
 const SSO = 'https://oidc:8543'
 
