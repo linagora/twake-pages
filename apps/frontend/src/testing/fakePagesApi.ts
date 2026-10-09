@@ -1141,6 +1141,8 @@ function signedIn(world: World, person: Person): FakePagesApi {
     ),
     setLabels: vi.fn<PagesApi['setLabels']>((pageId, names) =>
       answer(() => {
+        // The backend checks the body before it looks for the page.
+        if (names.length > 50) throw refuse('invalid_request')
         const { page, wiki } = liveAccess(pageId)
         page.labels = [...new Set(names.map(checkLabel))].sort(byName)
         bump(wiki)

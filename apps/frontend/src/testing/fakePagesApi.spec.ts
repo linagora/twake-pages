@@ -998,6 +998,27 @@ describe('fakePagesApi', () => {
       )
     })
 
+    it('takes at most 50 names, and checks their count before the page', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki()
+      const page = api.withPage(wiki.id)
+      const names = Array.from(
+        { length: 51 },
+        (_, index) => `n${String(index)}`
+      )
+      const invalidRequest = new ApiError(400, 'invalid_request')
+
+      await expect(api.setLabels(page.id, names)).rejects.toEqual(
+        invalidRequest
+      )
+      await expect(api.setLabels('unknown', names)).rejects.toEqual(
+        invalidRequest
+      )
+      await expect(
+        api.setLabels(page.id, names.slice(1))
+      ).resolves.toHaveLength(50)
+    })
+
     it('lists the labels of a wiki and their live pages', async () => {
       const api = fakePagesApi()
       const wiki = api.withWiki()
