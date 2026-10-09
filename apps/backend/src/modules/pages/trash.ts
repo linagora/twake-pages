@@ -36,14 +36,15 @@ async function putInTrash(tx: Tx, identity: Identity, pageId: string) {
 // The root takes its new place while still in the trash, as the live pages
 // under a parent each hold their own place and a page may hold the one the
 // root left. The branch then comes out of the trash, and a branch deleted
-// before under it stays there.
+// before under it stays there. Answers how many descendants came back with
+// the root.
 async function takeOutOfTrash(
   tx: Tx,
   rootId: string,
   place: { parentId: string | null; position: string }
 ) {
   await tx.update(pages).set(place).where(eq(pages.id, rootId))
-  await tx
+  const branch = await tx
     .update(pages)
     .set({
       deletedAt: null,
@@ -53,6 +54,8 @@ async function takeOutOfTrash(
       trashRootId: null
     })
     .where(eq(pages.trashRootId, rootId))
+    .returning({ id: pages.id })
+  return branch.length - 1
 }
 
 /** The parent while it is a live page, else null for the top of the tree. */
@@ -102,7 +105,11 @@ function createTrashStore(db: Db) {
           undefined,
           undefined
         )
-        await takeOutOfTrash(tx, page.id, { parentId, position })
+        const descendants = await takeOutOfTrash(tx, page.id, {
+          parentId,
+          position
+        })
+        await queuePageEvent(tx, identity, 'restored', page, { descendants })
         return { parentId, position }
       })
     },
