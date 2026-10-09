@@ -197,7 +197,10 @@ describe('a page', () => {
     expect(
       within(main).getByRole('heading', { name: 'Before the release' })
     ).toBeVisible()
-    expect(within(main).queryByRole('textbox')).not.toBeInTheDocument()
+    // The field of a new comment, below the blocks, is the only one.
+    expect(within(main).getAllByRole('textbox')).toEqual([
+      within(main).getByRole('textbox', { name: 'Comment' })
+    ])
   })
 
   it('shows the headings of its blocks below its title', async () => {

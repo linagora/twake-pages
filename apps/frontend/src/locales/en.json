@@ -284,7 +284,12 @@
     "title": "Comments",
     "loadFailed": "The comments could not be loaded.",
     "replies": "Replies",
-    "edited": "edited"
+    "edited": "edited",
+    "comment": "Comment",
+    "placeholder": "Write a comment…",
+    "send": "Send",
+    "sendHint": "Ctrl+Enter to send",
+    "sendFailed": "The comment could not be sent."
   },
   "labels": {
     "title": "Pages labelled %{name}",

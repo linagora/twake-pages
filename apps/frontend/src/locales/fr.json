@@ -284,7 +284,12 @@
     "title": "Commentaires",
     "loadFailed": "Les commentaires n'ont pas pu être chargés.",
     "replies": "Réponses",
-    "edited": "modifié"
+    "edited": "modifié",
+    "comment": "Commentaire",
+    "placeholder": "Écrire un commentaire…",
+    "send": "Envoyer",
+    "sendHint": "Ctrl+Entrée pour envoyer",
+    "sendFailed": "Le commentaire n'a pas pu être envoyé."
   },
   "labels": {
     "title": "Pages avec l'étiquette %{name}",

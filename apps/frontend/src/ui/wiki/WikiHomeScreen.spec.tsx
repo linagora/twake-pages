@@ -366,6 +366,20 @@ describe('the comments of the home page', () => {
       within(comments).getByRole('article', { name: 'Bob Durand' })
     ).toHaveTextContent('Welcome aboard!')
   })
+
+  it('are written below it, by any member', async () => {
+    const pagesApi = fakePagesApi()
+    const wiki = pagesApi.withWiki({ name: 'Handbook', role: 'viewer' })
+    renderRoute(`/wikis/${wiki.id}`, { pagesApi })
+    const comments = await screen.findByRole('region', { name: 'Comments' })
+
+    typeIn(comments, 'Comment', 'Thanks for the welcome.')
+    fireEvent.click(within(comments).getByRole('button', { name: 'Send' }))
+
+    expect(
+      await within(comments).findByRole('article', { name: 'Alice Martin' })
+    ).toHaveTextContent('Thanks for the welcome.')
+  })
 })
 
 describe('the Edit action of the home page', () => {
