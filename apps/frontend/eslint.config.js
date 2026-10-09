@@ -28,6 +28,10 @@ const RAW_UI = [
   {
     group: ['@mui/*', '@mui/*/**', '@emotion/*', '@emotion/*/**'],
     message: 'Import from @linagora/twake-mui. Missing UI goes to @/ds/.'
+  },
+  {
+    group: ['@blocknote/*', '@blocknote/*/**', '@mantine/*', '@mantine/*/**'],
+    message: 'BlockNote and Mantine, which draws it, stay in @/ds/.'
   }
 ]
 
