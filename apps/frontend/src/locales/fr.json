@@ -275,6 +275,11 @@
     "restore": "Restaurer cette version",
     "restoreFailed": "La version n'a pas pu être restaurée."
   },
+  "following": {
+    "follow": "Suivre",
+    "following": "Suivie",
+    "unfollow": "Ne plus suivre"
+  },
   "labels": {
     "title": "Pages avec l'étiquette %{name}",
     "ofPage": "Étiquettes de la page",

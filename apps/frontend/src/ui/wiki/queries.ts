@@ -601,3 +601,20 @@ export function useRestoreVersion(
     }
   })
 }
+
+/**
+ * Unlike Twake Tasks, which reads whether the person follows a task through
+ * a route of its own, the page tells it, and changes in place.
+ */
+export function useSetFollowing(
+  page: Page
+): UseMutationResult<void, Error, boolean> {
+  const api = usePagesApi()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (following: boolean) => api.setFollowing(page.id, following),
+    onSuccess: (_answer, following) => {
+      changeShownPage(queryClient, page, { following })
+    }
+  })
+}

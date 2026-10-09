@@ -8,6 +8,7 @@ import { useI18n } from '@/ui/i18n/useI18n'
 import { PageLabels } from '@/ui/labels/PageLabels'
 import { EditAction } from '@/ui/page/EditAction'
 import { FavoriteButton } from '@/ui/page/FavoriteButton'
+import { FollowButton } from '@/ui/page/FollowButton'
 import { PageContent } from '@/ui/page/PageContent'
 import { PageMenu } from '@/ui/page/PageMenu'
 import { PageVersion } from '@/ui/page/PageVersion'
@@ -56,6 +57,7 @@ export function PageScreen(): ReactElement {
         actions={
           <>
             <EditAction wikiId={wikiId} pageId={pageId} to="edit" />
+            <FollowButton page={page.data} />
             <FavoriteButton page={page.data} />
             <PageMenu page={page.data} />
           </>

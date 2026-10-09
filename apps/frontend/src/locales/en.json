@@ -275,6 +275,11 @@
     "restore": "Restore this version",
     "restoreFailed": "The version could not be restored."
   },
+  "following": {
+    "follow": "Follow",
+    "following": "Following",
+    "unfollow": "Unfollow"
+  },
   "labels": {
     "title": "Pages labelled %{name}",
     "ofPage": "Page labels",
