@@ -9,6 +9,7 @@ import {
   type IdentityProvider
 } from './modules/auth/index.ts'
 import { registerFavorites } from './modules/pages/favorites.ts'
+import { registerHistory } from './modules/pages/history.ts'
 import { registerLabels } from './modules/pages/labels.ts'
 import { registerRecent } from './modules/pages/recent.ts'
 import { registerPages } from './modules/pages/routes.ts'
@@ -47,6 +48,7 @@ export async function buildApp(deps: {
       registerFavorites(api, { db: deps.db, requireIdentity })
       registerRecent(api, { db: deps.db, requireIdentity })
       registerSearch(api, { db: deps.db, requireIdentity })
+      registerHistory(api, { db: deps.db, requireIdentity })
       registerLive(api, {
         db: deps.db,
         requireIdentity,
