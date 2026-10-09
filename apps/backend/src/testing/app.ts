@@ -410,6 +410,7 @@ export interface Page {
   following: boolean
   favorite: boolean
   deletedAt: string | null
+  trashRootId: string | null
 }
 
 /** The job planned to purge the deleted wiki. */

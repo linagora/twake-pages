@@ -79,7 +79,8 @@ describe('POST /pages/:pageId/versions', () => {
         ancestors: [],
         following: true,
         favorite: false,
-        deletedAt: null
+        deletedAt: null,
+        trashRootId: null
       })
     }
   )

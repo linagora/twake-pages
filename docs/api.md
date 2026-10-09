@@ -76,6 +76,7 @@ interface Page {
   following: boolean
   favorite: boolean
   deletedAt: string | null
+  trashRootId: string | null // in the trash: the root of the branch it went with, itself for the root
 }
 
 interface VersionSummary {

@@ -310,7 +310,8 @@ describe('POST /pages/:pageId/versions/:number/restore', () => {
       ancestors: [],
       following: true,
       favorite: false,
-      deletedAt: null
+      deletedAt: null,
+      trashRootId: null
     })
   })
 

@@ -8,6 +8,7 @@ import {
   aUser,
   aWikiOf,
   createPage,
+  deletePage,
   GRIST_ORIGIN,
   INVALID_PARENTS,
   joinWiki,
@@ -116,7 +117,8 @@ describe('GET /pages/:pageId', () => {
       ancestors: [],
       following: true,
       favorite: false,
-      deletedAt: null
+      deletedAt: null,
+      trashRootId: null
     })
   })
 
@@ -227,6 +229,24 @@ describe('GET /pages/:pageId', () => {
     const page = await pageOf(api, alice, drafts)
 
     expect(page.deletedAt).toEqual(expect.any(String))
+  })
+
+  it('names the root of the branch a page in the trash went with', async () => {
+    const alice = aUser()
+    const wiki = await aWikiOf(api, alice)
+    const plans = await aPageIn(db, alice, wiki.id, {
+      title: 'Plans',
+      position: 'a0'
+    })
+    const q1 = await aPageIn(db, alice, wiki.id, {
+      title: 'Q1',
+      position: 'a0',
+      parentId: plans
+    })
+    await deletePage(api, alice, plans)
+
+    expect((await pageOf(api, alice, plans)).trashRootId).toBe(plans)
+    expect((await pageOf(api, alice, q1)).trashRootId).toBe(plans)
   })
 
   it.each(['viewer', 'editor'] as const)(
@@ -365,7 +385,8 @@ describe('POST /wikis/:wikiId/pages', () => {
         ancestors: [],
         following: true,
         favorite: false,
-        deletedAt: null
+        deletedAt: null,
+        trashRootId: null
       })
     }
   )

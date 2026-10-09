@@ -175,7 +175,8 @@ async function pageOf(
     ancestors: await ancestorsOf(tx, page.parentId),
     following,
     favorite,
-    deletedAt: page.deletedAt
+    deletedAt: page.deletedAt,
+    trashRootId: page.trashRootId
   }
 }
 
