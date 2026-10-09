@@ -34,15 +34,17 @@ const blocksIn = (value: unknown): Block[] =>
   Array.isArray(value) ? value.filter(isFields) : []
 
 /**
- * `blocks` as the editor opens them. A block it does not write goes in a
- * kept block, as JSON, but for the blocks under it, which stay under the
- * kept block to be written.
+ * `blocks` with each block of a type not `known` in a kept block, as JSON,
+ * but for the blocks under it, which stay under the kept block.
  */
-export function toEditor(blocks: Block[]): Block[] {
+export function withOthersKept(
+  blocks: Block[],
+  known: ReadonlySet<unknown>
+): Block[] {
   return blocks.map(block => {
-    const children = toEditor(blocksIn(block.children))
+    const children = withOthersKept(blocksIn(block.children), known)
     // Without a type, BlockNote takes a block as a paragraph.
-    if (block.type === undefined || written.has(block.type)) {
+    if (block.type === undefined || known.has(block.type)) {
       return { ...block, children }
     }
     const stored = Array.isArray(block.children)
@@ -55,6 +57,14 @@ export function toEditor(blocks: Block[]): Block[] {
     }
   })
 }
+
+/**
+ * `blocks` as the editor opens them: a block it does not write goes in a
+ * kept block, the blocks under it staying under the kept block to be
+ * written.
+ */
+export const toEditor = (blocks: Block[]): Block[] =>
+  withOthersKept(blocks, written)
 
 /** The block a kept block holds, from its JSON, or null if it holds none. */
 export function storedBlock(json: unknown): Block | null {
