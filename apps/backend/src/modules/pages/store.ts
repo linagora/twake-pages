@@ -28,6 +28,15 @@ const versionAuthor = {
   name: pageVersions.authorName
 }
 
+/** The columns of the contract's VersionSummary. */
+export const versionSummary = {
+  number: pageVersions.number,
+  title: pageVersions.title,
+  author: versionAuthor,
+  createdAt: pageVersions.createdAt,
+  restoredFrom: pageVersions.restoredFrom
+}
+
 async function authorOf(tx: Tx, pageId: string, number: number) {
   const [author] = await tx
     .select(versionAuthor)
@@ -44,13 +53,7 @@ async function authorOf(tx: Tx, pageId: string, number: number) {
 /** The contract's VersionSummary, as an edit conflict names it. */
 async function summaryOf(tx: Tx, pageId: string, number: number) {
   const [version] = await tx
-    .select({
-      number: pageVersions.number,
-      title: pageVersions.title,
-      author: versionAuthor,
-      createdAt: pageVersions.createdAt,
-      restoredFrom: pageVersions.restoredFrom
-    })
+    .select(versionSummary)
     .from(pageVersions)
     .where(
       and(eq(pageVersions.pageId, pageId), eq(pageVersions.number, number))
