@@ -1,42 +1,17 @@
 import { expect, test } from '@playwright/test'
-import { signIn } from './signIn.ts'
+import { aliceWiki, newChildPage, newPage } from './wiki.ts'
 
 test('creates a page from the how-to template, then a child page under it, nested in the tree', async ({
   page
 }) => {
-  await signIn(page, 'alice')
-  await page.getByRole('button', { name: 'New wiki' }).click()
-  const newWiki = page.getByRole('dialog', { name: 'New wiki' })
-  await newWiki.getByRole('textbox', { name: 'Name' }).fill('Engineering')
-  await newWiki.getByRole('button', { name: 'Create' }).click()
-  await expect(
-    page.getByRole('heading', { level: 1, name: 'Engineering' })
-  ).toBeVisible()
+  await aliceWiki(page)
 
-  await page.getByRole('button', { name: 'New page' }).click()
-  const newPage = page.getByRole('dialog', { name: 'New page' })
-  await newPage.getByRole('textbox', { name: 'Title' }).fill('Onboarding')
-  await newPage
-    .getByRole('combobox', { name: 'Template' })
-    .selectOption({ label: 'How-to' })
-  await newPage.getByRole('button', { name: 'Create' }).click()
-  await expect(
-    page.getByRole('heading', { level: 1, name: 'Onboarding' })
-  ).toBeVisible()
+  await newPage(page, 'Onboarding', 'How-to')
   await expect(
     page.getByRole('main').getByRole('heading', { level: 2, name: 'Steps' })
   ).toBeVisible()
 
-  await page.getByRole('button', { name: 'Page options' }).click()
-  await page.getByRole('menuitem', { name: 'New child page' }).click()
-  const newChild = page.getByRole('dialog', {
-    name: 'New page under Onboarding'
-  })
-  await newChild.getByRole('textbox', { name: 'Title' }).fill('Laptop setup')
-  await newChild.getByRole('button', { name: 'Create' }).click()
-  await expect(
-    page.getByRole('heading', { level: 1, name: 'Laptop setup' })
-  ).toBeVisible()
+  await newChildPage(page, 'Onboarding', 'Laptop setup')
 
   const tree = page.getByRole('tree', { name: 'Pages' })
   await expect(
