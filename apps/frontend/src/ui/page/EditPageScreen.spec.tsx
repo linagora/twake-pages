@@ -11,6 +11,7 @@ import {
   typeInBlocks
 } from '@/testing/blocks'
 import {
+  BUDGET,
   fakePagesApi,
   paragraph,
   type FakePagesApi
@@ -41,6 +42,55 @@ function publishedBlocks(pagesApi: FakePagesApi): Block[] {
 const VIDEO_AS_COPIED = `<div data-content-type="${KEPT_BLOCK}" data-stored='${JSON.stringify(
   { type: 'video', props: { url: 'https://media.example.com/intro.mp4' } }
 )}'></div>`
+
+describe('a Grist embed of the page', () => {
+  // As another client of the API may store one: with no id and no children.
+  const GRIST_EMBED: Block = { type: 'gristEmbed', props: { url: BUDGET } }
+
+  it('frames its document, with a link that opens it in Grist', async () => {
+    const pagesApi = fakePagesApi()
+    renderRoute(aPage(pagesApi, [GRIST_EMBED]).editor, { pagesApi })
+
+    const content = await screen.findByRole('textbox', { name: 'Content' })
+    expect(await within(content).findByTitle('Grist document')).toHaveAttribute(
+      'src',
+      BUDGET
+    )
+    expect(
+      within(content).getByRole('link', { name: 'Open in Grist' })
+    ).toHaveAttribute('href', BUDGET)
+  })
+
+  it('is kept in a paste of what was copied with it, then published', async () => {
+    const pagesApi = fakePagesApi()
+    const source = aPage(pagesApi, [
+      paragraph('Watch the budget'),
+      GRIST_EMBED,
+      paragraph('Then read the rules')
+    ])
+    const { unmount } = renderRoute(source.editor, { pagesApi })
+    const copied = await screen.findByRole('textbox', { name: 'Content' })
+    await within(copied).findByTitle('Grist document')
+    const clipboard = copyAllInBlocks(copied)
+    unmount()
+
+    renderRoute(aPage(pagesApi, []).editor, { pagesApi })
+    const content = await screen.findByRole('textbox', { name: 'Content' })
+    await pasteInBlocks(content, clipboard)
+    expect(await within(content).findByTitle('Grist document')).toHaveAttribute(
+      'src',
+      BUDGET
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Publish' }))
+
+    await waitFor(() => {
+      expect(pagesApi.publish).toHaveBeenCalledOnce()
+    })
+    expect(publishedBlocks(pagesApi)).toContainEqual(
+      expect.objectContaining({ type: 'gristEmbed', props: { url: BUDGET } })
+    )
+  })
+})
 
 describe('the editor of a page', () => {
   it('publishes the title and the blocks written, then shows the page at its new version', async () => {

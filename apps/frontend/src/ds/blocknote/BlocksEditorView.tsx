@@ -21,6 +21,7 @@ import {
   toEditor,
   type BlockOptions
 } from '@/ds/editorBlocks'
+import { gristStyles } from '@/ds/grist'
 
 type Blocks = Record<string, unknown>[]
 
@@ -28,7 +29,8 @@ type Blocks = Record<string, unknown>[]
  * BlockNote, the editor of the pages, writing blocks from `initial` on. A
  * block it does not write, it keeps as stored (see toEditor), named by
  * `options.kindOf`: the block menu does not offer the kept block, and a
- * paste does not make it (see pastesWithoutKeptBlocks).
+ * paste does not make it (see pastesWithoutKeptBlocks). A Grist embed
+ * frames its document as `options.grist` tells.
  */
 export function BlocksEditorView({
   initial,
@@ -58,7 +60,7 @@ export function BlocksEditorView({
   const dark = (mode === 'system' ? systemMode : mode) === 'dark'
 
   return (
-    <Box sx={keptBlockStyles}>
+    <Box sx={[keptBlockStyles, gristStyles]}>
       <BlockNoteView
         editor={editor}
         theme={dark ? 'dark' : 'light'}

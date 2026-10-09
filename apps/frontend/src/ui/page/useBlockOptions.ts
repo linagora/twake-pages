@@ -1,15 +1,20 @@
 import { useMemo } from 'react'
 
 import type { BlockOptions } from '@/ds/editorBlocks'
+import { useGristOrigins } from '@/ui/GristOriginsProvider'
+import { listed } from '@/ui/i18n/listed'
 import { useI18n } from '@/ui/i18n/useI18n'
 
 /**
  * What the blocks of the pages take from the app: the kind of a block the
  * editor does not write, named from its type, those the API knows by their
- * names, any other by its type.
+ * names, any other by its type; and the origins of Grist the pages frame
+ * documents from, with what a document of Grist says, in the language of
+ * the app.
  */
 export function useBlockOptions(): BlockOptions {
-  const { t } = useI18n()
+  const origins = useGristOrigins()
+  const { t, lang } = useI18n()
   // The same while the language is: the read view draws its blocks again
   // when it changes.
   return useMemo(
@@ -22,13 +27,22 @@ export function useBlockOptions(): BlockOptions {
             return t('editor.blockKind.audio')
           case 'file':
             return t('editor.blockKind.file')
-          case 'gristEmbed':
-            return t('editor.blockKind.gristEmbed')
           default:
             return t('editor.blockKind.other', { type })
         }
+      },
+      grist: {
+        origins,
+        labels: {
+          frame: t('grist.frame'),
+          open: t('grist.open'),
+          offOrigins:
+            origins.length > 0
+              ? t('grist.offOrigins', { origins: listed(origins, lang) })
+              : t('grist.noOrigins')
+        }
       }
     }),
-    [t]
+    [origins, t, lang]
   )
 }

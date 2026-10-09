@@ -1,8 +1,13 @@
+import type { GristOptions } from '@/ds/grist'
+
 type Block = Record<string, unknown>
+
+/** The block that shows a document of Grist, or one of its pages. */
+export const GRIST_EMBED = 'gristEmbed'
 
 /**
  * The blocks the editor writes: BlockNote's but video, audio and file ones,
- * which pages cannot show until files come (ADR 012).
+ * which pages cannot show until files come (ADR 012), and the Grist embed.
  */
 export const EDITOR_BLOCKS = [
   'paragraph',
@@ -15,12 +20,13 @@ export const EDITOR_BLOCKS = [
   'codeBlock',
   'table',
   'image',
-  'divider'
+  'divider',
+  GRIST_EMBED
 ] as const
 
 /**
- * The block in which the editor holds a block it does not write, as a video
- * or a Grist embed, to publish it as the page stores it.
+ * The block in which the editor holds a block it does not write, as a
+ * video, to publish it as the page stores it.
  */
 export const KEPT_BLOCK = 'keptBlock'
 
@@ -28,6 +34,8 @@ export const KEPT_BLOCK = 'keptBlock'
 export interface BlockOptions {
   /** Names the kind of a block the editor does not write, from its type. */
   kindOf: (type: string) => string
+  /** Where a Grist embed frames its document from, and what it says. */
+  grist: GristOptions
 }
 
 const written: ReadonlySet<unknown> = new Set(EDITOR_BLOCKS)

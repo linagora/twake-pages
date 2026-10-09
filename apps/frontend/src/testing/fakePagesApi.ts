@@ -76,6 +76,9 @@ export const NO_SETTINGS: UserSettings = {
 
 export const GRIST_ORIGIN = 'https://grist.example.com'
 
+/** A Grist document on `GRIST_ORIGIN`. */
+export const BUDGET = `${GRIST_ORIGIN}/o/docs/budget`
+
 const gristHost = new URL(GRIST_ORIGIN).host
 
 /**

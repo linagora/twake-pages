@@ -1,15 +1,16 @@
 import { BlockNoteEditor } from '@blocknote/core'
 import { Box } from '@linagora/twake-mui'
-import DOMPurify from 'dompurify'
 import { useCallback, type ReactElement } from 'react'
 
 import { keptBlockStyles } from '@/ds/blocknote/KeptBlock'
 import { pagesSchema } from '@/ds/blocknote/pagesSchema'
+import { sanitizedHtml } from '@/ds/blocknote/sanitizedHtml'
 import {
   EDITOR_BLOCKS,
   withOthersKept,
   type BlockOptions
 } from '@/ds/editorBlocks'
+import { gristStyles } from '@/ds/grist'
 
 type Blocks = Record<string, unknown>[]
 
@@ -33,7 +34,8 @@ const shownBy = new WeakMap<
  * Blocks of BlockNote, the editor of the pages, shown read only as the HTML
  * it exports: its editor draws a list item as a paragraph, which a screen
  * reader does not read as a list. Others write the blocks, so the HTML is
- * sanitized. `options.kindOf` names the kind of a block of another type.
+ * sanitized. `options.kindOf` names the kind of a block of another type, and
+ * `options.grist` tells where a Grist embed frames its document from.
  */
 export function BlocksHtml({
   blocks,
@@ -52,11 +54,10 @@ export function BlocksHtml({
         schema: pagesSchema(SHOWN_BLOCKS, options),
         initialContent: withOthersKept(blocks, shown)
       })
-      const html = DOMPurify.sanitize(editor.blocksToHTMLLossy(), {
-        // A link opens in a new tab, as from the editor.
-        ADD_ATTR: ['target'],
-        RETURN_DOM_FRAGMENT: true
-      })
+      const html = sanitizedHtml(
+        editor.blocksToHTMLLossy(),
+        options.grist.origins
+      )
       // As the editor shows a check list item when it is not editable.
       for (const box of html.querySelectorAll('input')) box.disabled = true
       // The blocks show under a title, which is the h1: each of their
@@ -93,7 +94,8 @@ export function BlocksHtml({
             padding: theme.spacing(0.5, 1)
           }
         }),
-        keptBlockStyles
+        keptBlockStyles,
+        gristStyles
       ]}
     />
   )

@@ -4,7 +4,12 @@ import { describe, expect, it } from 'vitest'
 import { ApiError } from '@/application/pages'
 import type { Block } from '@/domain/page'
 import { findEmptyState, PAGE_NOT_FOUND } from '@/testing/emptyState'
-import { fakePagesApi } from '@/testing/fakePagesApi'
+import {
+  BUDGET,
+  fakePagesApi,
+  GRIST_ORIGIN,
+  OFF_GRIST_ORIGINS
+} from '@/testing/fakePagesApi'
 import { renderRoute, WIKI_BASES } from '@/testing/renderWithProviders'
 
 /** Engineering, then Releases under it, then the Release checklist. */
@@ -28,16 +33,78 @@ const linksIn = (element: HTMLElement) =>
     .getAllByRole('link')
     .map(link => [link.textContent, link.getAttribute('href')])
 
-/** Opens the Release checklist, holding these blocks. */
-function openChecklistOf(content: Block[]) {
+/**
+ * Opens the Release checklist, holding these blocks, where the pages frame
+ * the documents of Grist on `gristOrigins`.
+ */
+function openChecklistOf(
+  content: Block[],
+  gristOrigins: readonly string[] = [GRIST_ORIGIN]
+) {
   const pagesApi = fakePagesApi()
   const wiki = pagesApi.withWiki()
   const checklist = pagesApi.withPage(wiki.id, {
     title: 'Release checklist',
     content
   })
-  renderRoute(`/wikis/${wiki.id}/pages/${checklist.id}`, { pagesApi })
+  renderRoute(`/wikis/${wiki.id}/pages/${checklist.id}`, {
+    pagesApi,
+    gristOrigins
+  })
 }
+
+describe('a Grist embed of a page', () => {
+  it('frames its document, with a link that opens it in Grist', async () => {
+    openChecklistOf([{ type: 'gristEmbed', props: { url: BUDGET } }])
+
+    expect(await screen.findByTitle('Grist document')).toHaveAttribute(
+      'src',
+      BUDGET
+    )
+    const open = screen.getByRole('link', { name: 'Open in Grist' })
+    expect(open).toHaveAttribute('href', BUDGET)
+    expect(open).toHaveAttribute('target', '_blank')
+  })
+
+  it.each(OFF_GRIST_ORIGINS)(
+    'frames no document %s, and says so',
+    async (_case, url) => {
+      openChecklistOf([{ type: 'gristEmbed', props: { url } }])
+
+      expect(
+        await screen.findByText(
+          'This Grist document is not shown, as Twake Pages shows Grist documents from https://grist.example.com only.'
+        )
+      ).toBeVisible()
+      expect(screen.queryByTitle('Grist document')).not.toBeInTheDocument()
+      expect(
+        screen.queryByRole('link', { name: 'Open in Grist' })
+      ).not.toBeInTheDocument()
+    }
+  )
+
+  it('frames no document where the pages frame no Grist, and says so', async () => {
+    openChecklistOf([{ type: 'gristEmbed', props: { url: BUDGET } }], [])
+
+    expect(
+      await screen.findByText(
+        'This Grist document is not shown, as Twake Pages shows no Grist documents.'
+      )
+    ).toBeVisible()
+    expect(screen.queryByTitle('Grist document')).not.toBeInTheDocument()
+  })
+
+  it('shows nothing until it is given an address', async () => {
+    openChecklistOf([
+      { type: 'gristEmbed', props: { url: '' } },
+      { type: 'paragraph', content: 'Then read the rules.' }
+    ])
+
+    expect(await screen.findByText('Then read the rules.')).toBeVisible()
+    expect(screen.queryByTitle('Grist document')).not.toBeInTheDocument()
+    expect(screen.queryByText(/Grist/)).not.toBeInTheDocument()
+  })
+})
 
 describe('a page', () => {
   it('shows its title', async () => {

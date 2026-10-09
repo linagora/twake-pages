@@ -236,9 +236,14 @@
       "video": "Vidéo",
       "audio": "Audio",
       "file": "Fichier",
-      "gristEmbed": "Intégration Grist",
       "other": "Bloc %{type}"
     }
+  },
+  "grist": {
+    "frame": "Document Grist",
+    "open": "Ouvrir dans Grist",
+    "offOrigins": "Ce document Grist ne s'affiche pas, car Twake Pages n'affiche que les documents Grist de %{origins}.",
+    "noOrigins": "Ce document Grist ne s'affiche pas, car Twake Pages n'affiche aucun document Grist."
   },
   "history": {
     "title": "Historique de la page %{title}",
