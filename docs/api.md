@@ -168,6 +168,8 @@ An invitation goes to an email of the inviting person's domain only, else `not_s
 
 A member who leaves a wiki, removed or by themself, loses their favorites and recent visits of its pages. Their follows and notifications stay, left out of their lists until they are a member again.
 
+`GET /people` suggests, by email, the people of the organization who have signed in to Pages, other than the person asking, whose email or name holds `q`, in any case. `q` is 1 to 200 characters, trimmed. Someone who never signed in is invited by their full email.
+
 ## Pages
 
 | Method and path | Body | Answer | Who |

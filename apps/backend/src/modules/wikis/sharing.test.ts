@@ -857,3 +857,92 @@ describe.each(someoneOfEachTenant)(
     )
   }
 )
+
+describe('GET /people', () => {
+  it('suggests the people of the organization who signed in, by part of their email or name', async () => {
+    const alice = aUser()
+    const bob = aColleagueOf(alice, 'bob')
+    const robert = { ...aColleagueOf(alice, 'robert'), name: 'Robert Bobin' }
+    const carol = aColleagueOf(alice, 'carol')
+    const outsider = aUser({ email: anEmail('bob') })
+    for (const person of [bob, robert, carol, outsider]) {
+      await wikisOf(api, person)
+    }
+
+    const response = await api.as(alice).get('/people?q=BOB')
+
+    expect(response.statusCode).toBe(200)
+    expect(response.json()).toEqual({
+      people: [
+        { email: bob.email, name: null },
+        { email: robert.email, name: 'Robert Bobin' }
+      ]
+    })
+  })
+
+  it('leaves out the person asking, and who never signed in', async () => {
+    const alice = aUser({ email: anEmail('pat') })
+    await wikisOf(api, alice)
+    const wiki = await aWikiOf(api, alice)
+    await joinWiki(db, alice, wiki.id, aColleagueOf(alice, 'pat'), 'editor')
+    await invite(api, alice, wiki.id, anEmail('pat'))
+
+    const response = await api.as(alice).get('/people?q=pat')
+
+    expect(response.json()).toEqual({ people: [] })
+  })
+
+  it('suggests 10 people at most, by email', async () => {
+    const alice = aUser()
+    const colleagues = Array.from({ length: 11 }, (_, index) =>
+      aColleagueOf(alice, `c${String(index).padStart(2, '0')}`)
+    )
+    for (const colleague of [...colleagues].reverse()) {
+      await wikisOf(api, colleague)
+    }
+
+    const response = await api.as(alice).get('/people?q=example')
+
+    expect(
+      response.json<{ people: { email: string }[] }>().people.map(p => p.email)
+    ).toEqual(colleagues.slice(0, 10).map(colleague => colleague.email))
+  })
+
+  it('takes % and _ in the query as themselves', async () => {
+    const alice = aUser()
+    await wikisOf(api, aColleagueOf(alice, 'bob'))
+
+    const percent = await api.as(alice).get('/people?q=%25')
+    const underscore = await api.as(alice).get('/people?q=_')
+
+    expect({
+      percent: percent.json<unknown>(),
+      underscore: underscore.json<unknown>()
+    }).toEqual({ percent: { people: [] }, underscore: { people: [] } })
+  })
+
+  it('suggests nobody in B2C, not even the members of a wiki of theirs', async () => {
+    const alice = aB2cUser()
+    const bob = aB2cUser()
+    await wikisOf(api, bob)
+    const wiki = await aWikiOf(api, alice)
+    await joinWiki(db, alice, wiki.id, bob, 'editor')
+
+    const response = await api
+      .as(alice)
+      .get(`/people?q=${encodeURIComponent(bob.email)}`)
+
+    expect(response.json()).toEqual({ people: [] })
+  })
+
+  it.each([
+    ['no query', '/people'],
+    ['a blank query', '/people?q=%20%20'],
+    ['a query of more than 200 characters', `/people?q=${'a'.repeat(201)}`]
+  ])('refuses %s', async (_case, path) => {
+    const response = await api.as(aUser()).get(path)
+
+    expect(response.statusCode).toBe(400)
+    expect(response.json()).toEqual({ error: 'invalid_request' })
+  })
+})

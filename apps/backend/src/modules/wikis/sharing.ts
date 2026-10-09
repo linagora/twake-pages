@@ -1,4 +1,4 @@
-import { and, asc, eq, ne, sql } from 'drizzle-orm'
+import { and, asc, eq, ilike, ne, or, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { inTenant, type Db, type Tx } from '../../infra/db.ts'
 import type { HttpServer } from '../../infra/http.ts'
@@ -19,6 +19,8 @@ const roleChange = z.object({ role })
 const inviteParams = wikiParams.extend({ inviteId: z.uuid() })
 
 const memberParams = wikiParams.extend({ userId: z.uuid() })
+
+const peopleQuery = z.object({ q: z.string().trim().min(1).max(200) })
 
 // A personal wiki stays private, and a space wiki takes its members from its
 // space. Unlike Twake Tasks, which answers forbidden, both are managed, as
@@ -188,6 +190,36 @@ function createSharingStore(db: Db) {
         const [left] = await takeOutOfWiki(tx, wikiId, [userId])
         if (!left) throw new Refused('not_found')
       })
+    },
+
+    /**
+     * The people of the person's organization who signed in to Pages, whose
+     * email or name holds the query: the members of its personal wikis, which
+     * a first sign-in makes. Twake Tasks has no such search, and the LDAP
+     * directory is not searched. In B2C, where a person sees no personal wiki
+     * but their own, nobody.
+     */
+    peopleMatching(identity: Identity, query: string) {
+      // LIKE's wildcards, and its escape character, as themselves.
+      const pattern = `%${query.replace(/[\\%_]/g, '\\$&')}%`
+      return inTenant(db, identity, tx =>
+        tx
+          .select({ email: wikiMembers.email, name: wikiMembers.name })
+          .from(wikiMembers)
+          .innerJoin(wikis, eq(wikis.id, wikiMembers.wikiId))
+          .where(
+            and(
+              eq(wikis.kind, 'personal'),
+              ne(wikiMembers.userId, identity.userId),
+              or(
+                ilike(wikiMembers.email, pattern),
+                ilike(wikiMembers.name, pattern)
+              )
+            )
+          )
+          .orderBy(asc(wikiMembers.email))
+          .limit(10)
+      )
     }
   }
 }
@@ -290,6 +322,20 @@ export function registerSharing(
       )
       if (!result.ok) return refuse(reply, result.error)
       return reply.code(204).send()
+    }
+  )
+
+  app.get(
+    '/people',
+    { preHandler: deps.requireIdentity },
+    async (request, reply) => {
+      const identity = request.identity
+      if (!identity) return reply.code(401).send()
+      const query = peopleQuery.safeParse(request.query)
+      if (!query.success) {
+        return reply.code(400).send({ error: 'invalid_request' })
+      }
+      return { people: await store.peopleMatching(identity, query.data.q) }
     }
   )
 }
