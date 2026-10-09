@@ -193,7 +193,10 @@ export interface PagesApi {
   movePage: (pageId: string, move: Move) => Promise<Placement>
   /** Editor; the page and its live descendants go to the trash as one branch. */
   deletePage: (pageId: string) => Promise<void>
-  /** Editor; trims and lowercases the names, and answers the page's labels. */
+  /**
+   * Editor; at most 50 names, trimmed and lowercased. Answers the page's
+   * labels.
+   */
   setLabels: (pageId: string, names: string[]) => Promise<string[]>
   /** Whether the person is notified of the page's versions and comments. */
   setFollowing: (pageId: string, following: boolean) => Promise<void>
