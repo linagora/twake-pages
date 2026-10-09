@@ -18,6 +18,7 @@ import {
   personOf,
   publish,
   removeFromWiki,
+  setLabels,
   STALE_NEIGHBOURS,
   startApp,
   styled,
@@ -29,7 +30,7 @@ import {
 } from '../../testing/app.ts'
 import { pageFollowers } from '../notifications/schema.ts'
 import { MAX_BLOCKS_BYTES } from './blocks.ts'
-import { labels, pageLabels, pageVisits } from './schema.ts'
+import { pageVisits } from './schema.ts'
 
 let api: Awaited<ReturnType<typeof startApp>>
 const { sql, db } = createDb(inject('databaseUrl'))
@@ -43,34 +44,7 @@ afterAll(async () => {
   await sql.end()
 })
 
-// Labelling is not served yet, so labels are written as it will write them.
-const label = (
-  editor: TestUser,
-  wikiId: string,
-  pageId: string,
-  names: string[]
-) =>
-  inTenant(db, editor, async tx => {
-    const made = await tx
-      .insert(labels)
-      .values(
-        names.map(name => ({
-          wikiId,
-          organizationId: editor.organizationId,
-          name
-        }))
-      )
-      .returning({ id: labels.id })
-    await tx.insert(pageLabels).values(
-      made.map(({ id }) => ({
-        pageId,
-        labelId: id,
-        organizationId: editor.organizationId
-      }))
-    )
-  })
-
-// Nor is following.
+// Following is not served yet, so followers are written as it will write them.
 const follow = (user: TestUser, pageId: string) =>
   inTenant(db, user, tx =>
     tx.insert(pageFollowers).values({
@@ -207,8 +181,8 @@ describe('GET /pages/:pageId', () => {
       title: 'Archive',
       position: 'a1'
     })
-    await label(alice, wiki.id, plans, ['roadmap', 'draft'])
-    await label(alice, wiki.id, archive, ['old'])
+    await setLabels(api, alice, plans, ['roadmap', 'draft'])
+    await setLabels(api, alice, archive, ['old'])
 
     expect((await pageOf(api, alice, plans)).labels).toEqual([
       'draft',
