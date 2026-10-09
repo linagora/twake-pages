@@ -1,10 +1,10 @@
-import { screen, within } from '@testing-library/react'
+import { act, screen, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
 import { ApiError } from '@/application/pages'
 import { findEmptyState } from '@/testing/emptyState'
 import { fakePagesApi } from '@/testing/fakePagesApi'
-import { renderRoute } from '@/testing/renderWithProviders'
+import { renderRoute, WIKI_BASES } from '@/testing/renderWithProviders'
 
 const NOT_FOUND = "This wiki doesn't exist, or you can't open it."
 
@@ -85,4 +85,35 @@ describe('a wiki', () => {
       'The wiki could not be loaded.'
     )
   })
+
+  it.each(WIKI_BASES)(
+    'opens at %s/<wiki> a wiki the person was invited to, read once their wikis are listed',
+    async base => {
+      const pagesApi = fakePagesApi()
+      const carol = pagesApi.signedInAs('carol@example.com')
+      const wiki = carol.withWiki({ name: 'Engineering' })
+      await carol.invite(wiki.id, 'alice@example.com', 'editor')
+      const listWikis = pagesApi.listWikis.getMockImplementation()
+      let answer = (): void => undefined
+      pagesApi.listWikis.mockImplementationOnce(async () => {
+        await new Promise<void>(resolve => {
+          answer = resolve
+        })
+        return (await listWikis?.()) ?? []
+      })
+      renderRoute(`${base}/${wiki.id}`, { pagesApi })
+
+      expect(
+        await screen.findByRole('progressbar', { name: 'Loading' })
+      ).toBeInTheDocument()
+      expect(pagesApi.getWiki).not.toHaveBeenCalled()
+      act(() => {
+        answer()
+      })
+
+      expect(
+        await screen.findByRole('heading', { level: 1, name: 'Engineering' })
+      ).toBeVisible()
+    }
+  )
 })

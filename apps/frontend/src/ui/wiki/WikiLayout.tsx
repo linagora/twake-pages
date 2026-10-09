@@ -14,16 +14,22 @@ import { WikiLabels } from '@/ui/labels/WikiLabels'
 import { BackToWikis, UnavailableScreen } from '@/ui/shell/Problems'
 import { EntryLink } from '@/ui/shell/SidebarLink'
 import { PageTree } from '@/ui/wiki/PageTree'
-import { useLiveWiki, useWiki } from '@/ui/wiki/queries'
+import { useLiveWiki, useWiki, useWikis } from '@/ui/wiki/queries'
 
 /** `back` leads to the person's wikis, which the frame of TwakeSpace has not. */
 export function WikiLayout({ back = true }: { back?: boolean }): ReactElement {
   const { t } = useI18n()
   const { wikiId = '' } = useParams()
-  const wiki = useWiki(wikiId)
+  // The wiki is read and watched once the wikis are listed, which claims the
+  // person's invitations, so the link an invitation's email gives opens its
+  // wiki. Unlike Twake Tasks, which reads the board beside the list of
+  // boards, so that a board followed from its invitation may be read before
+  // the claim, and not found.
+  const listed = !useWikis().isPending
+  const wiki = useWiki(wikiId, { enabled: listed })
   // Checked before the data, which a failed reload keeps.
   const missing = wiki.error instanceof ApiError && wiki.error.status === 404
-  useLiveWiki(wikiId, !missing)
+  useLiveWiki(wikiId, listed && !missing)
 
   if (missing || !wiki.data) {
     return (

@@ -114,11 +114,16 @@ export function useWikiSearch(
   })
 }
 
-export function useWiki(wikiId: string): UseQueryResult<Wiki> {
+// `enabled` false holds the wiki back until it may be found.
+export function useWiki(
+  wikiId: string,
+  { enabled = true }: { enabled?: boolean } = {}
+): UseQueryResult<Wiki> {
   const api = usePagesApi()
   return useQuery({
     queryKey: wikiKey(wikiId),
-    queryFn: () => api.getWiki(wikiId)
+    queryFn: () => api.getWiki(wikiId),
+    enabled
   })
 }
 
