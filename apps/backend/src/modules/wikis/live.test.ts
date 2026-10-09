@@ -1,10 +1,13 @@
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest'
 import { createDb } from '../../infra/db.ts'
 import {
+  aColleagueOf,
   aUser,
   aWikiOf,
+  invite,
   joinWiki,
   startApp,
+  wikisOf,
   type TestUser
 } from '../../testing/app.ts'
 import { openStream } from '../../testing/stream.ts'
@@ -59,6 +62,24 @@ describe('live wiki updates', () => {
     stream.close()
 
     expect(next).toEqual({ event: 'version', id: '1', data: '{"version":1}' })
+  })
+
+  it('sends a new version when an invitation to the wiki becomes a membership', async () => {
+    const alice = aUser()
+    const bob = aColleagueOf(alice)
+    const wiki = await aWikiOf(api, alice)
+    await invite(api, alice, wiki.id, bob.email)
+    const stream = openWikiStream(alice, wiki.id)
+
+    const first = (await stream.messages.next()).value
+    await wikisOf(api, bob)
+    const next = (await stream.messages.next()).value
+    stream.close()
+
+    expect([first, next]).toEqual([
+      { event: 'version', id: '1', data: '{"version":1}' },
+      { event: 'version', id: '2', data: '{"version":2}' }
+    ])
   })
 
   it.each(['viewer', 'editor'] as const)(

@@ -341,6 +341,24 @@ describe('the invites policy', () => {
       )
     ).rejects.toHaveProperty('cause.code', ROW_LEVEL_SECURITY_VIOLATION)
   })
+
+  // The claim shows them the wikis it locks, in USING only.
+  it('keeps B2C users from writing a wiki whose invitation they claim', async () => {
+    const alice = aB2cUser()
+    const mallory = aB2cUser()
+    const { id: wikiId } = await aWikiOf(api, alice)
+
+    await expect(
+      inTenant(db, mallory, async tx => {
+        await tx.execute(
+          statement`select set_config('app.claimed_wikis', ${`{${wikiId}}`}, true)`
+        )
+        await tx.execute(
+          statement`update wikis set name = 'Mine' where id = ${wikiId}`
+        )
+      })
+    ).rejects.toHaveProperty('cause.code', ROW_LEVEL_SECURITY_VIOLATION)
+  })
 })
 
 describe('tenant foreign keys', () => {

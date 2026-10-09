@@ -27,6 +27,10 @@ export const memberRole = pgEnum('member_role', ['viewer', 'editor', 'admin'])
 
 export const wikiKind = pgEnum('wiki_kind', ['personal', 'shared', 'space'])
 
+// The B2C wikis of a person: those they made, and those they are a member of.
+const createdOrJoined = (createdBy: AnyPgColumn, wikiId: AnyPgColumn): SQL =>
+  sql`${createdBy} = ${currentUser} or ${wikiId} = any((select app_member_wiki_ids())::uuid[])`
+
 export const wikis = pgTable.withRLS(
   'wikis',
   {
@@ -48,9 +52,13 @@ export const wikis = pgTable.withRLS(
     uniqueIndex('wikis_one_personal_per_user')
       .on(sql`coalesce(${table.organizationId}, '')`, table.createdBy)
       .where(sql`${table.kind} = 'personal'`),
+    // A B2C person sees a wiki once a member only, but app_claim_invites locks
+    // the wikis whose invitations it claims first: it names them in
+    // app.claimed_wikis, which shows them in USING only (see its migration).
     tenantPolicy(
       table.organizationId,
-      sql`${table.createdBy} = ${currentUser} or ${table.id} = any((select app_member_wiki_ids())::uuid[])`
+      sql`${createdOrJoined(table.createdBy, table.id)} or ${table.id} = any((select nullif(current_setting('app.claimed_wikis', true), ''))::uuid[])`,
+      createdOrJoined(table.createdBy, table.id)
     )
   ]
 )

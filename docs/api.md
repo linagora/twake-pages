@@ -141,7 +141,7 @@ interface TrashEntry {
 
 | Method and path | Body | Answer | Who |
 |---|---|---|---|
-| `GET /wikis` | | `{ wikis: WikiSummary[] }`, personal first, then by name. Creates the personal wiki on first call. | anyone |
+| `GET /wikis` | | `{ wikis: WikiSummary[] }`, personal first, then by name. Creates the personal wiki on first call, and turns the invites to the person's email into memberships, which moves the version of each wiki they were for. | anyone |
 | `POST /wikis` | `{ name, description? }` | `201 Wiki`, kind `shared`, the creator admin, with an empty home page titled after the wiki, which the creator follows | anyone |
 | `GET /wikis/:wikiId` | | `Wiki` | member |
 | `PATCH /wikis/:wikiId` | `{ name?, description? }` | `Wiki`; `managed` for the name of a space's wiki | admin |

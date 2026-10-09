@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest'
 import { createDb } from '../../infra/db.ts'
 import {
   aB2cUser,
+  aColleagueOf,
   aPageIn,
   aSpaceWiki,
   aUser,
@@ -9,13 +10,17 @@ import {
   invite,
   joinWiki,
   purgeJobOf,
+  sharingOf,
+  someoneOfEachTenant,
   startApp,
+  versionOf,
   wikiRowsOf,
   wikisOf,
   type TestUser
 } from '../../testing/app.ts'
 import { notify } from '../notifications/testing.ts'
 import { purgeWiki } from './store.ts'
+import { behindAChange } from './testing.ts'
 
 let api: Awaited<ReturnType<typeof startApp>>
 let baseUrl: string
@@ -151,6 +156,79 @@ describe('GET /wikis', () => {
       ['Recipes', 'editor']
     ])
   })
+
+  describe.each(someoneOfEachTenant)(
+    'claiming invitations, %s',
+    (_tenant, someone) => {
+      it('moves the version of each wiki whose invitation it claims', async () => {
+        const alice = someone()
+        const bob = aColleagueOf(alice)
+        const handbook = await aWikiOf(api, alice)
+        const roadmap = await aWikiOf(api, alice, 'Roadmap')
+        await invite(api, alice, handbook.id, bob.email)
+        await invite(api, alice, roadmap.id, bob.email)
+        const before = [
+          await versionOf(api, alice, handbook.id),
+          await versionOf(api, alice, roadmap.id)
+        ]
+
+        await wikisOf(api, bob)
+
+        expect([
+          await versionOf(api, alice, handbook.id),
+          await versionOf(api, alice, roadmap.id)
+        ]).toEqual(before.map(version => version + 1))
+      })
+
+      // As the sharing routes, the claim waits its turn on the wiki's row
+      // before it takes the invitation, with the role the admin gave it
+      // meanwhile.
+      it('takes its turn behind an admin changing the invitation', async () => {
+        const alice = someone()
+        const bob = aColleagueOf(alice)
+        const wiki = await aWikiOf(api, alice)
+        await invite(api, alice, wiki.id, bob.email, 'viewer')
+
+        const [invited, listed] = await behindAChange(db, alice, wiki.id, [
+          () => invite(api, alice, wiki.id, bob.email, 'admin'),
+          () => api.as(bob).get('/wikis')
+        ])
+
+        expect([invited?.statusCode, listed?.statusCode]).toEqual([202, 200])
+        const sharing = await sharingOf(api, alice, wiki.id)
+        expect({
+          bob: sharing.members.find(member => member.id === bob.userId)?.role,
+          invites: sharing.invites
+        }).toEqual({ bob: 'admin', invites: [] })
+      })
+
+      // The claim is sent once the role change waits on the wiki's row, and
+      // must wait too, or the helper never lets the wiki go. Bob's answer
+      // shows neither the version nor carol's role: which went first does
+      // not show.
+      it('waits on the wiki as an admin changes a role, and both move the version', async () => {
+        const alice = someone()
+        const bob = aColleagueOf(alice)
+        const carol = aColleagueOf(alice, 'carol')
+        const wiki = await aWikiOf(api, alice)
+        await joinWiki(db, alice, wiki.id, carol, 'viewer')
+        await invite(api, alice, wiki.id, bob.email)
+        const before = await versionOf(api, alice, wiki.id)
+
+        const [changed, listed] = await behindAChange(db, alice, wiki.id, [
+          () =>
+            api.as(alice).patch(`/wikis/${wiki.id}/members/${carol.userId}`, {
+              role: 'editor'
+            }),
+          () => api.as(bob).get('/wikis')
+        ])
+
+        expect([changed?.statusCode, listed?.statusCode]).toEqual([204, 200])
+        // One move each, neither lost.
+        expect(await versionOf(api, alice, wiki.id)).toBe(before + 2)
+      })
+    }
+  )
 
   it('asks for a bearer token', async () => {
     const response = await fetch(`${baseUrl}/api/wikis`)
