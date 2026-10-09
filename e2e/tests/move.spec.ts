@@ -1,12 +1,5 @@
-import { expect, test, type Page } from '@playwright/test'
-import { aliceWiki, newChildPage, newPage } from './wiki.ts'
-
-/** Alice's Engineering wiki, open on Laptop setup, a child page of Onboarding. */
-async function engineering(page: Page) {
-  await aliceWiki(page)
-  await newPage(page, 'Onboarding')
-  await newChildPage(page, 'Onboarding', 'Laptop setup')
-}
+import { expect, test } from '@playwright/test'
+import { engineering } from './wiki.ts'
 
 test('moves a page to the top of the tree from its menu, then back under its parent with the keyboard', async ({
   page

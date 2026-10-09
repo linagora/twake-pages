@@ -41,3 +41,10 @@ export async function newChildPage(page: Page, parent: string, title: string) {
     page.getByRole('heading', { level: 1, name: title })
   ).toBeVisible()
 }
+
+/** Alice's Engineering wiki, open on Laptop setup, a child page of Onboarding. */
+export async function engineering(page: Page) {
+  await aliceWiki(page)
+  await newPage(page, 'Onboarding')
+  await newChildPage(page, 'Onboarding', 'Laptop setup')
+}
