@@ -652,6 +652,33 @@ describe('fakePagesApi', () => {
       })
     })
 
+    it('refuses to restore a version whose blocks or Grist address publishing refuses now', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki()
+      // Seeded unchecked, as published while the Grist origins named its own.
+      const formerAddress = 'https://grist.example.net/o/docs/budget'
+      const page = api.withPage(wiki.id, {
+        title: 'Budget',
+        content: [
+          { type: 'gristEmbed', props: { url: formerAddress }, children: [] }
+        ]
+      })
+      const database = api.withPage(wiki.id, {
+        title: 'Budget',
+        kind: 'database',
+        gristUrl: formerAddress
+      })
+      const before = (await api.getWiki(wiki.id)).version
+
+      await expect(api.restoreVersion(page.id, 1)).rejects.toEqual(
+        new ApiError(400, 'invalid_content')
+      )
+      await expect(api.restoreVersion(database.id, 1)).rejects.toEqual(
+        new ApiError(400, 'invalid_grist_url')
+      )
+      expect((await api.getWiki(wiki.id)).version).toBe(before)
+    })
+
     it('lets viewers read pages, and only editors write them', async () => {
       const api = fakePagesApi()
       const wiki = api.withWiki({ role: 'viewer' })

@@ -1118,11 +1118,21 @@ function signedIn(world: World, person: Person): FakePagesApi {
     ),
     restoreVersion: vi.fn<PagesApi['restoreVersion']>((pageId, number) =>
       answer(() => {
-        const { page, wiki } = liveAccess(pageId)
+        // As the backend, which checks the version as a draft once its page is
+        // in the person's reach, before it locks the wiki.
+        const { page } = pageAccess(pageId)
         const version = page.versions.find(each => each.number === number)
         if (!version) throw refuse('not_found')
-        const { title, content, gristUrl } = version
-        addVersion(page, wiki, { title, content, gristUrl }, number)
+        const content = checkBlocks(version.content)
+        const gristUrl =
+          version.gristUrl === null ? null : checkGristUrl(version.gristUrl)
+        const { wiki } = liveAccess(pageId)
+        addVersion(
+          page,
+          wiki,
+          { title: version.title, content, gristUrl },
+          number
+        )
         return pageFor(page)
       })
     ),
