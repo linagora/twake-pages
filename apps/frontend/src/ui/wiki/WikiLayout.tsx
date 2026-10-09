@@ -10,6 +10,7 @@ import { Outlet, useParams } from 'react-router'
 import { ApiError } from '@/application/pages'
 import { WikiFrame } from '@/ds/WikiFrame'
 import { useI18n } from '@/ui/i18n/useI18n'
+import { WikiLabels } from '@/ui/labels/WikiLabels'
 import { BackToWikis, UnavailableScreen } from '@/ui/shell/Problems'
 import { EntryLink } from '@/ui/shell/SidebarLink'
 import { PageTree } from '@/ui/wiki/PageTree'
@@ -46,6 +47,7 @@ export function WikiLayout({ back = true }: { back?: boolean }): ReactElement {
             <WikiLink to="trash" label={t('trash.title')} />
           </List>
           <PageTree wikiId={wiki.data.id} />
+          <WikiLabels wikiId={wiki.data.id} />
         </nav>
       }
     >

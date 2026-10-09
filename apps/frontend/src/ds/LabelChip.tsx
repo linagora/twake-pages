@@ -25,13 +25,16 @@ function partsOf(name: string, search: string) {
   ].filter(part => part.text !== '')
 }
 
-// Labels have no stored colour, so each name gets a stable hue.
+// Labels have no stored colour, so each name gets a stable hue. Unlike
+// Twake Tasks' chip, it may tell how many pages carry the label.
 export function LabelChip({
   name,
-  highlight = ''
+  highlight = '',
+  count
 }: {
   name: string
   highlight?: string
+  count?: number | undefined
 }): ReactElement {
   const hue = hueOf(name)
   return (
@@ -59,6 +62,11 @@ export function LabelChip({
       })}
     >
       <Highlight parts={partsOf(name, highlight)} />
+      {count !== undefined && (
+        <Box component="span" sx={{ ml: 0.75, opacity: 0.75 }}>
+          {count}
+        </Box>
+      )}
     </Box>
   )
 }

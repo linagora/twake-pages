@@ -1,12 +1,11 @@
 import { Icon, Pen } from '@linagora/twake-icons'
-import { IconButton, Link, Typography } from '@linagora/twake-mui'
+import { IconButton, Typography } from '@linagora/twake-mui'
 import { useState, type ReactElement } from 'react'
-import { Link as RouterLink } from 'react-router'
 
-import { LabelChip } from '@/ds/LabelChip'
 import { Chips, Inline } from '@/ds/SidePanel'
 import type { Page } from '@/domain/page'
 import { useI18n } from '@/ui/i18n/useI18n'
+import { LabelLink } from '@/ui/labels/LabelLink'
 import { LabelsPicker } from '@/ui/labels/LabelsPicker'
 import { useWiki } from '@/ui/wiki/queries'
 
@@ -36,13 +35,10 @@ export function PageLabels({ page }: { page: Page }): ReactElement | null {
           <Chips label={t('labels.ofPage')}>
             {page.labels.map(name => (
               <li key={name}>
-                <Link
-                  component={RouterLink}
+                <LabelLink
                   to={`../labels/${encodeURIComponent(name)}`}
-                  underline="none"
-                >
-                  <LabelChip name={name} />
-                </Link>
+                  name={name}
+                />
               </li>
             ))}
           </Chips>

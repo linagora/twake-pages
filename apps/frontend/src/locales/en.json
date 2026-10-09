@@ -216,7 +216,10 @@
     "tooMany": "A page carries at most %{max} labels.",
     "saveFailed": "The labels could not be saved.",
     "loadFailed": "The labels of the wiki could not be loaded.",
-    "retry": "Retry"
+    "retry": "Retry",
+    "list": "Labels",
+    "entry": "%{name}, %{smart_count} page |||| %{name}, %{smart_count} pages",
+    "empty": "No labels yet"
   },
   "search": {
     "title": "Search",

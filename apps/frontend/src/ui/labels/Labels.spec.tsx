@@ -2,6 +2,7 @@ import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
 import { ApiError } from '@/application/pages'
+import { findEmptyState } from '@/testing/emptyState'
 import { fakePagesApi } from '@/testing/fakePagesApi'
 import { typeIn } from '@/testing/forms'
 import { renderRoute, WIKI_BASES } from '@/testing/renderWithProviders'
@@ -406,18 +407,94 @@ describe('the labels picker', () => {
 
   it('says when the labels of the wiki could not be loaded, and loads them again', async () => {
     const { pagesApi, wiki, onboarding } = await handbookWithHowTo()
-    pagesApi.listLabels.mockRejectedValueOnce(new ApiError(403, null))
+    const listLabels = pagesApi.listLabels.getMockImplementation()
+    if (!listLabels) throw new Error('No labels to list')
+    pagesApi.listLabels.mockRejectedValue(new ApiError(403, null))
     renderRoute(`/wikis/${wiki.id}/pages/${onboarding.id}`, { pagesApi })
 
     const picker = within(await openLabels())
     expect(await picker.findByRole('alert')).toHaveTextContent(
       'The labels of the wiki could not be loaded.'
     )
+    pagesApi.listLabels.mockImplementation(listLabels)
     fireEvent.click(picker.getByRole('button', { name: 'Retry' }))
 
     expect(
       await picker.findByRole('menuitemcheckbox', { name: 'howto' })
     ).toBeVisible()
     expect(picker.queryByRole('alert')).not.toBeInTheDocument()
+  })
+})
+
+describe('the labels of a wiki', () => {
+  it.each(WIKI_BASES)(
+    'show in the sidebar at %s/<wiki>, by name, with how many pages carry each',
+    async base => {
+      const { pagesApi, wiki } = await onboardingLabelled(['howto', 'hr'])
+      const laptops = pagesApi.withPage(wiki.id, { title: 'Laptops' })
+      await pagesApi.setLabels(laptops.id, ['hr'])
+      renderRoute(`${base}/${wiki.id}`, { pagesApi })
+
+      const sidebar = within(
+        await screen.findByRole('navigation', { name: 'Wiki' })
+      )
+      const labels = within(
+        await sidebar.findByRole('list', { name: 'Labels' })
+      )
+      expect(
+        labels.getAllByRole('link').map(link => link.getAttribute('href'))
+      ).toEqual([
+        `${base}/${wiki.id}/labels/howto`,
+        `${base}/${wiki.id}/labels/hr`
+      ])
+      expect(labels.getByRole('link', { name: 'howto, 1 page' })).toBeVisible()
+      expect(labels.getByRole('link', { name: 'hr, 2 pages' })).toBeVisible()
+    }
+  )
+
+  it('say when the wiki has none', async () => {
+    const pagesApi = fakePagesApi()
+    const wiki = pagesApi.withWiki()
+    renderRoute(`/wikis/${wiki.id}`, { pagesApi })
+
+    expect(await findEmptyState('No labels yet')).toBeVisible()
+  })
+
+  it('say so when they cannot be loaded', async () => {
+    const { pagesApi, wiki } = await onboardingLabelled(['howto'])
+    pagesApi.listLabels.mockRejectedValue(new ApiError(403, null))
+    renderRoute(`/wikis/${wiki.id}`, { pagesApi })
+
+    const sidebar = within(
+      await screen.findByRole('navigation', { name: 'Wiki' })
+    )
+    expect(await sidebar.findByRole('alert')).toHaveTextContent(
+      'The labels of the wiki could not be loaded.'
+    )
+    expect(
+      sidebar.queryByRole('list', { name: 'Labels' })
+    ).not.toBeInTheDocument()
+  })
+
+  it('show a label as soon as a page carries it, though live updates are down', async () => {
+    const { pagesApi, wiki, onboarding } = await handbookWithHowTo()
+    pagesApi.watchWiki.mockImplementation(() => () => undefined)
+    renderRoute(`/wikis/${wiki.id}/pages/${onboarding.id}`, { pagesApi })
+    const dialog = await openLabels()
+
+    typeIn(dialog, 'Search labels', 'onboarding')
+    fireEvent.click(
+      within(dialog).getByRole('menuitem', { name: 'Create “onboarding”' })
+    )
+
+    const sidebar = within(
+      screen.getByRole('navigation', { name: 'Wiki', hidden: true })
+    )
+    expect(
+      await sidebar.findByRole('link', {
+        name: 'onboarding, 1 page',
+        hidden: true
+      })
+    ).toBeInTheDocument()
   })
 })

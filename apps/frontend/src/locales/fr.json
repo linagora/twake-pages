@@ -216,7 +216,10 @@
     "tooMany": "Une page porte au plus %{max} étiquettes.",
     "saveFailed": "Les étiquettes n'ont pas pu être enregistrées.",
     "loadFailed": "Les étiquettes du wiki n'ont pas pu être chargées.",
-    "retry": "Réessayer"
+    "retry": "Réessayer",
+    "list": "Étiquettes",
+    "entry": "%{name}, %{smart_count} page |||| %{name}, %{smart_count} pages",
+    "empty": "Aucune étiquette pour l'instant"
   },
   "search": {
     "title": "Recherche",
