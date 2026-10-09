@@ -36,6 +36,7 @@
     "dayjs": "^1.11.23",
     "dompurify": "^3.4.16",
     "openid-client": "^6.8.8",
+    "prosemirror-state": "^1.4.4",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "react-router": "^8.4.0",

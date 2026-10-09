@@ -26,6 +26,11 @@ Object.defineProperty(window, 'matchMedia', {
 // BlockNote places its menus from getBoundingClientRect().toJSON(), which the
 // plain rectangle of jsdom lacks: a DOMRect has it, as empty as jsdom's.
 Element.prototype.getBoundingClientRect = () => new DOMRect()
+// BlockNote places its toolbar over the text selected from the rectangles of
+// a range, which jsdom lacks: they are as empty as those of an element.
+Range.prototype.getClientRects = () =>
+  document.createElement('div').getClientRects()
+Range.prototype.getBoundingClientRect = () => new DOMRect()
 
 // ProseMirror pastes HTML through a ClipboardEvent, which jsdom lacks.
 Object.defineProperty(window, 'ClipboardEvent', {

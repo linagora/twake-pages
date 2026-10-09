@@ -9,13 +9,15 @@ const BlocksEditorView = lazy(async () => ({
 
 /**
  * Blocks of BlockNote, written in its editor from `initial` on. `onChange`
- * receives every change.
+ * receives every change, with the blocks the editor does not write as
+ * `initial` holds them.
  */
 export function BlocksEditor({
   initial,
   label,
   lang,
   loadingLabel,
+  blockKind,
   onChange
 }: {
   initial: Record<string, unknown>[]
@@ -24,6 +26,8 @@ export function BlocksEditor({
   lang: string
   /** Names the placeholder shown while BlockNote loads. */
   loadingLabel: string
+  /** Names the kind of a block the editor does not write, from its type. */
+  blockKind: (type: string) => string
   onChange: (blocks: Record<string, unknown>[]) => void
 }): ReactElement {
   return (
@@ -32,6 +36,7 @@ export function BlocksEditor({
         initial={initial}
         label={label}
         lang={lang}
+        blockKind={blockKind}
         onChange={onChange}
       />
     </Suspense>

@@ -15,40 +15,57 @@ import { useCreateBlockNote } from '@blocknote/react'
 import { useColorScheme } from '@linagora/twake-mui'
 import type { ReactElement } from 'react'
 
-import { EDITOR_BLOCKS } from '@/ds/editorBlocks'
+import {
+  BlockKindContext,
+  keptBlockSpec,
+  pastesWithoutKeptBlocks
+} from '@/ds/blocknote/KeptBlock'
+import {
+  EDITOR_BLOCKS,
+  fromEditor,
+  KEPT_BLOCK,
+  toEditor
+} from '@/ds/editorBlocks'
 
 type Blocks = Record<string, unknown>[]
 
-// Neither the block menu nor a paste makes a block the schema lacks. Its
-// blocks are given as any blocks, as BlockNote's heading fails BlockNote's
-// own constraint on them under exactOptionalPropertyTypes (its optional
-// isToggleable).
+// The blocks of the editor: those it writes, and the kept block, which the
+// block menu does not offer and a paste does not make (see
+// pastesWithoutKeptBlocks). Its blocks are given as any blocks, as
+// BlockNote's heading fails BlockNote's own constraint on them under
+// exactOptionalPropertyTypes (its optional isToggleable); spread, they type
+// as the kept block alone.
 const schema = BlockNoteSchema.create<BlockSpecs>({
-  // @ts-expect-error -- the heading, as above.
-  blockSpecs: Object.fromEntries(
-    EDITOR_BLOCKS.map(type => [type, defaultBlockSpecs[type]])
-  )
+  blockSpecs: {
+    ...Object.fromEntries(
+      EDITOR_BLOCKS.map(type => [type, defaultBlockSpecs[type]])
+    ),
+    [KEPT_BLOCK]: keptBlockSpec()
+  }
 })
 
 /**
- * BlockNote, the editor of the pages, writing blocks from `initial` on,
- * which hold only blocks it writes (see editableBlocks).
+ * BlockNote, the editor of the pages, writing blocks from `initial` on. A
+ * block it does not write, it keeps as stored (see toEditor).
  */
 export function BlocksEditorView({
   initial,
   label,
   lang,
+  blockKind,
   onChange
 }: {
   initial: Blocks
   label: string
   lang: string
+  blockKind: (type: string) => string
   onChange: (blocks: Blocks) => void
 }): ReactElement {
   const editor = useCreateBlockNote({
     schema,
     dictionary: lang === 'fr' ? fr : en,
-    ...(initial.length > 0 && { initialContent: initial }),
+    ...(initial.length > 0 && { initialContent: toEditor(initial) }),
+    extensions: [pastesWithoutKeptBlocks()],
     domAttributes: {
       editor: { role: 'textbox', 'aria-multiline': 'true', 'aria-label': label }
     }
@@ -57,12 +74,14 @@ export function BlocksEditorView({
   const dark = (mode === 'system' ? systemMode : mode) === 'dark'
 
   return (
-    <BlockNoteView
-      editor={editor}
-      theme={dark ? 'dark' : 'light'}
-      onChange={() => {
-        onChange(editor.document)
-      }}
-    />
+    <BlockKindContext value={blockKind}>
+      <BlockNoteView
+        editor={editor}
+        theme={dark ? 'dark' : 'light'}
+        onChange={() => {
+          onChange(fromEditor(editor.document))
+        }}
+      />
+    </BlockKindContext>
   )
 }

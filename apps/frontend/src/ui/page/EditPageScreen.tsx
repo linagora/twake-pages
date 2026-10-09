@@ -88,6 +88,7 @@ function PageEditor({
     publish.error instanceof EditConflict ? publish.error.current : null
   const imageSources = useImageSources()
   const hidden = imageHostsNotShown(draft.content, imageSources)
+  const blockKind = useBlockKind()
   const path = pathOf(page)
 
   const restart = () => {
@@ -194,12 +195,35 @@ function PageEditor({
         label={t('editor.content')}
         lang={lang}
         loadingLabel={t('app.loading')}
+        blockKind={blockKind}
         onChange={content => {
           change({ content })
         }}
       />
     </main>
   )
+}
+
+/**
+ * Names the kind of a block the editor does not write, from its type: those
+ * the API knows by their names, any other by its type.
+ */
+function useBlockKind(): (type: string) => string {
+  const { t } = useI18n()
+  return type => {
+    switch (type) {
+      case 'video':
+        return t('editor.blockKind.video')
+      case 'audio':
+        return t('editor.blockKind.audio')
+      case 'file':
+        return t('editor.blockKind.file')
+      case 'gristEmbed':
+        return t('editor.blockKind.gristEmbed')
+      default:
+        return t('editor.blockKind.other', { type })
+    }
+  }
 }
 
 /** Why the page was not published, above the draft it keeps. */

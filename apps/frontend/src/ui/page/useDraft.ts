@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
 
-import { editableBlocks } from '@/ds/editorBlocks'
 import type { Page } from '@/domain/page'
 import { dropDraft, keepDraft, keptDraft, type Draft } from '@/ui/page/drafts'
 import { useSession } from '@/ui/session/SessionGate'
@@ -8,7 +7,7 @@ import { useSession } from '@/ui/session/SessionGate'
 const draftOf = (page: Page): Draft => ({
   baseVersion: page.version,
   title: page.title,
-  content: editableBlocks(page.content)
+  content: page.content
 })
 
 interface PageDraft {

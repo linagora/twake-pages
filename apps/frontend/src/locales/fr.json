@@ -194,7 +194,14 @@
     "publishOver": "Publier par-dessus",
     "publishOverTitle": "Publier par-dessus la version %{number} ?",
     "publishOverText": "Votre brouillon devient le contenu de la page pour tout le monde, à la place de la version publiée par %{author}, qui reste dans l'historique de la page.",
-    "cancel": "Annuler"
+    "cancel": "Annuler",
+    "blockKind": {
+      "video": "Vidéo",
+      "audio": "Audio",
+      "file": "Fichier",
+      "gristEmbed": "Intégration Grist",
+      "other": "Bloc %{type}"
+    }
   },
   "labels": {
     "title": "Pages avec l'étiquette %{name}"

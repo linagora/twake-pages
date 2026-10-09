@@ -1,14 +1,18 @@
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { KEPT_BLOCK } from '@/ds/editorBlocks'
 import type { Block } from '@/domain/page'
 import {
+  backspaceBefore,
   copiedFromBlockNote,
+  copyAllInBlocks,
   pasteInBlocks,
   typeInBlocks
 } from '@/testing/blocks'
 import {
   fakePagesApi,
+  GRIST_ORIGIN,
   paragraph,
   type FakePagesApi
 } from '@/testing/fakePagesApi'
@@ -32,6 +36,12 @@ function publishedBlocks(pagesApi: FakePagesApi): Block[] {
   }
   return version.content
 }
+
+// A video in the HTML the editor copies, which holds it in an attribute
+// that a page of another site or a text may hold as well.
+const VIDEO_AS_COPIED = `<div data-content-type="${KEPT_BLOCK}" data-stored='${JSON.stringify(
+  { type: 'video', props: { url: 'https://media.example.com/intro.mp4' } }
+)}'></div>`
 
 describe('the editor of a page', () => {
   it('publishes the title and the blocks written, then shows the page at its new version', async () => {
@@ -214,6 +224,18 @@ describe('the editor of a page', () => {
         },
         { type: 'file', props: { url: 'https://media.example.com/intro.pdf' } }
       ])
+    ],
+    [
+      'a page of another site, holding a video as the editor copies one',
+      { 'text/html': `<p>Watch the intro</p>${VIDEO_AS_COPIED}` }
+    ],
+    [
+      'a page of another site, holding a video as the editor copies one, in the HTML of BlockNote',
+      { 'blocknote/html': `<p>Watch the intro</p>${VIDEO_AS_COPIED}` }
+    ],
+    [
+      'a text holding a video as the editor copies one',
+      { 'text/plain': `Watch the intro\n\n${VIDEO_AS_COPIED}` }
     ]
   ])(
     'makes no video, audio or file block of what is pasted from %s',
@@ -244,48 +266,6 @@ describe('the editor of a page', () => {
       ).toEqual([])
     }
   )
-
-  it('opens a video the page holds as a link to it, which publishing keeps', async () => {
-    const pagesApi = fakePagesApi()
-    const wiki = pagesApi.withWiki()
-    const onboarding = pagesApi.withPage(wiki.id, {
-      title: 'Onboarding',
-      content: [
-        {
-          type: 'video',
-          props: { url: 'https://media.example.com/intro.mp4', name: 'Intro' },
-          children: []
-        }
-      ]
-    })
-    renderRoute(`/wikis/${wiki.id}/pages/${onboarding.id}/edit`, { pagesApi })
-
-    const content = await screen.findByRole('textbox', { name: 'Content' })
-    expect(
-      within(content).getByRole('link', { name: 'Intro' })
-    ).toHaveAttribute('href', 'https://media.example.com/intro.mp4')
-    fireEvent.click(screen.getByRole('button', { name: 'Publish' }))
-
-    await waitFor(() => {
-      expect(pagesApi.publish).toHaveBeenCalledWith(onboarding.id, {
-        baseVersion: 1,
-        title: 'Onboarding',
-        content: [
-          {
-            type: 'paragraph',
-            content: [
-              {
-                type: 'link',
-                href: 'https://media.example.com/intro.mp4',
-                content: [{ type: 'text', text: 'Intro', styles: {} }]
-              }
-            ],
-            children: []
-          }
-        ]
-      })
-    })
-  })
 
   it('takes an image by its link, with no upload', async () => {
     const pagesApi = fakePagesApi()
@@ -320,12 +300,12 @@ describe('the editor of a page', () => {
 const DRAFT_KEPT = /This is your draft, started from version 1/
 
 /** A page of a wiki, and the path of its editor. */
-function aPage(pagesApi: FakePagesApi) {
+function aPage(
+  pagesApi: FakePagesApi,
+  content: Block[] = [paragraph('Bring your badge')]
+) {
   const wiki = pagesApi.withWiki({ members: { 'bob@example.com': 'editor' } })
-  const page = pagesApi.withPage(wiki.id, {
-    title: 'Onboarding',
-    content: [paragraph('Bring your badge')]
-  })
+  const page = pagesApi.withPage(wiki.id, { title: 'Onboarding', content })
   return { page, editor: `/wikis/${wiki.id}/pages/${page.id}/edit` }
 }
 
@@ -345,6 +325,224 @@ async function leaveADraft(editor: string, pagesApi: FakePagesApi) {
   await writeADraft()
   unmount()
 }
+
+// A video as BlockNote stores one, with each of its props.
+const VIDEO: Block = {
+  id: 'intro-video',
+  type: 'video',
+  props: {
+    backgroundColor: 'default',
+    textAlignment: 'left',
+    name: 'intro.mp4',
+    url: 'https://media.example.com/intro.mp4',
+    caption: 'Welcome video',
+    showPreview: true,
+    previewWidth: 512
+  },
+  children: []
+}
+
+// As another client of the API may store one: with no id and no children.
+const GRIST_EMBED: Block = {
+  type: 'gristEmbed',
+  props: { url: `${GRIST_ORIGIN}/o/docs/budget` }
+}
+
+/** Leaves the next publish pending, so that the page does not show next. */
+function holdPublish(pagesApi: FakePagesApi) {
+  pagesApi.publish.mockImplementationOnce(() => new Promise(() => undefined))
+}
+
+describe('a block of the page that the editor does not offer', () => {
+  it('shows by its kind, its caption or else its name, and its address, and cannot be edited', async () => {
+    const pagesApi = fakePagesApi()
+    const { editor } = aPage(pagesApi, [
+      VIDEO,
+      {
+        type: 'file',
+        props: {
+          url: 'https://media.example.com/rules.pdf',
+          name: 'Rules.pdf'
+        },
+        children: []
+      },
+      GRIST_EMBED,
+      { type: 'mermaid', props: { code: 'graph TD' }, children: [] }
+    ])
+    renderRoute(editor, { pagesApi })
+
+    const content = await screen.findByRole('textbox', { name: 'Content' })
+    const kept = await within(content).findAllByRole('group')
+
+    expect(
+      kept.map(block => [...block.children].map(line => line.textContent))
+    ).toEqual([
+      ['Video', 'Welcome video', 'https://media.example.com/intro.mp4'],
+      ['File', 'Rules.pdf', 'https://media.example.com/rules.pdf'],
+      ['Grist embed', `${GRIST_ORIGIN}/o/docs/budget`],
+      ['mermaid block']
+    ])
+    expect(within(content).getByRole('group', { name: 'Grist embed' })).toBe(
+      kept[2]
+    )
+    expect(
+      kept.map(block =>
+        block.closest('[contenteditable]')?.getAttribute('contenteditable')
+      )
+    ).toEqual(['false', 'false', 'false', 'false'])
+  })
+
+  it('is published as stored when the title alone changes', async () => {
+    const pagesApi = fakePagesApi()
+    const { page, editor } = aPage(pagesApi, [VIDEO, GRIST_EMBED])
+    // The page would show its Grist embed next, which reading cannot yet.
+    holdPublish(pagesApi)
+    renderRoute(editor, { pagesApi })
+
+    await within(
+      await screen.findByRole('textbox', { name: 'Content' })
+    ).findAllByRole('group')
+    typeIn(screen.getByRole('main'), 'Title', 'Onboarding guide')
+    fireEvent.click(screen.getByRole('button', { name: 'Publish' }))
+
+    await waitFor(() => {
+      expect(pagesApi.publish).toHaveBeenCalledOnce()
+    })
+    expect(pagesApi.publish.mock.calls[0]).toStrictEqual([
+      page.id,
+      {
+        baseVersion: 1,
+        title: 'Onboarding guide',
+        content: [VIDEO, GRIST_EMBED]
+      }
+    ])
+  })
+
+  it('is published as stored among the blocks written', async () => {
+    const pagesApi = fakePagesApi()
+    const { editor } = aPage(pagesApi, [
+      VIDEO,
+      GRIST_EMBED,
+      paragraph('Bring your badge')
+    ])
+    // The page would show its Grist embed next, which reading cannot yet.
+    holdPublish(pagesApi)
+    renderRoute(editor, { pagesApi })
+
+    await typeInBlocks(
+      await screen.findByRole('textbox', { name: 'Content' }),
+      'Ask for a laptop'
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Publish' }))
+
+    await waitFor(() => {
+      expect(pagesApi.publish).toHaveBeenCalledOnce()
+    })
+    expect(publishedBlocks(pagesApi)).toStrictEqual([
+      VIDEO,
+      GRIST_EMBED,
+      expect.objectContaining(paragraph('Ask for a laptop')) as Block
+    ])
+  })
+
+  it('is published as stored with its text, the blocks under it as written', async () => {
+    const pagesApi = fakePagesApi()
+    // A paragraph as BlockNote stores one, under a block of a type the
+    // editor does not know, which holds text.
+    const desk = (text: string): Block => ({
+      id: 'badge-desk',
+      type: 'paragraph',
+      props: {
+        backgroundColor: 'default',
+        textColor: 'default',
+        textAlignment: 'left'
+      },
+      content: [{ type: 'text', text, styles: {} }],
+      children: []
+    })
+    const callout = (under: Block): Block => ({
+      id: 'badge-callout',
+      type: 'callout',
+      props: { tone: 'warning' },
+      content: [{ type: 'text', text: 'Mind the badge', styles: {} }],
+      children: [under]
+    })
+    const { editor } = aPage(pagesApi, [callout(desk('Ask at the desk'))])
+    // The page would show its callout next, which reading cannot yet.
+    holdPublish(pagesApi)
+    renderRoute(editor, { pagesApi })
+
+    const content = await screen.findByRole('textbox', { name: 'Content' })
+    await within(content).findByRole('group', { name: 'callout block' })
+    // In the last paragraph of the editor: the one under the callout.
+    await typeInBlocks(content, 'Ask at the front desk')
+    fireEvent.click(screen.getByRole('button', { name: 'Publish' }))
+
+    await waitFor(() => {
+      expect(pagesApi.publish).toHaveBeenCalledOnce()
+    })
+    expect(publishedBlocks(pagesApi)).toStrictEqual([
+      callout(desk('Ask at the front desk'))
+    ])
+  })
+
+  it('is published no more once deleted', async () => {
+    const pagesApi = fakePagesApi()
+    const { editor } = aPage(pagesApi, [
+      paragraph('Bring your badge'),
+      VIDEO,
+      paragraph('Ask for a laptop')
+    ])
+    renderRoute(editor, { pagesApi })
+
+    const content = await screen.findByRole('textbox', { name: 'Content' })
+    await within(content).findByRole('group', { name: 'Video' })
+    await backspaceBefore(content, 'Ask for a laptop')
+    expect(within(content).queryByRole('group')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Publish' }))
+
+    await waitFor(() => {
+      expect(pagesApi.publish).toHaveBeenCalledOnce()
+    })
+    expect(publishedBlocks(pagesApi)).toStrictEqual([
+      expect.objectContaining(paragraph('Bring your badge')) as Block,
+      expect.objectContaining(paragraph('Ask for a laptop')) as Block
+    ])
+  })
+
+  it('is left out of a paste of what was copied with it, the blocks under it taking its place', async () => {
+    const pagesApi = fakePagesApi()
+    const source = aPage(pagesApi, [
+      paragraph('Watch the intro'),
+      { ...VIDEO, children: [paragraph('Under the video')] },
+      GRIST_EMBED,
+      paragraph('Then read the rules')
+    ])
+    const { unmount } = renderRoute(source.editor, { pagesApi })
+    const copied = await screen.findByRole('textbox', { name: 'Content' })
+    await within(copied).findAllByRole('group')
+    const clipboard = copyAllInBlocks(copied)
+    unmount()
+    // The video was copied: the text of the clipboard holds its caption.
+    expect(clipboard['text/plain']).toContain('Welcome video')
+
+    renderRoute(aPage(pagesApi, []).editor, { pagesApi })
+    const content = await screen.findByRole('textbox', { name: 'Content' })
+    await pasteInBlocks(content, clipboard)
+    expect(content).toHaveTextContent('Then read the rules')
+    expect(within(content).queryByRole('group')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Publish' }))
+
+    await waitFor(() => {
+      expect(pagesApi.publish).toHaveBeenCalledOnce()
+    })
+    expect(publishedBlocks(pagesApi)).toStrictEqual([
+      expect.objectContaining(paragraph('Watch the intro')) as Block,
+      expect.objectContaining(paragraph('Under the video')) as Block,
+      expect.objectContaining(paragraph('Then read the rules')) as Block
+    ])
+  })
+})
 
 describe('the draft of a page', () => {
   it('is offered back when the editor opens again, and stays in the browser', async () => {

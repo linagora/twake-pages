@@ -194,7 +194,14 @@
     "publishOver": "Publish over it",
     "publishOverTitle": "Publish over version %{number}?",
     "publishOverText": "Your draft becomes the page's content for everyone, in place of the version %{author} published, which stays in the page's history.",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "blockKind": {
+      "video": "Video",
+      "audio": "Audio",
+      "file": "File",
+      "gristEmbed": "Grist embed",
+      "other": "%{type} block"
+    }
   },
   "labels": {
     "title": "Pages labelled %{name}"
