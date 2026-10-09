@@ -1,21 +1,15 @@
 import { Dots, Icon, Pen, Trash } from '@linagora/twake-icons'
 import {
-  Button,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogContentText,
-  DialogTitle,
   IconButton,
   ListItemIcon,
   ListItemText,
   Menu,
-  MenuItem,
-  Typography
+  MenuItem
 } from '@linagora/twake-mui'
-import { useId, useState, type ElementType, type ReactElement } from 'react'
+import { useState, type ElementType, type ReactElement } from 'react'
 import { useNavigate } from 'react-router'
 
+import { ConfirmDialog } from '@/ds/ConfirmDialog'
 import type { Wiki } from '@/domain/wiki'
 import { useI18n } from '@/ui/i18n/useI18n'
 import { useDeleteWiki, useEditWiki } from '@/ui/wiki/queries'
@@ -111,44 +105,27 @@ function DeleteWikiDialog({
   onClose: () => void
 }): ReactElement {
   const { t } = useI18n()
-  const titleId = useId()
   const navigate = useNavigate()
   const wikiName = useWikiName()
   const remove = useDeleteWiki(wiki.id)
 
   return (
-    <Dialog open onClose={onClose} aria-labelledby={titleId} size="small">
-      <form
-        onSubmit={event => {
-          event.preventDefault()
-          // The stream may tell the wiki is gone before its answer does, and
-          // the screen it closes would drop the callbacks given to mutate.
-          void remove.mutateAsync().then(
-            () => navigate('/'),
-            () => undefined
-          )
-        }}
-      >
-        <DialogTitle id={titleId}>
-          {t('deleteWiki.title', { name: wikiName(wiki) })}
-        </DialogTitle>
-        <DialogContent>
-          <DialogContentText>{t('deleteWiki.text')}</DialogContentText>
-          {remove.isError && (
-            <Typography role="alert" color="error">
-              {t('deleteWiki.failed')}
-            </Typography>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button variant="text" onClick={onClose}>
-            {t('deleteWiki.cancel')}
-          </Button>
-          <Button type="submit" color="error" disabled={remove.isPending}>
-            {t('deleteWiki.confirm')}
-          </Button>
-        </DialogActions>
-      </form>
-    </Dialog>
+    <ConfirmDialog
+      title={t('deleteWiki.title', { name: wikiName(wiki) })}
+      text={t('deleteWiki.text')}
+      confirm={t('deleteWiki.confirm')}
+      cancel={t('deleteWiki.cancel')}
+      failed={remove.isError ? t('deleteWiki.failed') : null}
+      pending={remove.isPending}
+      onConfirm={() => {
+        // The stream may tell the wiki is gone before its answer does, and
+        // the screen it closes would drop the callbacks given to mutate.
+        void remove.mutateAsync().then(
+          () => navigate('/'),
+          () => undefined
+        )
+      }}
+      onClose={onClose}
+    />
   )
 }
