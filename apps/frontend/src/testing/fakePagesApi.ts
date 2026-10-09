@@ -406,6 +406,12 @@ function checkName(value: string) {
   return name
 }
 
+function checkComment(value: string) {
+  const body = checkText(value, 10_000)
+  if (!storable(body)) throw refuse('invalid_request')
+  return body
+}
+
 // A block's address is its `url` prop, empty until the block is given one.
 function urlAllowed(block: Fields, allowed: (url: URL) => boolean) {
   const url = isFields(block.props) ? block.props.url : undefined
@@ -1365,7 +1371,7 @@ function signedIn(world: World, person: Person): FakePagesApi {
     ),
     addComment: vi.fn<PagesApi['addComment']>((pageId, input) =>
       answer(() => {
-        const body = checkText(input.body, 10_000)
+        const body = checkComment(input.body)
         const { page, wiki } = liveAccess(pageId, 'viewer')
         const parentId = input.parentId ?? null
         if (parentId !== null) {
@@ -1403,7 +1409,7 @@ function signedIn(world: World, person: Person): FakePagesApi {
     ),
     editComment: vi.fn<PagesApi['editComment']>((commentId, body) =>
       answer(() => {
-        const edited = checkText(body, 10_000)
+        const edited = checkComment(body)
         const { comment, page, wiki } = commentAccess(commentId)
         if (comment.author.id !== person.id) throw refuse('forbidden')
         if (page.deletion) throw refuse('in_trash')

@@ -1542,6 +1542,22 @@ describe('fakePagesApi', () => {
       )
     })
 
+    it('refuses a body with a NUL character or a lone surrogate', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki()
+      const page = api.withPage(wiki.id)
+      const comment = await api.addComment(page.id, { body: 'Draft' })
+      const invalid = new ApiError(400, 'invalid_request')
+
+      for (const body of ['Dr\u0000aft', 'Draft \ud83d']) {
+        await expect(api.addComment(page.id, { body })).rejects.toEqual(invalid)
+        await expect(api.editComment(comment.id, body)).rejects.toEqual(invalid)
+      }
+      await expect(api.listComments(page.id)).resolves.toMatchObject([
+        { body: 'Draft', editedAt: null }
+      ])
+    })
+
     it('makes its author and the members it mentions follow the page', async () => {
       const api = fakePagesApi()
       const wiki = api.withWiki({
