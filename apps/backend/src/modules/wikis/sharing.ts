@@ -6,6 +6,7 @@ import { refuse, Refused, writeOrRefuse } from '../../infra/refusals.ts'
 import type { Identity, RequireIdentity } from '../auth/index.ts'
 import { checkRole, roleOn, type Role } from './access.ts'
 import { bumpWiki } from './live.ts'
+import { takeOutOfWiki } from './members.ts'
 import { wikiParams } from './routes.ts'
 import { wikiInvites, wikiMembers, wikis } from './schema.ts'
 
@@ -184,13 +185,8 @@ function createSharingStore(db: Db) {
           await sharedWiki(tx, identity, wikiId)
         }
         await keepAnAdmin(tx, wikiId, userId)
-        const removed = await tx
-          .delete(wikiMembers)
-          .where(
-            and(eq(wikiMembers.wikiId, wikiId), eq(wikiMembers.userId, userId))
-          )
-          .returning({ userId: wikiMembers.userId })
-        if (removed.length === 0) throw new Refused('not_found')
+        const [left] = await takeOutOfWiki(tx, wikiId, [userId])
+        if (!left) throw new Refused('not_found')
       })
     }
   }

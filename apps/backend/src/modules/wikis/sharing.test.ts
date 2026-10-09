@@ -6,8 +6,10 @@ import {
   aSpaceWiki,
   aUser,
   aWikiOf,
+  createPage,
   invite,
   joinWiki,
+  pageOf,
   personalWikiOf,
   removeMember,
   someoneOfEachTenant,
@@ -15,8 +17,11 @@ import {
   versionOf,
   WAYS_TO_LEAVE,
   wikisOf,
+  type Page,
+  type PageRef,
   type TestUser
 } from '../../testing/app.ts'
+import { notify } from '../notifications/testing.ts'
 import type { Role } from './access.ts'
 import { behindAChange } from './testing.ts'
 
@@ -802,3 +807,70 @@ describe('DELETE /wikis/:wikiId/members/:userId', () => {
     expect(await versionOf(api, alice, wiki.id)).toBe(wiki.version)
   })
 })
+
+/** The pages the person lists across wikis, as favorites and as recent. */
+async function listsOf(user: TestUser) {
+  const idsAt = async (path: string) =>
+    (await api.as(user).get(path))
+      .json<{ pages: PageRef[] }>()
+      .pages.map(page => page.id)
+  return {
+    favorites: await idsAt('/favorites'),
+    recent: await idsAt('/recent')
+  }
+}
+
+/** Invites the person back into the wiki, which they join as they sign in. */
+async function backIn(admin: TestUser, member: TestUser, wikiId: string) {
+  await invite(api, admin, wikiId, member.email)
+  await wikisOf(api, member)
+}
+
+describe.each(someoneOfEachTenant)(
+  'a member who leaves a wiki, %s',
+  (_tenant, someone) => {
+    it.each(WAYS_TO_LEAVE)(
+      'loses their favorites and visits of its pages, %s',
+      async (_case, leave) => {
+        const alice = someone()
+        const bob = aColleagueOf(alice)
+        const wiki = await aWikiOf(api, alice)
+        await joinWiki(db, alice, wiki.id, bob, 'viewer')
+        await api.as(bob).put(`/pages/${wiki.homePageId}/favorite`)
+        await pageOf(api, bob, wiki.homePageId)
+        const before = await listsOf(bob)
+
+        await leave(api, alice, wiki.id, bob)
+
+        await backIn(alice, bob, wiki.id)
+        expect({ before, after: await listsOf(bob) }).toEqual({
+          before: { favorites: [wiki.homePageId], recent: [wiki.homePageId] },
+          after: { favorites: [], recent: [] }
+        })
+      }
+    )
+
+    it.each(WAYS_TO_LEAVE)(
+      'keeps their follows and notifications of its pages, %s',
+      async (_case, leave) => {
+        const alice = someone()
+        const bob = aColleagueOf(alice)
+        const wiki = await aWikiOf(api, alice)
+        await joinWiki(db, alice, wiki.id, bob, 'editor')
+        const notes = await createPage(api, bob, wiki.id, { title: 'Notes' })
+        await notify(db, alice, wiki, bob)
+
+        await leave(api, alice, wiki.id, bob)
+
+        await backIn(alice, bob, wiki.id)
+        const back = (await wikisOf(api, bob)).find(
+          listed => listed.id === wiki.id
+        )
+        expect({
+          following: (await pageOf(api, bob, notes.json<Page>().id)).following,
+          unread: back?.unread
+        }).toEqual({ following: true, unread: 1 })
+      }
+    )
+  }
+)

@@ -20,6 +20,7 @@ import {
 import {
   currentUser,
   id,
+  leavingUser,
   organizationId,
   sortKey,
   tenant,
@@ -198,9 +199,15 @@ export const pageLabels = pgTable.withRLS(
   ]
 )
 
+// The person's own rows, and in USING those of whoever app_leave_wiki takes
+// out of a wiki, for the admin removing them (see its migration).
 function ownRows(userId: AnyPgColumn) {
   const own = sql`${userId} = ${currentUser}`
-  return pgPolicy('own', { as: 'restrictive', using: own, withCheck: own })
+  return pgPolicy('own', {
+    as: 'restrictive',
+    using: sql`${own} or ${userId} = ${leavingUser}`,
+    withCheck: own
+  })
 }
 
 export const pageFavorites = pgTable.withRLS(

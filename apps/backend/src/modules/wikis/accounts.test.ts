@@ -13,6 +13,7 @@ import {
   joinWiki,
   personalWikiOf,
   purgeJobOf,
+  removeMember,
   startApp,
   versionOf,
   wikiRowsOf,
@@ -28,6 +29,7 @@ import { keepSettings } from '../settings/events.ts'
 import type { Role } from './access.ts'
 import { accountRoutes } from './accounts.ts'
 import { wikiMembers, wikis } from './schema.ts'
+import { behindAChange } from './testing.ts'
 
 let api: Awaited<ReturnType<typeof startApp>>
 const { sql, db } = createDb(inject('databaseUrl'))
@@ -268,6 +270,37 @@ describe.each(deletions)(
       expect(await versionOf(api, editor, handedOn.id)).toBeGreaterThan(
         handedOnBefore
       )
+    })
+
+    // A removal locks the wiki, then deletes the favorites and visits of the
+    // member it takes out, which the deletion deletes too: the deletion locks
+    // the wikis of the account before, so it waits for the removal, rather
+    // than hold rows the removal waits for.
+    it('takes its turn behind an admin removing it from a wiki', async () => {
+      const gone = makeUser()
+      const admin = aPeerOf(gone)
+      // Their personal wiki keeps them a member, so the deletion finds them by
+      // their email even when the removal is done before it starts: another
+      // file's ALTER TABLE on wiki_members, as db.test.ts runs, can wait
+      // behind the removal, and behindAChange counts it as the deletion.
+      await personalWikiOf(api, gone)
+      const wiki = await aWiki(admin, 'Roadmap', [[gone, 'editor']])
+      await favoriteOpenAndFollow(gone, wiki.homePageId)
+
+      const done = await behindAChange<number | string>(db, admin, wiki.id, [
+        async () =>
+          (await removeMember(api, admin, wiki.id, gone.userId)).statusCode,
+        async () => {
+          await deliver(routingKey, body(gone))
+          return 'deleted'
+        }
+      ])
+
+      expect(done).toEqual([204, 'deleted'])
+      expect(await membersOf(admin, wiki.id)).toEqual([
+        { userId: admin.userId, role: 'admin' }
+      ])
+      expect(await keptFor(gone)).toEqual(NOTHING_KEPT)
     })
 
     it('leaves a wiki its admin deleted to its purge', async () => {

@@ -37,6 +37,10 @@ export const tenant = () =>
 const currentOrganization = sql`nullif(current_setting('app.org_id', true), '')`
 export const currentUser = sql`nullif(current_setting('app.user_id', true), '')::uuid`
 
+// The person app_leave_wiki takes out of a wiki, while it forgets their rows
+// for whoever removes them.
+export const leavingUser = sql`nullif(current_setting('app.leaving_user', true), '')::uuid`
+
 // B2C rows have no organization: a request without one only sees those, and
 // only within `b2cScope`, since every B2C user shares the missing organization.
 // A narrower `b2cWriteScope` limits the B2C rows it may write.

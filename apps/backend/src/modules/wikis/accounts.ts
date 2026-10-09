@@ -130,6 +130,9 @@ async function bumpWikisOf(tx: Tx, userId: string) {
 // deleted account, rather than for the 30 days a wiki its admin deletes is kept.
 async function forget(tx: Tx, organizationId: string | null, userId: string) {
   await asTenant(tx, { organizationId, userId, email: '' })
+  // First: a removal from one of the person's wikis locks it before it
+  // deletes rows this deletes too.
+  await bumpWikisOf(tx, userId)
   await tx.delete(userSettings).where(
     inArray(
       userSettings.email,
@@ -149,7 +152,6 @@ async function forget(tx: Tx, organizationId: string | null, userId: string) {
   await tx
     .delete(wikis)
     .where(and(eq(wikis.createdBy, userId), eq(wikis.kind, 'personal')))
-  await bumpWikisOf(tx, userId)
   await handOnWikis(tx, userId)
   await tx.delete(wikiMembers).where(eq(wikiMembers.userId, userId))
 }

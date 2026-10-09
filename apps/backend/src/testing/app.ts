@@ -59,7 +59,10 @@ export async function joinWiki(
   )
 }
 
-/** Takes the person out of the wiki, as its admin will by removing them. */
+/**
+ * Takes the person out of the wiki in the database alone, which keeps their
+ * favorites and visits of its pages, unlike the sharing routes.
+ */
 export async function removeFromWiki(
   db: Db,
   admin: TestUser,
