@@ -16,6 +16,7 @@ import {
   type TestUser
 } from '../../testing/app.ts'
 import type { Role } from './access.ts'
+import { behindAChange } from './testing.ts'
 
 let api: Awaited<ReturnType<typeof startApp>>
 const { sql, db } = createDb(inject('databaseUrl'))
@@ -432,6 +433,176 @@ describe('DELETE /wikis/:wikiId/invites/:inviteId', () => {
     const wiki = await aWikiOf(api, alice)
 
     const response = await cancel(alice, wiki.id, 'carol')
+
+    expect(response.statusCode).toBe(404)
+    expect(response.json()).toEqual({ error: 'not_found' })
+    expect(await versionOf(api, alice, wiki.id)).toBe(wiki.version)
+  })
+})
+
+const setRole = (admin: TestUser, wikiId: string, userId: string, role: Role) =>
+  api.as(admin).patch(`/wikis/${wikiId}/members/${userId}`, { role })
+
+/** How many admins the wiki has, as its member shows them. */
+const adminsOf = async (member: TestUser, wikiId: string) =>
+  (await sharingOf(member, wikiId)).members.filter(
+    listed => listed.role === 'admin'
+  ).length
+
+describe('PATCH /wikis/:wikiId/members/:userId', () => {
+  it('changes the role of a member', async () => {
+    const alice = aUser()
+    const bob = aColleagueOf(alice)
+    const wiki = await aWikiOf(api, alice)
+    await joinWiki(db, alice, wiki.id, bob, 'viewer')
+
+    const response = await setRole(alice, wiki.id, bob.userId, 'editor')
+
+    expect(response.statusCode).toBe(204)
+    expect(await wikisOf(api, bob)).toContainEqual(
+      expect.objectContaining({ id: wiki.id, role: 'editor' })
+    )
+  })
+
+  it('moves the wiki’s version', async () => {
+    const alice = aUser()
+    const bob = aColleagueOf(alice)
+    const wiki = await aWikiOf(api, alice)
+    await joinWiki(db, alice, wiki.id, bob, 'viewer')
+    const before = await versionOf(api, alice, wiki.id)
+
+    await setRole(alice, wiki.id, bob.userId, 'admin')
+
+    expect(await versionOf(api, alice, wiki.id)).toBeGreaterThan(before)
+  })
+
+  it('lets an admin step down once another admin is there', async () => {
+    const alice = aUser()
+    const bob = aColleagueOf(alice)
+    const wiki = await aWikiOf(api, alice)
+    await joinWiki(db, alice, wiki.id, bob, 'editor')
+    await setRole(alice, wiki.id, bob.userId, 'admin')
+
+    const response = await setRole(alice, wiki.id, alice.userId, 'viewer')
+
+    expect(response.statusCode).toBe(204)
+    expect(await wikisOf(api, alice)).toContainEqual(
+      expect.objectContaining({ id: wiki.id, role: 'viewer' })
+    )
+  })
+
+  it('refuses to take the role of the last admin', async () => {
+    const alice = aUser()
+    const bob = aColleagueOf(alice)
+    const wiki = await aWikiOf(api, alice)
+    await joinWiki(db, alice, wiki.id, bob, 'editor')
+    const before = await versionOf(api, alice, wiki.id)
+
+    const response = await setRole(alice, wiki.id, alice.userId, 'editor')
+
+    expect(response.statusCode).toBe(409)
+    expect(response.json()).toEqual({ error: 'last_admin' })
+    expect(await versionOf(api, alice, wiki.id)).toBe(before)
+    expect(await wikisOf(api, alice)).toContainEqual(
+      expect.objectContaining({ id: wiki.id, role: 'admin' })
+    )
+  })
+
+  // Each change waits for the wiki's row lock, which the change before it
+  // holds, then reads the admins as that change left them.
+  it('keeps an admin when the last two step down at once', async () => {
+    const alice = aUser()
+    const bob = aColleagueOf(alice)
+    const wiki = await aWikiOf(api, alice)
+    await joinWiki(db, alice, wiki.id, bob, 'admin')
+
+    const [first, second] = await behindAChange(db, alice, wiki.id, [
+      () => setRole(alice, wiki.id, alice.userId, 'editor'),
+      () => setRole(bob, wiki.id, bob.userId, 'editor')
+    ])
+
+    expect(first?.statusCode).toBe(204)
+    expect(second?.statusCode).toBe(409)
+    expect(second?.json()).toEqual({ error: 'last_admin' })
+    expect(await adminsOf(alice, wiki.id)).toBe(1)
+  })
+
+  it.each([
+    ['no role', {}],
+    ['an unknown role', { role: 'owner' }]
+  ])('refuses %s', async (_case, body) => {
+    const alice = aUser()
+    const bob = aColleagueOf(alice)
+    const wiki = await aWikiOf(api, alice)
+    await joinWiki(db, alice, wiki.id, bob, 'viewer')
+    const before = await versionOf(api, alice, wiki.id)
+
+    const response = await api
+      .as(alice)
+      .patch(`/wikis/${wiki.id}/members/${bob.userId}`, body)
+
+    expect(response.statusCode).toBe(400)
+    expect(response.json()).toEqual({ error: 'invalid_request' })
+    expect(await versionOf(api, alice, wiki.id)).toBe(before)
+  })
+
+  it.each(['viewer', 'editor'] as const)('refuses %ss', async role => {
+    const alice = aUser()
+    const bob = aColleagueOf(alice)
+    const wiki = await aWikiOf(api, alice)
+    await joinWiki(db, alice, wiki.id, bob, role)
+    const before = await versionOf(api, alice, wiki.id)
+
+    const response = await setRole(bob, wiki.id, bob.userId, 'admin')
+
+    expect(response.statusCode).toBe(403)
+    expect(response.json()).toEqual({ error: 'forbidden' })
+    expect(await versionOf(api, alice, wiki.id)).toBe(before)
+    expect(await wikisOf(api, bob)).toContainEqual(
+      expect.objectContaining({ id: wiki.id, role })
+    )
+  })
+
+  it('hides the wiki from someone who is no member', async () => {
+    const alice = aUser()
+    const wiki = await aWikiOf(api, alice)
+
+    const response = await setRole(
+      aColleagueOf(alice),
+      wiki.id,
+      alice.userId,
+      'viewer'
+    )
+
+    expect(response.statusCode).toBe(404)
+    expect(response.json()).toEqual({ error: 'not_found' })
+    expect(await versionOf(api, alice, wiki.id)).toBe(wiki.version)
+  })
+
+  it.each(WIKIS_WITH_MANAGED_MEMBERS)(
+    'answers managed for %s',
+    async (_case, aWiki) => {
+      const alice = aUser()
+      const bob = aColleagueOf(alice)
+      const wikiId = await aWiki(alice, bob)
+      const before = await versionOf(api, alice, wikiId)
+
+      const response = await setRole(alice, wikiId, bob.userId, 'viewer')
+
+      expect(response.statusCode).toBe(409)
+      expect(response.json()).toEqual({ error: 'managed' })
+      expect(await versionOf(api, alice, wikiId)).toBe(before)
+    }
+  )
+
+  it.each([
+    ['someone who is no member of the wiki', () => randomUUID()],
+    ['an id that is no uuid', () => 'bob']
+  ])('answers not_found for %s', async (_case, userId) => {
+    const alice = aUser()
+    const wiki = await aWikiOf(api, alice)
+
+    const response = await setRole(alice, wiki.id, userId(), 'viewer')
 
     expect(response.statusCode).toBe(404)
     expect(response.json()).toEqual({ error: 'not_found' })

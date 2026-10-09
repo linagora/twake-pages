@@ -1,4 +1,4 @@
-import { and, asc, eq, sql } from 'drizzle-orm'
+import { and, asc, eq, ne, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { inTenant, type Db, type Tx } from '../../infra/db.ts'
 import type { HttpServer } from '../../infra/http.ts'
@@ -13,7 +13,11 @@ const role = z.enum(['viewer', 'editor', 'admin'])
 
 const newInvite = z.object({ email: z.email().max(254).toLowerCase(), role })
 
+const roleChange = z.object({ role })
+
 const inviteParams = wikiParams.extend({ inviteId: z.uuid() })
+
+const memberParams = wikiParams.extend({ userId: z.uuid() })
 
 // A personal wiki stays private, and a space wiki takes its members from its
 // space. Unlike Twake Tasks, which answers forbidden, both are managed, as
@@ -37,6 +41,23 @@ function checkSameOrganization(identity: Identity, email: string) {
   if (domainOf(email) !== domainOf(identity.email)) {
     throw new Refused('not_same_organization')
   }
+}
+
+// Every sharing change moves the wiki's version first, so the row lock makes
+// two admins stepping down at once take turns, and one of them stays.
+async function keepAnAdmin(tx: Tx, wikiId: string, leaving: string) {
+  const [other] = await tx
+    .select({ userId: wikiMembers.userId })
+    .from(wikiMembers)
+    .where(
+      and(
+        eq(wikiMembers.wikiId, wikiId),
+        eq(wikiMembers.role, 'admin'),
+        ne(wikiMembers.userId, leaving)
+      )
+    )
+    .limit(1)
+  if (!other) throw new Refused('last_admin')
 }
 
 function createSharingStore(db: Db) {
@@ -124,6 +145,26 @@ function createSharingStore(db: Db) {
             and(eq(wikiInvites.wikiId, wikiId), eq(wikiInvites.id, inviteId))
           )
       })
+    },
+
+    setMemberRole(
+      identity: Identity,
+      wikiId: string,
+      userId: string,
+      role: Role
+    ) {
+      return writeOrRefuse(db, identity, async tx => {
+        await sharedWiki(tx, identity, wikiId)
+        if (role !== 'admin') await keepAnAdmin(tx, wikiId, userId)
+        const changed = await tx
+          .update(wikiMembers)
+          .set({ role })
+          .where(
+            and(eq(wikiMembers.wikiId, wikiId), eq(wikiMembers.userId, userId))
+          )
+          .returning({ userId: wikiMembers.userId })
+        if (changed.length === 0) throw new Refused('not_found')
+      })
     }
   }
 }
@@ -182,6 +223,29 @@ export function registerSharing(
         identity,
         params.data.wikiId,
         params.data.inviteId
+      )
+      if (!result.ok) return refuse(reply, result.error)
+      return reply.code(204).send()
+    }
+  )
+
+  app.patch(
+    '/wikis/:wikiId/members/:userId',
+    { preHandler: deps.requireIdentity },
+    async (request, reply) => {
+      const identity = request.identity
+      if (!identity) return reply.code(401).send()
+      const params = memberParams.safeParse(request.params)
+      if (!params.success) return refuse(reply, 'not_found')
+      const body = roleChange.safeParse(request.body)
+      if (!body.success) {
+        return reply.code(400).send({ error: 'invalid_request' })
+      }
+      const result = await store.setMemberRole(
+        identity,
+        params.data.wikiId,
+        params.data.userId,
+        body.data.role
       )
       if (!result.ok) return refuse(reply, result.error)
       return reply.code(204).send()
