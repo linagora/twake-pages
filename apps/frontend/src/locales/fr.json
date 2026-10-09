@@ -93,7 +93,11 @@
     "invitation": "Invitation",
     "cancelInvitation": "Annuler l'invitation",
     "remove": "Retirer",
-    "close": "Fermer"
+    "close": "Fermer",
+    "failed": "La modification n'a pas pu être enregistrée.",
+    "notSameOrganization": "Seules les personnes de votre organisation peuvent être invitées.",
+    "lastAdmin": "Un wiki garde au moins un administrateur.",
+    "loadFailed": "Les membres n'ont pas pu être chargés."
   },
   "tree": {
     "title": "Pages",

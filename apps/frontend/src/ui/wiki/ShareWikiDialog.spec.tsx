@@ -8,6 +8,7 @@ import {
 } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
+import { ApiError } from '@/application/pages'
 import { fakePagesApi, type FakePagesApi } from '@/testing/fakePagesApi'
 import { renderRoute } from '@/testing/renderWithProviders'
 
@@ -187,5 +188,133 @@ describe('ShareWikiDialog', () => {
     await expect(pagesApi.getMembers(wiki.id)).resolves.toMatchObject({
       invites: []
     })
+  })
+
+  it('tells the admin that only people of their organization are invited, and keeps the email', async () => {
+    const pagesApi = fakePagesApi()
+    const wiki = pagesApi.withWiki({ name: 'Engineering' })
+    const dialog = await openSharing(pagesApi, wiki.id)
+    const form = within(dialog.getByRole('form', { name: 'Invite' }))
+    const email = form.getByRole('combobox', { name: 'Email' })
+
+    fireEvent.change(email, { target: { value: 'bob@elsewhere.com' } })
+    fireEvent.click(form.getByRole('button', { name: 'Invite' }))
+
+    expect(await dialog.findByRole('alert')).toHaveTextContent(
+      'Only people of your organization can be invited.'
+    )
+    expect(email).toHaveValue('bob@elsewhere.com')
+    expect(dialog.queryByRole('status')).toBeNull()
+  })
+
+  it('tells the last admin that a wiki keeps one', async () => {
+    const pagesApi = fakePagesApi()
+    const wiki = pagesApi.withWiki({
+      name: 'Engineering',
+      members: { 'bob@example.com': 'editor' }
+    })
+    const dialog = await openSharing(pagesApi, wiki.id)
+    const alice = within(
+      await dialog.findByRole('listitem', { name: 'Alice Martin' })
+    )
+
+    fireEvent.click(alice.getByRole('button', { name: 'Role: Admin' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Editor' }))
+
+    expect(await dialog.findByRole('alert')).toHaveTextContent(
+      'A wiki keeps at least one admin.'
+    )
+    expect(alice.getByRole('button', { name: 'Role: Admin' })).toBeVisible()
+  })
+
+  it('keeps the last admin who removes themself on the wiki, and tells why', async () => {
+    const pagesApi = fakePagesApi()
+    const wiki = pagesApi.withWiki({
+      name: 'Engineering',
+      members: { 'bob@example.com': 'editor' }
+    })
+    const { router } = renderRoute(`/wikis/${wiki.id}`, { pagesApi })
+    fireEvent.click(await screen.findByRole('button', { name: 'Share' }))
+    const dialog = within(
+      await screen.findByRole('dialog', { name: 'Share Engineering' })
+    )
+    const alice = within(
+      await dialog.findByRole('listitem', { name: 'Alice Martin' })
+    )
+
+    fireEvent.click(alice.getByRole('button', { name: 'Role: Admin' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Remove' }))
+
+    expect(await dialog.findByRole('alert')).toHaveTextContent(
+      'A wiki keeps at least one admin.'
+    )
+    expect(router.state.location.pathname).toBe(`/wikis/${wiki.id}`)
+    expect(alice.getByRole('button', { name: 'Role: Admin' })).toBeVisible()
+  })
+
+  it('tells that a change was not saved, and shows the members as they now are', async () => {
+    const pagesApi = fakePagesApi()
+    const wiki = pagesApi.withWiki({
+      name: 'Engineering',
+      members: { 'bob@example.com': 'viewer', 'carol@example.com': 'admin' }
+    })
+    const bob = pagesApi.signedInAs('bob@example.com')
+    const carol = pagesApi.signedInAs('carol@example.com')
+    // Down, so the dialog still shows bob once carol removed him.
+    pagesApi.watchWiki.mockImplementation(() => () => undefined)
+    const dialog = await openSharing(pagesApi, wiki.id)
+    const bobRow = within(
+      await dialog.findByRole('listitem', { name: 'bob@example.com' })
+    )
+    await carol.removeMember(wiki.id, bob.person.id)
+
+    fireEvent.click(bobRow.getByRole('button', { name: 'Role: Viewer' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Editor' }))
+
+    expect(await dialog.findByRole('alert')).toHaveTextContent(
+      'The change could not be saved.'
+    )
+    expect(
+      dialog.queryByRole('listitem', { name: 'bob@example.com' })
+    ).toBeNull()
+  })
+
+  it('tells only why the last change failed', async () => {
+    const pagesApi = fakePagesApi()
+    const wiki = pagesApi.withWiki({
+      name: 'Engineering',
+      members: { 'bob@example.com': 'editor' }
+    })
+    const dialog = await openSharing(pagesApi, wiki.id)
+    const alice = within(
+      await dialog.findByRole('listitem', { name: 'Alice Martin' })
+    )
+    fireEvent.click(alice.getByRole('button', { name: 'Role: Admin' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Remove' }))
+    await dialog.findByRole('alert')
+    const form = within(dialog.getByRole('form', { name: 'Invite' }))
+
+    fireEvent.change(form.getByRole('combobox', { name: 'Email' }), {
+      target: { value: 'bob@elsewhere.com' }
+    })
+    fireEvent.click(form.getByRole('button', { name: 'Invite' }))
+
+    await waitFor(() => {
+      expect(dialog.getByRole('alert')).toHaveTextContent(
+        'Only people of your organization can be invited.'
+      )
+    })
+  })
+
+  it('tells when the members could not be loaded', async () => {
+    const pagesApi = fakePagesApi()
+    const wiki = pagesApi.withWiki({ name: 'Engineering' })
+    pagesApi.getMembers.mockRejectedValue(new ApiError(403, null))
+
+    const dialog = await openSharing(pagesApi, wiki.id)
+
+    expect(await dialog.findByRole('alert')).toHaveTextContent(
+      'The members could not be loaded.'
+    )
   })
 })
