@@ -2,7 +2,7 @@
 
 The backend serves JSON under `/api`, like Twake Tasks (the paths below leave the prefix out), and `/health/live`, `/health/ready` at the root. Every API route but the back-channel logout needs `Authorization: Bearer <access token>`; a missing or rejected token answers `401` with no body.
 
-Ids are UUIDv7 strings. Times are ISO 8601 strings in UTC. Bodies are validated with zod: a malformed id in the path answers `404 { error: 'not_found' }`, a malformed body `400 { error: 'invalid_request' }`. A failure of the server answers `500 { error: 'server_error' }`, and its cause goes only to the log.
+Ids are UUIDv7 strings. Times are ISO 8601 strings in UTC. Bodies are validated with zod: a malformed id or version number in the path answers `404 { error: 'not_found' }`, a malformed body `400 { error: 'invalid_request' }`. A failure of the server answers `500 { error: 'server_error' }`, and its cause goes only to the log.
 
 A refusal answers `{ error: <Refusal> }` with its status:
 
