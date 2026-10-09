@@ -3,12 +3,16 @@ import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest'
 import { createDb, inTenant } from '../../infra/db.ts'
 import {
   aColleagueOf,
+  aCommentOn,
   anInvitation,
   aPage,
   aPageIn,
   aUser,
   aWikiOf,
   backIn,
+  commentOn,
+  deleteComment,
+  editComment,
   invite,
   isFollowing,
   joinWiki,
@@ -23,7 +27,7 @@ import {
   waysOutOfAWiki,
   wikiRowsOf,
   wikisOf,
-  type Person,
+  type Comment,
   type TestUser
 } from '../../testing/app.ts'
 import { behindAChange } from '../wikis/testing.ts'
@@ -39,27 +43,6 @@ afterAll(async () => {
   await api.close()
   await sql.end()
 })
-
-/** A comment as the comments routes answer it. */
-interface Comment {
-  id: string
-  parentId: string | null
-  author: Person
-  body: string
-  createdAt: string
-  editedAt: string | null
-}
-
-/** `POST /pages/:pageId/comments` by the person. */
-const commentOn = (user: TestUser, pageId: string, comment: object) =>
-  api.as(user).post(`/pages/${pageId}/comments`, comment)
-
-/** A comment the person writes on the page through the API. */
-const aCommentOn = async (
-  user: TestUser,
-  pageId: string,
-  comment: { body: string; parentId?: string }
-) => (await commentOn(user, pageId, comment)).json<Comment>()
 
 /** `GET /pages/:pageId/comments` by the person. */
 const listComments = (user: TestUser, pageId: string) =>
@@ -101,8 +84,8 @@ const UNANSWERABLE: [string, ParentOf][] = [
   [
     'a reply',
     async ({ user, pageId }) => {
-      const first = await aCommentOn(user, pageId, { body: 'Plan' })
-      const reply = await aCommentOn(user, pageId, {
+      const first = await aCommentOn(api, user, pageId, { body: 'Plan' })
+      const reply = await aCommentOn(api, user, pageId, {
         body: 'Agreed',
         parentId: first.id
       })
@@ -113,7 +96,7 @@ const UNANSWERABLE: [string, ParentOf][] = [
     'a comment on another page of the wiki',
     async ({ user, wikiId }) => {
       const other = await aPage(api, user, wikiId, { title: 'Goals' })
-      return (await aCommentOn(user, other, { body: 'Plan' })).id
+      return (await aCommentOn(api, user, other, { body: 'Plan' })).id
     }
   ],
   ['an unknown comment', () => Promise.resolve(randomUUID())]
@@ -128,7 +111,7 @@ describe('POST and GET /pages/:pageId/comments', () => {
       const wiki = await aWikiOf(api, alice)
       await joinWiki(db, alice, wiki.id, bob, 'viewer')
 
-      const response = await commentOn(bob, wiki.homePageId, {
+      const response = await commentOn(api, bob, wiki.homePageId, {
         body: '  Looks good.\n'
       })
 
@@ -152,10 +135,12 @@ describe('POST and GET /pages/:pageId/comments', () => {
     const wiki = await aWikiOf(api, alice)
     await joinWiki(db, alice, wiki.id, bob, 'viewer')
     const goals = await aPage(api, alice, wiki.id, { title: 'Goals' })
-    const first = await aCommentOn(alice, wiki.homePageId, { body: 'Plan' })
-    await aCommentOn(bob, goals, { body: 'Elsewhere' })
-    await aCommentOn(bob, wiki.homePageId, { body: 'Question' })
-    await aCommentOn(bob, wiki.homePageId, {
+    const first = await aCommentOn(api, alice, wiki.homePageId, {
+      body: 'Plan'
+    })
+    await aCommentOn(api, bob, goals, { body: 'Elsewhere' })
+    await aCommentOn(api, bob, wiki.homePageId, { body: 'Question' })
+    await aCommentOn(api, bob, wiki.homePageId, {
       body: 'Agreed',
       parentId: first.id
     })
@@ -173,7 +158,7 @@ describe('POST and GET /pages/:pageId/comments', () => {
     const alice = aUser()
     const wiki = await aWikiOf(api, alice)
 
-    const response = await commentOn(alice, wiki.homePageId, {
+    const response = await commentOn(api, alice, wiki.homePageId, {
       body: 'Plan',
       parentId: null
     })
@@ -187,7 +172,7 @@ describe('POST and GET /pages/:pageId/comments', () => {
     const wiki = await aWikiOf(api, alice)
     const body = 'a'.repeat(10_000)
 
-    const response = await commentOn(alice, wiki.homePageId, {
+    const response = await commentOn(api, alice, wiki.homePageId, {
       body: ` ${body}\n`
     })
 
@@ -201,7 +186,7 @@ describe('POST and GET /pages/:pageId/comments', () => {
     const bob = { ...aColleagueOf(alice, 'bob'), name: 'Bob Martin' }
     const wiki = await aWikiOf(api, alice)
     await joinWiki(db, alice, wiki.id, bob, 'viewer')
-    await commentOn(bob, wiki.homePageId, { body: 'Bye' })
+    await commentOn(api, bob, wiki.homePageId, { body: 'Bye' })
 
     await removeMember(api, bob, wiki.id, bob.userId)
 
@@ -217,7 +202,7 @@ describe('POST and GET /pages/:pageId/comments', () => {
       const wiki = await aWikiOf(api, alice)
       await joinWiki(db, alice, wiki.id, bob, 'viewer')
 
-      await commentOn(bob, wiki.homePageId, { body: 'Plan' })
+      await commentOn(api, bob, wiki.homePageId, { body: 'Plan' })
 
       expect(await isFollowing(api, bob, wiki.homePageId)).toBe(true)
     }
@@ -226,10 +211,12 @@ describe('POST and GET /pages/:pageId/comments', () => {
   it('makes the author of a reply follow the page again, after they stopped', async () => {
     const alice = aUser()
     const wiki = await aWikiOf(api, alice)
-    const first = await aCommentOn(alice, wiki.homePageId, { body: 'Plan' })
+    const first = await aCommentOn(api, alice, wiki.homePageId, {
+      body: 'Plan'
+    })
     await stopFollowing(api, alice, wiki.homePageId)
 
-    await commentOn(alice, wiki.homePageId, {
+    await commentOn(api, alice, wiki.homePageId, {
       body: 'Agreed',
       parentId: first.id
     })
@@ -242,7 +229,7 @@ describe('POST and GET /pages/:pageId/comments', () => {
     const wiki = await aWikiOf(api, alice)
     const before = await versionOf(api, alice, wiki.id)
 
-    await commentOn(alice, wiki.homePageId, { body: 'Plan' })
+    await commentOn(api, alice, wiki.homePageId, { body: 'Plan' })
 
     expect(await versionOf(api, alice, wiki.id)).toBe(before + 1)
   })
@@ -252,7 +239,7 @@ describe('POST and GET /pages/:pageId/comments', () => {
     const alice = aUser()
     const wiki = await aWikiOf(api, alice)
     const plans = await aPage(api, alice, wiki.id, { title: 'Plans' })
-    const written = await aCommentOn(alice, plans, { body: 'Plan' })
+    const written = await aCommentOn(api, alice, plans, { body: 'Plan' })
 
     await trash(alice, plans)
 
@@ -269,7 +256,7 @@ describe('POST and GET /pages/:pageId/comments', () => {
     })
     const before = await versionOf(api, alice, wiki.id)
 
-    const response = await commentOn(alice, drafts, { body: 'Plan' })
+    const response = await commentOn(api, alice, drafts, { body: 'Plan' })
 
     expect(response.statusCode).toBe(409)
     expect(response.json()).toEqual({ error: 'in_trash' })
@@ -281,15 +268,15 @@ describe('POST and GET /pages/:pageId/comments', () => {
     const alice = aUser()
     const wiki = await aWikiOf(api, alice)
     const plans = await aPage(api, alice, wiki.id, { title: 'Plans' })
-    const first = await aCommentOn(alice, plans, { body: 'Plan' })
-    const reply = await aCommentOn(alice, plans, {
+    const first = await aCommentOn(api, alice, plans, { body: 'Plan' })
+    const reply = await aCommentOn(api, alice, plans, {
       body: 'Agreed',
       parentId: first.id
     })
     await trash(alice, plans)
     const before = await versionOf(api, alice, wiki.id)
 
-    const response = await commentOn(alice, plans, {
+    const response = await commentOn(api, alice, plans, {
       body: 'Me too',
       parentId: reply.id
     })
@@ -306,7 +293,7 @@ describe('POST and GET /pages/:pageId/comments', () => {
       const wiki = await aWikiOf(api, alice)
       const before = await versionOf(api, alice, wiki.id)
 
-      const response = await commentOn(alice, wiki.homePageId, comment)
+      const response = await commentOn(api, alice, wiki.homePageId, comment)
 
       expect(response.statusCode).toBe(400)
       expect(response.json()).toEqual({ error: 'invalid_request' })
@@ -328,7 +315,7 @@ describe('POST and GET /pages/:pageId/comments', () => {
       const listed = await commentsOf(alice, wiki.homePageId)
       const before = await versionOf(api, alice, wiki.id)
 
-      const response = await commentOn(alice, wiki.homePageId, {
+      const response = await commentOn(api, alice, wiki.homePageId, {
         body: 'Me too',
         parentId
       })
@@ -344,12 +331,12 @@ describe('POST and GET /pages/:pageId/comments', () => {
     const alice = aUser()
     const bob = aColleagueOf(alice, 'bob')
     const wiki = await aWikiOf(api, alice)
-    await aCommentOn(alice, wiki.homePageId, { body: 'Plan' })
+    await aCommentOn(api, alice, wiki.homePageId, { body: 'Plan' })
     const before = await versionOf(api, alice, wiki.id)
 
     const responses = [
       await listComments(bob, wiki.homePageId),
-      await commentOn(bob, wiki.homePageId, { body: 'Me too' })
+      await commentOn(api, bob, wiki.homePageId, { body: 'Me too' })
     ]
 
     expect(responses.map(response => response.statusCode)).toEqual([404, 404])
@@ -367,7 +354,7 @@ describe('POST and GET /pages/:pageId/comments', () => {
     const wiki = await aWikiOf(api, alice)
     const before = await versionOf(api, alice, wiki.id)
 
-    const response = await commentOn(bob, wiki.homePageId, {})
+    const response = await commentOn(api, bob, wiki.homePageId, {})
 
     expect(response.statusCode).toBe(400)
     expect(response.json()).toEqual({ error: 'invalid_request' })
@@ -384,7 +371,7 @@ describe('POST and GET /pages/:pageId/comments', () => {
     })
     const before = await versionOf(api, alice, wiki.id)
 
-    const response = await commentOn(alice, drafts, {})
+    const response = await commentOn(api, alice, drafts, {})
 
     expect(response.statusCode).toBe(400)
     expect(response.json()).toEqual({ error: 'invalid_request' })
@@ -402,7 +389,7 @@ describe('POST and GET /pages/:pageId/comments', () => {
     })
     const before = await versionOf(api, alice, wiki.id)
 
-    const response = await commentOn(bob, drafts, { body: 'Plan' })
+    const response = await commentOn(api, bob, drafts, { body: 'Plan' })
 
     expect(response.statusCode).toBe(404)
     expect(response.json()).toEqual({ error: 'not_found' })
@@ -422,7 +409,7 @@ describe('POST and GET /pages/:pageId/comments', () => {
 
       const responses = [
         await listComments(alice, wiki.homePageId),
-        await commentOn(alice, wiki.homePageId, { body: 'Plan' })
+        await commentOn(api, alice, wiki.homePageId, { body: 'Plan' })
       ]
 
       expect(responses.map(response => response.statusCode)).toEqual([404, 404])
@@ -441,7 +428,7 @@ describe('POST and GET /pages/:pageId/comments', () => {
 
       const responses = [
         await listComments(alice, pageId),
-        await commentOn(alice, pageId, { body: 'Plan' })
+        await commentOn(api, alice, pageId, { body: 'Plan' })
       ]
 
       expect(responses.map(response => response.statusCode)).toEqual([404, 404])
@@ -493,7 +480,7 @@ describe('mentions in POST /pages/:pageId/comments', () => {
       const wiki = await aWikiOf(api, alice)
       await joinWiki(db, alice, wiki.id, jean, 'viewer')
 
-      const response = await commentOn(alice, wiki.homePageId, {
+      const response = await commentOn(api, alice, wiki.homePageId, {
         body: bodyOf(jean.email)
       })
 
@@ -513,7 +500,9 @@ describe('mentions in POST /pages/:pageId/comments', () => {
       const wiki = await aWikiOf(api, alice)
       await joinWiki(db, alice, wiki.id, jean, 'viewer')
 
-      await commentOn(alice, wiki.homePageId, { body: `Ask @${jean.email}` })
+      await commentOn(api, alice, wiki.homePageId, {
+        body: `Ask @${jean.email}`
+      })
 
       expect(await isFollowing(api, jean, wiki.homePageId)).toBe(true)
     }
@@ -527,7 +516,9 @@ describe('mentions in POST /pages/:pageId/comments', () => {
       const wiki = await aWikiOf(api, alice)
       await joinWiki(db, alice, wiki.id, jean, 'viewer')
 
-      await commentOn(alice, wiki.homePageId, { body: bodyOf(jean.email) })
+      await commentOn(api, alice, wiki.homePageId, {
+        body: bodyOf(jean.email)
+      })
 
       expect(await isFollowing(api, jean, wiki.homePageId)).toBe(false)
     }
@@ -541,7 +532,7 @@ describe('mentions in POST /pages/:pageId/comments', () => {
       const wiki = await aWikiOf(api, alice)
       await joinWiki(db, alice, wiki.id, bob, 'viewer')
 
-      await commentOn(alice, wiki.homePageId, {
+      await commentOn(api, alice, wiki.homePageId, {
         body: `Thanks @${bob.email.toLowerCase()}`
       })
 
@@ -556,7 +547,9 @@ describe('mentions in POST /pages/:pageId/comments', () => {
     const wiki = await aWikiOf(api, alice)
     await anInvitation(api, alice, wiki.id, carol.email)
 
-    await commentOn(alice, wiki.homePageId, { body: `Welcome @${carol.email}` })
+    await commentOn(api, alice, wiki.homePageId, {
+      body: `Welcome @${carol.email}`
+    })
     await wikisOf(api, carol)
 
     expect(await isFollowing(api, carol, wiki.homePageId)).toBe(false)
@@ -570,16 +563,12 @@ describe('mentions in POST /pages/:pageId/comments', () => {
     await wikisOf(api, bob)
     await removeMember(api, alice, wiki.id, bob.userId)
 
-    await commentOn(alice, wiki.homePageId, { body: `Ask @${bob.email}` })
+    await commentOn(api, alice, wiki.homePageId, { body: `Ask @${bob.email}` })
     await backIn(api, alice, bob, wiki.id)
 
     expect(await isFollowing(api, bob, wiki.homePageId)).toBe(false)
   })
 })
-
-/** `PATCH /comments/:commentId` by the person. */
-const editComment = (user: TestUser, commentId: string, edit: object) =>
-  api.as(user).patch(`/comments/${commentId}`, edit)
 
 describe('PATCH /comments/:commentId', () => {
   it.each(someoneOfEachTenant)(
@@ -589,9 +578,11 @@ describe('PATCH /comments/:commentId', () => {
       const bob = { ...aColleagueOf(alice, 'bob'), name: 'Bob Martin' }
       const wiki = await aWikiOf(api, alice)
       await joinWiki(db, alice, wiki.id, bob, 'viewer')
-      const written = await aCommentOn(bob, wiki.homePageId, { body: 'Plan' })
+      const written = await aCommentOn(api, bob, wiki.homePageId, {
+        body: 'Plan'
+      })
 
-      const response = await editComment(bob, written.id, {
+      const response = await editComment(api, bob, written.id, {
         body: ' Better plan\n'
       })
 
@@ -609,10 +600,12 @@ describe('PATCH /comments/:commentId', () => {
   it('moves the version of the wiki once for an edit', async () => {
     const alice = aUser()
     const wiki = await aWikiOf(api, alice)
-    const written = await aCommentOn(alice, wiki.homePageId, { body: 'Plan' })
+    const written = await aCommentOn(api, alice, wiki.homePageId, {
+      body: 'Plan'
+    })
     const before = await versionOf(api, alice, wiki.id)
 
-    await editComment(alice, written.id, { body: 'Better plan' })
+    await editComment(api, alice, written.id, { body: 'Better plan' })
 
     expect(await versionOf(api, alice, wiki.id)).toBe(before + 1)
   })
@@ -622,9 +615,13 @@ describe('PATCH /comments/:commentId', () => {
     const carol = aColleagueOf(alice, 'carol')
     const wiki = await aWikiOf(api, alice)
     await joinWiki(db, alice, wiki.id, carol, 'viewer')
-    const written = await aCommentOn(alice, wiki.homePageId, { body: 'Plan' })
+    const written = await aCommentOn(api, alice, wiki.homePageId, {
+      body: 'Plan'
+    })
 
-    await editComment(alice, written.id, { body: `Plan, @${carol.email}?` })
+    await editComment(api, alice, written.id, {
+      body: `Plan, @${carol.email}?`
+    })
 
     expect(await isFollowing(api, carol, wiki.homePageId)).toBe(true)
   })
@@ -635,12 +632,12 @@ describe('PATCH /comments/:commentId', () => {
     const carol = aColleagueOf(alice, 'carol')
     const wiki = await aWikiOf(api, alice)
     await joinWiki(db, alice, wiki.id, carol, 'viewer')
-    const written = await aCommentOn(alice, wiki.homePageId, {
+    const written = await aCommentOn(api, alice, wiki.homePageId, {
       body: `Plan, @${carol.email}?`
     })
     await stopFollowing(api, carol, wiki.homePageId)
 
-    await editComment(alice, written.id, {
+    await editComment(api, alice, written.id, {
       body: `Better plan, @${carol.email.toUpperCase()}?`
     })
 
@@ -652,10 +649,12 @@ describe('PATCH /comments/:commentId', () => {
   it('leaves the author who stopped following no follower, once they edit', async () => {
     const alice = aUser()
     const wiki = await aWikiOf(api, alice)
-    const written = await aCommentOn(alice, wiki.homePageId, { body: 'Plan' })
+    const written = await aCommentOn(api, alice, wiki.homePageId, {
+      body: 'Plan'
+    })
     await stopFollowing(api, alice, wiki.homePageId)
 
-    await editComment(alice, written.id, { body: 'Better plan' })
+    await editComment(api, alice, written.id, { body: 'Better plan' })
 
     expect(await isFollowing(api, alice, wiki.homePageId)).toBe(false)
   })
@@ -663,10 +662,14 @@ describe('PATCH /comments/:commentId', () => {
   it('makes the author the edit mentions for the first time follow the page again', async () => {
     const alice = aUser()
     const wiki = await aWikiOf(api, alice)
-    const written = await aCommentOn(alice, wiki.homePageId, { body: 'Plan' })
+    const written = await aCommentOn(api, alice, wiki.homePageId, {
+      body: 'Plan'
+    })
     await stopFollowing(api, alice, wiki.homePageId)
 
-    await editComment(alice, written.id, { body: `Plan, @${alice.email}?` })
+    await editComment(api, alice, written.id, {
+      body: `Plan, @${alice.email}?`
+    })
 
     expect(await isFollowing(api, alice, wiki.homePageId)).toBe(true)
   })
@@ -676,10 +679,12 @@ describe('PATCH /comments/:commentId', () => {
     async (_case, edit) => {
       const alice = aUser()
       const wiki = await aWikiOf(api, alice)
-      const written = await aCommentOn(alice, wiki.homePageId, { body: 'Plan' })
+      const written = await aCommentOn(api, alice, wiki.homePageId, {
+        body: 'Plan'
+      })
       const before = await versionOf(api, alice, wiki.id)
 
-      const response = await editComment(alice, written.id, edit)
+      const response = await editComment(api, alice, written.id, edit)
 
       expect(response.statusCode).toBe(400)
       expect(response.json()).toEqual({ error: 'invalid_request' })
@@ -697,10 +702,12 @@ describe('PATCH /comments/:commentId', () => {
       const wiki = await aWikiOf(api, alice)
       await joinWiki(db, alice, wiki.id, bob, 'viewer')
       await joinWiki(db, alice, wiki.id, carol, role)
-      const written = await aCommentOn(bob, wiki.homePageId, { body: 'Plan' })
+      const written = await aCommentOn(api, bob, wiki.homePageId, {
+        body: 'Plan'
+      })
       const before = await versionOf(api, alice, wiki.id)
 
-      const response = await editComment(carol, written.id, {
+      const response = await editComment(api, carol, written.id, {
         body: 'Better plan'
       })
 
@@ -716,10 +723,12 @@ describe('PATCH /comments/:commentId', () => {
     const bob = aColleagueOf(alice, 'bob')
     const wiki = await aWikiOf(api, alice)
     await joinWiki(db, alice, wiki.id, bob, 'viewer')
-    const written = await aCommentOn(alice, wiki.homePageId, { body: 'Plan' })
+    const written = await aCommentOn(api, alice, wiki.homePageId, {
+      body: 'Plan'
+    })
     const before = await versionOf(api, alice, wiki.id)
 
-    const response = await editComment(bob, written.id, { body: ' ' })
+    const response = await editComment(api, bob, written.id, { body: ' ' })
 
     expect(response.statusCode).toBe(400)
     expect(response.json()).toEqual({ error: 'invalid_request' })
@@ -732,11 +741,11 @@ describe('PATCH /comments/:commentId', () => {
     const wiki = await aWikiOf(api, alice)
     await joinWiki(db, alice, wiki.id, bob, 'editor')
     const plans = await aPage(api, alice, wiki.id, { title: 'Plans' })
-    const written = await aCommentOn(alice, plans, { body: 'Plan' })
+    const written = await aCommentOn(api, alice, plans, { body: 'Plan' })
     await trash(alice, plans)
     const before = await versionOf(api, alice, wiki.id)
 
-    const response = await editComment(bob, written.id, { body: 'Mine' })
+    const response = await editComment(api, bob, written.id, { body: 'Mine' })
 
     expect(response.statusCode).toBe(403)
     expect(response.json()).toEqual({ error: 'forbidden' })
@@ -747,11 +756,11 @@ describe('PATCH /comments/:commentId', () => {
     const alice = aUser()
     const wiki = await aWikiOf(api, alice)
     const plans = await aPage(api, alice, wiki.id, { title: 'Plans' })
-    const written = await aCommentOn(alice, plans, { body: 'Plan' })
+    const written = await aCommentOn(api, alice, plans, { body: 'Plan' })
     await trash(alice, plans)
     const before = await versionOf(api, alice, wiki.id)
 
-    const response = await editComment(alice, written.id, {
+    const response = await editComment(api, alice, written.id, {
       body: 'Better plan'
     })
 
@@ -765,10 +774,12 @@ describe('PATCH /comments/:commentId', () => {
     const alice = aUser()
     const bob = aColleagueOf(alice, 'bob')
     const wiki = await aWikiOf(api, alice)
-    const written = await aCommentOn(alice, wiki.homePageId, { body: 'Plan' })
+    const written = await aCommentOn(api, alice, wiki.homePageId, {
+      body: 'Plan'
+    })
     const before = await versionOf(api, alice, wiki.id)
 
-    const response = await editComment(bob, written.id, { body: 'Mine' })
+    const response = await editComment(api, bob, written.id, { body: 'Mine' })
 
     expect(response.statusCode).toBe(404)
     expect(response.json()).toEqual({ error: 'not_found' })
@@ -780,10 +791,12 @@ describe('PATCH /comments/:commentId', () => {
     const alice = aUser()
     const bob = aColleagueOf(alice, 'bob')
     const wiki = await aWikiOf(api, alice)
-    const written = await aCommentOn(alice, wiki.homePageId, { body: 'Plan' })
+    const written = await aCommentOn(api, alice, wiki.homePageId, {
+      body: 'Plan'
+    })
     const before = await versionOf(api, alice, wiki.id)
 
-    const response = await editComment(bob, written.id, { body: ' ' })
+    const response = await editComment(api, bob, written.id, { body: ' ' })
 
     expect(response.statusCode).toBe(400)
     expect(response.json()).toEqual({ error: 'invalid_request' })
@@ -794,11 +807,11 @@ describe('PATCH /comments/:commentId', () => {
     const alice = aUser()
     const wiki = await aWikiOf(api, alice)
     const plans = await aPage(api, alice, wiki.id, { title: 'Plans' })
-    const written = await aCommentOn(alice, plans, { body: 'Plan' })
+    const written = await aCommentOn(api, alice, plans, { body: 'Plan' })
     await trash(alice, plans)
     const before = await versionOf(api, alice, wiki.id)
 
-    const response = await editComment(alice, written.id, { body: ' ' })
+    const response = await editComment(api, alice, written.id, { body: ' ' })
 
     expect(response.statusCode).toBe(400)
     expect(response.json()).toEqual({ error: 'invalid_request' })
@@ -810,11 +823,11 @@ describe('PATCH /comments/:commentId', () => {
     const bob = aColleagueOf(alice, 'bob')
     const wiki = await aWikiOf(api, alice)
     const plans = await aPage(api, alice, wiki.id, { title: 'Plans' })
-    const written = await aCommentOn(alice, plans, { body: 'Plan' })
+    const written = await aCommentOn(api, alice, plans, { body: 'Plan' })
     await trash(alice, plans)
     const before = await versionOf(api, alice, wiki.id)
 
-    const response = await editComment(bob, written.id, { body: 'Mine' })
+    const response = await editComment(api, bob, written.id, { body: 'Mine' })
 
     expect(response.statusCode).toBe(404)
     expect(response.json()).toEqual({ error: 'not_found' })
@@ -829,13 +842,13 @@ describe('PATCH /comments/:commentId', () => {
       const carol = aColleagueOf(alice, 'carol')
       const wiki = await aWikiOf(api, carol)
       await joinWiki(db, carol, wiki.id, alice, 'viewer')
-      const written = await aCommentOn(alice, wiki.homePageId, {
+      const written = await aCommentOn(api, alice, wiki.homePageId, {
         body: 'Plan'
       })
       await takeOut(api, carol, wiki.id, alice)
       const before = await wikiRowsOf(db, carol, wiki.id)
 
-      const response = await editComment(alice, written.id, {
+      const response = await editComment(api, alice, written.id, {
         body: 'Better plan'
       })
 
@@ -850,7 +863,7 @@ describe('PATCH /comments/:commentId', () => {
     async (_case, commentId) => {
       const alice = aUser()
 
-      const response = await editComment(alice, commentId, {
+      const response = await editComment(api, alice, commentId, {
         body: 'Better plan'
       })
 
@@ -860,10 +873,6 @@ describe('PATCH /comments/:commentId', () => {
   )
 })
 
-/** `DELETE /comments/:commentId` by the person. */
-const deleteComment = (user: TestUser, commentId: string) =>
-  api.as(user).delete(`/comments/${commentId}`)
-
 describe('DELETE /comments/:commentId', () => {
   it.each(someoneOfEachTenant)(
     'lets the author %s delete their comment, with its replies',
@@ -872,16 +881,18 @@ describe('DELETE /comments/:commentId', () => {
       const bob = aColleagueOf(alice, 'bob')
       const wiki = await aWikiOf(api, alice)
       await joinWiki(db, alice, wiki.id, bob, 'viewer')
-      const written = await aCommentOn(bob, wiki.homePageId, { body: 'Plan' })
-      await aCommentOn(alice, wiki.homePageId, {
+      const written = await aCommentOn(api, bob, wiki.homePageId, {
+        body: 'Plan'
+      })
+      await aCommentOn(api, alice, wiki.homePageId, {
         body: 'Agreed',
         parentId: written.id
       })
-      const other = await aCommentOn(alice, wiki.homePageId, {
+      const other = await aCommentOn(api, alice, wiki.homePageId, {
         body: 'Question'
       })
 
-      const response = await deleteComment(bob, written.id)
+      const response = await deleteComment(api, bob, written.id)
 
       expect(response.statusCode).toBe(204)
       expect(await commentsOf(alice, wiki.homePageId)).toEqual([other])
@@ -891,13 +902,15 @@ describe('DELETE /comments/:commentId', () => {
   it('lets the author delete a reply, which leaves its comment', async () => {
     const alice = aUser()
     const wiki = await aWikiOf(api, alice)
-    const written = await aCommentOn(alice, wiki.homePageId, { body: 'Plan' })
-    const reply = await aCommentOn(alice, wiki.homePageId, {
+    const written = await aCommentOn(api, alice, wiki.homePageId, {
+      body: 'Plan'
+    })
+    const reply = await aCommentOn(api, alice, wiki.homePageId, {
       body: 'Agreed',
       parentId: written.id
     })
 
-    const response = await deleteComment(alice, reply.id)
+    const response = await deleteComment(api, alice, reply.id)
 
     expect(response.statusCode).toBe(204)
     expect(await commentsOf(alice, wiki.homePageId)).toEqual([written])
@@ -908,9 +921,11 @@ describe('DELETE /comments/:commentId', () => {
     const bob = aColleagueOf(alice, 'bob')
     const wiki = await aWikiOf(api, alice)
     await joinWiki(db, alice, wiki.id, bob, 'viewer')
-    const written = await aCommentOn(bob, wiki.homePageId, { body: 'Plan' })
+    const written = await aCommentOn(api, bob, wiki.homePageId, {
+      body: 'Plan'
+    })
 
-    const response = await deleteComment(alice, written.id)
+    const response = await deleteComment(api, alice, written.id)
 
     expect(response.statusCode).toBe(204)
     expect(await commentsOf(bob, wiki.homePageId)).toEqual([])
@@ -919,10 +934,12 @@ describe('DELETE /comments/:commentId', () => {
   it('moves the version of the wiki once for a deletion', async () => {
     const alice = aUser()
     const wiki = await aWikiOf(api, alice)
-    const written = await aCommentOn(alice, wiki.homePageId, { body: 'Plan' })
+    const written = await aCommentOn(api, alice, wiki.homePageId, {
+      body: 'Plan'
+    })
     const before = await versionOf(api, alice, wiki.id)
 
-    await deleteComment(alice, written.id)
+    await deleteComment(api, alice, written.id)
 
     expect(await versionOf(api, alice, wiki.id)).toBe(before + 1)
   })
@@ -936,10 +953,12 @@ describe('DELETE /comments/:commentId', () => {
       const wiki = await aWikiOf(api, alice)
       await joinWiki(db, alice, wiki.id, bob, 'viewer')
       await joinWiki(db, alice, wiki.id, carol, role)
-      const written = await aCommentOn(bob, wiki.homePageId, { body: 'Plan' })
+      const written = await aCommentOn(api, bob, wiki.homePageId, {
+        body: 'Plan'
+      })
       const before = await versionOf(api, alice, wiki.id)
 
-      const response = await deleteComment(carol, written.id)
+      const response = await deleteComment(api, carol, written.id)
 
       expect(response.statusCode).toBe(403)
       expect(response.json()).toEqual({ error: 'forbidden' })
@@ -954,11 +973,11 @@ describe('DELETE /comments/:commentId', () => {
     const wiki = await aWikiOf(api, alice)
     await joinWiki(db, alice, wiki.id, bob, 'editor')
     const plans = await aPage(api, alice, wiki.id, { title: 'Plans' })
-    const written = await aCommentOn(alice, plans, { body: 'Plan' })
+    const written = await aCommentOn(api, alice, plans, { body: 'Plan' })
     await trash(alice, plans)
     const before = await versionOf(api, alice, wiki.id)
 
-    const response = await deleteComment(bob, written.id)
+    const response = await deleteComment(api, bob, written.id)
 
     expect(response.statusCode).toBe(403)
     expect(response.json()).toEqual({ error: 'forbidden' })
@@ -969,11 +988,11 @@ describe('DELETE /comments/:commentId', () => {
     const alice = aUser()
     const wiki = await aWikiOf(api, alice)
     const plans = await aPage(api, alice, wiki.id, { title: 'Plans' })
-    const written = await aCommentOn(alice, plans, { body: 'Plan' })
+    const written = await aCommentOn(api, alice, plans, { body: 'Plan' })
     await trash(alice, plans)
     const before = await versionOf(api, alice, wiki.id)
 
-    const response = await deleteComment(alice, written.id)
+    const response = await deleteComment(api, alice, written.id)
 
     expect(response.statusCode).toBe(409)
     expect(response.json()).toEqual({ error: 'in_trash' })
@@ -985,10 +1004,12 @@ describe('DELETE /comments/:commentId', () => {
     const alice = aUser()
     const bob = aColleagueOf(alice, 'bob')
     const wiki = await aWikiOf(api, alice)
-    const written = await aCommentOn(alice, wiki.homePageId, { body: 'Plan' })
+    const written = await aCommentOn(api, alice, wiki.homePageId, {
+      body: 'Plan'
+    })
     const before = await versionOf(api, alice, wiki.id)
 
-    const response = await deleteComment(bob, written.id)
+    const response = await deleteComment(api, bob, written.id)
 
     expect(response.statusCode).toBe(404)
     expect(response.json()).toEqual({ error: 'not_found' })
@@ -1001,11 +1022,11 @@ describe('DELETE /comments/:commentId', () => {
     const bob = aColleagueOf(alice, 'bob')
     const wiki = await aWikiOf(api, alice)
     const plans = await aPage(api, alice, wiki.id, { title: 'Plans' })
-    const written = await aCommentOn(alice, plans, { body: 'Plan' })
+    const written = await aCommentOn(api, alice, plans, { body: 'Plan' })
     await trash(alice, plans)
     const before = await versionOf(api, alice, wiki.id)
 
-    const response = await deleteComment(bob, written.id)
+    const response = await deleteComment(api, bob, written.id)
 
     expect(response.statusCode).toBe(404)
     expect(response.json()).toEqual({ error: 'not_found' })
@@ -1020,13 +1041,13 @@ describe('DELETE /comments/:commentId', () => {
       const carol = aColleagueOf(alice, 'carol')
       const wiki = await aWikiOf(api, carol)
       await joinWiki(db, carol, wiki.id, alice, 'viewer')
-      const written = await aCommentOn(alice, wiki.homePageId, {
+      const written = await aCommentOn(api, alice, wiki.homePageId, {
         body: 'Plan'
       })
       await takeOut(api, carol, wiki.id, alice)
       const before = await wikiRowsOf(db, carol, wiki.id)
 
-      const response = await deleteComment(alice, written.id)
+      const response = await deleteComment(api, alice, written.id)
 
       expect(response.statusCode).toBe(404)
       expect(response.json()).toEqual({ error: 'not_found' })
@@ -1039,7 +1060,7 @@ describe('DELETE /comments/:commentId', () => {
     async (_case, commentId) => {
       const alice = aUser()
 
-      const response = await deleteComment(alice, commentId)
+      const response = await deleteComment(api, alice, commentId)
 
       expect(response.statusCode).toBe(404)
       expect(response.json()).toEqual({ error: 'not_found' })
@@ -1053,13 +1074,15 @@ describe('DELETE /comments/:commentId', () => {
     const bob = aColleagueOf(alice, 'bob')
     const wiki = await aWikiOf(api, alice)
     await joinWiki(db, alice, wiki.id, bob, 'viewer')
-    const written = await aCommentOn(alice, wiki.homePageId, { body: 'Plan' })
+    const written = await aCommentOn(api, alice, wiki.homePageId, {
+      body: 'Plan'
+    })
     const before = await versionOf(api, alice, wiki.id)
 
     const [deletion, reply] = await behindAChange(db, alice, wiki.id, [
-      () => deleteComment(alice, written.id),
+      () => deleteComment(api, alice, written.id),
       () =>
-        commentOn(bob, wiki.homePageId, {
+        commentOn(api, bob, wiki.homePageId, {
           body: 'Agreed',
           parentId: written.id
         })
@@ -1077,12 +1100,14 @@ describe('DELETE /comments/:commentId', () => {
     const bob = aColleagueOf(alice, 'bob')
     const wiki = await aWikiOf(api, alice)
     await joinWiki(db, alice, wiki.id, bob, 'viewer')
-    const written = await aCommentOn(bob, wiki.homePageId, { body: 'Plan' })
+    const written = await aCommentOn(api, bob, wiki.homePageId, {
+      body: 'Plan'
+    })
     const before = await versionOf(api, alice, wiki.id)
 
     const [deletion, edit] = await behindAChange(db, alice, wiki.id, [
-      () => deleteComment(alice, written.id),
-      () => editComment(bob, written.id, { body: 'Better plan' })
+      () => deleteComment(api, alice, written.id),
+      () => editComment(api, bob, written.id, { body: 'Better plan' })
     ])
 
     expect(deletion?.statusCode).toBe(204)

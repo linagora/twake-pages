@@ -402,6 +402,16 @@ export async function jobOf(db: Db, key: string) {
   return job
 }
 
+/** A comment as the comments routes answer it. */
+export interface Comment {
+  id: string
+  parentId: string | null
+  author: Person
+  body: string
+  createdAt: string
+  editedAt: string | null
+}
+
 /** The job planned to purge the deleted wiki. */
 export async function purgeJobOf(db: Db, wikiId: string) {
   const job = await jobOf(db, `${PURGE_WIKI_JOB}:${wikiId}`)
@@ -721,6 +731,45 @@ export async function followingAndUnreadOf(
     following: await isFollowing(app, user, pageId),
     unread: wiki?.unread
   }
+}
+
+/** `POST /pages/:pageId/comments` by the person. */
+export function commentOn(
+  app: Awaited<ReturnType<typeof startApp>>,
+  user: TestUser,
+  pageId: string,
+  comment: object
+) {
+  return app.as(user).post(`/pages/${pageId}/comments`, comment)
+}
+
+/** A comment the person writes on the page through the API. */
+export async function aCommentOn(
+  app: Awaited<ReturnType<typeof startApp>>,
+  user: TestUser,
+  pageId: string,
+  comment: { body: string; parentId?: string }
+) {
+  return (await commentOn(app, user, pageId, comment)).json<Comment>()
+}
+
+/** `PATCH /comments/:commentId` by the person. */
+export function editComment(
+  app: Awaited<ReturnType<typeof startApp>>,
+  user: TestUser,
+  commentId: string,
+  edit: object
+) {
+  return app.as(user).patch(`/comments/${commentId}`, edit)
+}
+
+/** `DELETE /comments/:commentId` by the person. */
+export function deleteComment(
+  app: Awaited<ReturnType<typeof startApp>>,
+  user: TestUser,
+  commentId: string
+) {
+  return app.as(user).delete(`/comments/${commentId}`)
 }
 
 /**
