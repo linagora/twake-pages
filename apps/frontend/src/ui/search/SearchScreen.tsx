@@ -12,12 +12,9 @@ import { excerptParts, type SearchResult } from '@/domain/search'
 import { useI18n } from '@/ui/i18n/useI18n'
 import { SearchField } from '@/ui/search/SearchField'
 import { useDocumentTitle } from '@/ui/useDocumentTitle'
+import { pathInItsWiki } from '@/ui/wiki/pathInItsWiki'
 import { useSearch, useWikiSearch } from '@/ui/wiki/queries'
-import {
-  usePageEntry,
-  type PageEntry,
-  type PathOf
-} from '@/ui/wiki/usePageEntry'
+import { usePageEntry, type PageEntry } from '@/ui/wiki/usePageEntry'
 
 /** The search of every wiki of the person, or of the wiki of the address. */
 export function SearchScreen(): ReactElement {
@@ -48,13 +45,6 @@ function AppSearch({ text }: { text: string }): ReactElement {
   const entryOf = usePageEntry()
   return <Outcome text={text} results={results} entryOf={entryOf} />
 }
-
-/**
- * The path to a page found from its wiki's own screen, which keeps to the
- * frame of TwakeSpace, where the wiki's address would leave it.
- */
-const pathInItsWiki: PathOf = (page, home) =>
-  home ? '..' : `../pages/${page.id}`
 
 /**
  * The search of one wiki. It has a field of its own, as TwakeSpace shows the

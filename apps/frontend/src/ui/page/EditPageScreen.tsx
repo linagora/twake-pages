@@ -22,6 +22,7 @@ import { useEditable } from '@/ui/page/useEditable'
 import { useWikiPage } from '@/ui/page/useWikiPage'
 import { UnavailableScreen } from '@/ui/shell/Problems'
 import { useDocumentTitle } from '@/ui/useDocumentTitle'
+import { pathInItsWiki } from '@/ui/wiki/pathInItsWiki'
 import { usePublish } from '@/ui/wiki/queries'
 
 export function EditPageScreen(): ReactElement {
@@ -45,7 +46,9 @@ export function EditPageScreen(): ReactElement {
 
   // The page as it is, for a person who does not write it, with no draft.
   // The wiki is read by now, as its layout waits for it.
-  if (!editable) return <Navigate to={pathOf(page.data)} replace />
+  if (!editable) {
+    return <Navigate to={pathInItsWiki(page.data, page.data.home)} replace />
+  }
 
   return (
     <PageEditor
@@ -59,9 +62,6 @@ export function EditPageScreen(): ReactElement {
     />
   )
 }
-
-// The home page shows under the name of its wiki.
-const pathOf = (page: Page) => (page.home ? '..' : `../pages/${page.id}`)
 
 /** The title and the blocks of a page, written in its draft. */
 function PageEditor({
@@ -89,7 +89,7 @@ function PageEditor({
   const imageSources = useImageSources()
   const hidden = imageHostsNotShown(draft.content, imageSources)
   const blockKind = useBlockKind()
-  const path = pathOf(page)
+  const path = pathInItsWiki(page, page.home)
 
   const restart = () => {
     drop()
