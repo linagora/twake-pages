@@ -139,11 +139,10 @@ function plainText(blocks: Blocks): string {
 }
 
 /**
- * The one way in for blocks, which every write of them takes: the blocks as
- * the store keeps them, with their plain text for search and previews, or
- * `invalid_content` when they fail its checks.
+ * The blocks as the store keeps them, with their plain text for search and
+ * previews, or `invalid_content` when they fail its checks.
  */
-export function checkBlocks(
+function checkBlocks(
   blocks: Blocks,
   gristOrigins: readonly string[]
 ): { content: Blocks; text: string } {
@@ -155,7 +154,7 @@ export function checkBlocks(
  * A database page's Grist address as the store keeps it, or
  * `invalid_grist_url` unless a Grist origin of the deployment serves it.
  */
-export function checkGristUrl(
+function checkGristUrl(
   gristUrl: string,
   gristOrigins: readonly string[]
 ): string {
@@ -167,8 +166,9 @@ export function checkGristUrl(
 }
 
 /**
- * A page's content as the store keeps it: a document's checked blocks with
- * their plain text, or a database page's checked Grist address and no blocks.
+ * The one way in for a page's content, which every write of it takes: a
+ * document's checked blocks with their plain text, or a database page's
+ * checked Grist address and no blocks, as the store keeps them.
  */
 export function checkContent(
   body: { content: Blocks } | { gristUrl: string },

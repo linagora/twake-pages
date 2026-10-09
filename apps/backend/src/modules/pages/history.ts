@@ -4,7 +4,7 @@ import { inTenant, type Db } from '../../infra/db.ts'
 import type { HttpServer } from '../../infra/http.ts'
 import { Refused, refuse, writeOrRefuse } from '../../infra/refusals.ts'
 import type { Identity, RequireIdentity } from '../auth/index.ts'
-import { checkBlocks, checkGristUrl, type Blocks } from './blocks.ts'
+import { checkContent, type Blocks } from './blocks.ts'
 import { pageParams } from './routes.ts'
 import { pageVersions } from './schema.ts'
 import {
@@ -84,17 +84,18 @@ function createHistoryStore(db: Db, gristOrigins: readonly string[]) {
         if (!version) throw new Refused('not_found')
         // Checked as a draft is, before the wiki's row lock: the checks may
         // have changed since it was published, as the Grist origins may.
-        const blocks = checkBlocks(version.content as Blocks, gristOrigins)
-        const gristUrl =
+        const checked = checkContent(
           version.gristUrl === null
-            ? null
-            : checkGristUrl(version.gristUrl, gristOrigins)
+            ? { content: version.content as Blocks }
+            : { gristUrl: version.gristUrl },
+          gristOrigins
+        )
         const page = await pageToPublish(tx, identity, pageId)
         return publishVersion(
           tx,
           identity,
           page,
-          { title: version.title, ...blocks, gristUrl },
+          { title: version.title, ...checked },
           number
         )
       })
