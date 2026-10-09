@@ -54,6 +54,12 @@ export const gristEmbedSpec = (grist: GristOptions) =>
     }
   )()
 
+/** `words` of each type of block, with `word` for a Grist embed. */
+const withGrist = (words: Record<string, string>, word: string) => ({
+  ...words,
+  [GRIST_EMBED]: word
+})
+
 /**
  * `dictionary` with the words of BlockNote's panel of files for a Grist
  * embed, which it takes from those of a file otherwise.
@@ -73,10 +79,7 @@ export function withGristWords(
       ...panel,
       embed: {
         ...panel.embed,
-        embed_button: {
-          ...panel.embed.embed_button,
-          [GRIST_EMBED]: labels.embed
-        }
+        embed_button: withGrist(panel.embed.embed_button, labels.embed)
       }
     }
   }
