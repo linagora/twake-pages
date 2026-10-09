@@ -3,10 +3,14 @@ import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest'
 import { createDb } from '../../infra/db.ts'
 import {
   aB2cUser,
+  aColleagueOf,
+  anEmail,
+  anInvitation,
   aSpaceWiki,
   aUser,
   aWikiOf,
   backIn,
+  cancelInvitation,
   createPage,
   favoritesAndRecentOf,
   followingAndUnreadOf,
@@ -15,6 +19,7 @@ import {
   pageOf,
   personalWikiOf,
   removeMember,
+  sharingOf,
   someoneOfEachTenant,
   startApp,
   versionOf,
@@ -38,23 +43,6 @@ afterAll(async () => {
   await api.close()
   await sql.end()
 })
-
-/** An email of the person's organization, unique to the test. */
-const anEmail = (name: string) => `${name}-${randomUUID()}@example.com`
-
-/** Someone of the person's organization. */
-const aColleagueOf = (user: TestUser, name = 'colleague') =>
-  aUser({ organizationId: user.organizationId, email: anEmail(name) })
-
-interface Sharing {
-  members: { id: string; email: string; role: Role }[]
-  invites: { id: string; email: string; role: Role }[]
-  managed: boolean
-}
-
-/** What `GET /wikis/:wikiId/members` shows the person. */
-const sharingOf = async (user: TestUser, wikiId: string) =>
-  (await api.as(user).get(`/wikis/${wikiId}/members`)).json<Sharing>()
 
 /**
  * The wikis whose members their admin does not choose, which sharing answers
@@ -135,7 +123,7 @@ describe('GET /wikis/:wikiId/members', () => {
       await joinWiki(db, alice, wiki.id, bob, role)
       await invite(api, alice, wiki.id, anEmail('carol'))
 
-      const sharing = await sharingOf(bob, wiki.id)
+      const sharing = await sharingOf(api, bob, wiki.id)
 
       expect(sharing.members.map(member => member.id).sort()).toEqual(
         [alice.userId, bob.userId].sort()
@@ -150,7 +138,9 @@ describe('GET /wikis/:wikiId/members', () => {
       const alice = aUser()
       const wikiId = await aWiki(alice, aColleagueOf(alice))
 
-      expect(await sharingOf(alice, wikiId)).toMatchObject({ managed: true })
+      expect(await sharingOf(api, alice, wikiId)).toMatchObject({
+        managed: true
+      })
     }
   )
 
@@ -214,7 +204,7 @@ describe('POST /wikis/:wikiId/invites', () => {
     await invite(api, alice, wiki.id, email, 'viewer')
     await invite(api, alice, wiki.id, email.toUpperCase(), 'admin')
 
-    expect((await sharingOf(alice, wiki.id)).invites).toEqual([
+    expect((await sharingOf(api, alice, wiki.id)).invites).toEqual([
       expect.objectContaining({ email: email.toLowerCase(), role: 'admin' })
     ])
   })
@@ -235,7 +225,7 @@ describe('POST /wikis/:wikiId/invites', () => {
 
     expect(response.statusCode).toBe(202)
     expect(response.json()).toEqual({ status: 'invited' })
-    expect(await sharingOf(alice, wiki.id)).toMatchObject({
+    expect(await sharingOf(api, alice, wiki.id)).toMatchObject({
       members: expect.arrayContaining([
         expect.objectContaining({ id: bob.userId, role: 'viewer' })
       ]) as unknown,
@@ -327,34 +317,17 @@ describe('POST /wikis/:wikiId/invites', () => {
   )
 })
 
-/** Invites the email to the wiki, and gives the invitation's id. */
-async function anInvitation(
-  admin: TestUser,
-  wikiId: string,
-  email = anEmail('carol')
-) {
-  await invite(api, admin, wikiId, email)
-  const invitation = (await sharingOf(admin, wikiId)).invites.find(
-    listed => listed.email === email.toLowerCase()
-  )
-  if (!invitation) throw new Error(`${email} is not invited`)
-  return invitation.id
-}
-
-const cancel = (admin: TestUser, wikiId: string, inviteId: string) =>
-  api.as(admin).delete(`/wikis/${wikiId}/invites/${inviteId}`)
-
 describe('DELETE /wikis/:wikiId/invites/:inviteId', () => {
   it('cancels an invitation, which its email then no longer claims', async () => {
     const alice = aUser()
     const bob = aColleagueOf(alice, 'bob')
     const wiki = await aWikiOf(api, alice)
-    const invitation = await anInvitation(alice, wiki.id, bob.email)
+    const invitation = await anInvitation(api, alice, wiki.id, bob.email)
 
-    const response = await cancel(alice, wiki.id, invitation)
+    const response = await cancelInvitation(api, alice, wiki.id, invitation)
 
     expect(response.statusCode).toBe(204)
-    expect((await sharingOf(alice, wiki.id)).invites).toEqual([])
+    expect((await sharingOf(api, alice, wiki.id)).invites).toEqual([])
     expect((await wikisOf(api, bob)).map(listed => listed.id)).not.toContain(
       wiki.id
     )
@@ -363,10 +336,10 @@ describe('DELETE /wikis/:wikiId/invites/:inviteId', () => {
   it('moves the wiki’s version', async () => {
     const alice = aUser()
     const wiki = await aWikiOf(api, alice)
-    const invitation = await anInvitation(alice, wiki.id)
+    const invitation = await anInvitation(api, alice, wiki.id)
     const before = await versionOf(api, alice, wiki.id)
 
-    await cancel(alice, wiki.id, invitation)
+    await cancelInvitation(api, alice, wiki.id, invitation)
 
     expect(await versionOf(api, alice, wiki.id)).toBeGreaterThan(before)
   })
@@ -374,10 +347,10 @@ describe('DELETE /wikis/:wikiId/invites/:inviteId', () => {
   it('answers the same for an invitation already canceled', async () => {
     const alice = aUser()
     const wiki = await aWikiOf(api, alice)
-    const invitation = await anInvitation(alice, wiki.id)
-    await cancel(alice, wiki.id, invitation)
+    const invitation = await anInvitation(api, alice, wiki.id)
+    await cancelInvitation(api, alice, wiki.id, invitation)
 
-    const response = await cancel(alice, wiki.id, invitation)
+    const response = await cancelInvitation(api, alice, wiki.id, invitation)
 
     expect(response.statusCode).toBe(204)
   })
@@ -386,11 +359,11 @@ describe('DELETE /wikis/:wikiId/invites/:inviteId', () => {
     const alice = aUser()
     const wiki = await aWikiOf(api, alice)
     const archives = await aWikiOf(api, alice, 'Archives')
-    const invitation = await anInvitation(alice, archives.id)
+    const invitation = await anInvitation(api, alice, archives.id)
 
-    await cancel(alice, wiki.id, invitation)
+    await cancelInvitation(api, alice, wiki.id, invitation)
 
-    expect((await sharingOf(alice, archives.id)).invites).toHaveLength(1)
+    expect((await sharingOf(api, alice, archives.id)).invites).toHaveLength(1)
   })
 
   it.each(['viewer', 'editor'] as const)('refuses %ss', async role => {
@@ -398,24 +371,29 @@ describe('DELETE /wikis/:wikiId/invites/:inviteId', () => {
     const bob = aColleagueOf(alice)
     const wiki = await aWikiOf(api, alice)
     await joinWiki(db, alice, wiki.id, bob, role)
-    const invitation = await anInvitation(alice, wiki.id)
+    const invitation = await anInvitation(api, alice, wiki.id)
     const before = await versionOf(api, alice, wiki.id)
 
-    const response = await cancel(bob, wiki.id, invitation)
+    const response = await cancelInvitation(api, bob, wiki.id, invitation)
 
     expect(response.statusCode).toBe(403)
     expect(response.json()).toEqual({ error: 'forbidden' })
     expect(await versionOf(api, alice, wiki.id)).toBe(before)
-    expect((await sharingOf(alice, wiki.id)).invites).toHaveLength(1)
+    expect((await sharingOf(api, alice, wiki.id)).invites).toHaveLength(1)
   })
 
   it('hides the wiki from someone who is no member', async () => {
     const alice = aUser()
     const wiki = await aWikiOf(api, alice)
-    const invitation = await anInvitation(alice, wiki.id)
+    const invitation = await anInvitation(api, alice, wiki.id)
     const before = await versionOf(api, alice, wiki.id)
 
-    const response = await cancel(aColleagueOf(alice), wiki.id, invitation)
+    const response = await cancelInvitation(
+      api,
+      aColleagueOf(alice),
+      wiki.id,
+      invitation
+    )
 
     expect(response.statusCode).toBe(404)
     expect(response.json()).toEqual({ error: 'not_found' })
@@ -429,7 +407,7 @@ describe('DELETE /wikis/:wikiId/invites/:inviteId', () => {
       const wikiId = await aWiki(alice, aColleagueOf(alice))
       const before = await versionOf(api, alice, wikiId)
 
-      const response = await cancel(alice, wikiId, randomUUID())
+      const response = await cancelInvitation(api, alice, wikiId, randomUUID())
 
       expect(response.statusCode).toBe(409)
       expect(response.json()).toEqual({ error: 'managed' })
@@ -441,7 +419,7 @@ describe('DELETE /wikis/:wikiId/invites/:inviteId', () => {
     const alice = aUser()
     const wiki = await aWikiOf(api, alice)
 
-    const response = await cancel(alice, wiki.id, 'carol')
+    const response = await cancelInvitation(api, alice, wiki.id, 'carol')
 
     expect(response.statusCode).toBe(404)
     expect(response.json()).toEqual({ error: 'not_found' })
@@ -454,7 +432,7 @@ const setRole = (admin: TestUser, wikiId: string, userId: string, role: Role) =>
 
 /** How many admins the wiki has, as its member shows them. */
 const adminsOf = async (member: TestUser, wikiId: string) =>
-  (await sharingOf(member, wikiId)).members.filter(
+  (await sharingOf(api, member, wikiId)).members.filter(
     listed => listed.role === 'admin'
   ).length
 
@@ -621,7 +599,7 @@ describe('PATCH /wikis/:wikiId/members/:userId', () => {
 
 /** The ids of the wiki's members, as its member sees them. */
 const memberIdsOf = async (member: TestUser, wikiId: string) =>
-  (await sharingOf(member, wikiId)).members.map(listed => listed.id).sort()
+  (await sharingOf(api, member, wikiId)).members.map(listed => listed.id).sort()
 
 describe('DELETE /wikis/:wikiId/members/:userId', () => {
   it.each(WAYS_TO_LEAVE)(

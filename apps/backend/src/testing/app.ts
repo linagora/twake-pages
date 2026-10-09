@@ -40,6 +40,13 @@ export function aB2cUser(): TestUser {
   return aUser({ organizationId: null })
 }
 
+/** An email of the domain of the tests' people, unique to the test. */
+export const anEmail = (name: string) => `${name}-${randomUUID()}@example.com`
+
+/** Someone of the person's organization. */
+export const aColleagueOf = (user: TestUser, name = 'colleague') =>
+  aUser({ organizationId: user.organizationId, email: anEmail(name) })
+
 /** Adds the person to the wiki, as sharing it does once they sign in. */
 export async function joinWiki(
   db: Db,
@@ -580,6 +587,46 @@ export function invite(
   role: Role = 'editor'
 ) {
   return app.as(admin).post(`/wikis/${wikiId}/invites`, { email, role })
+}
+
+export interface Sharing {
+  members: { id: string; email: string; role: Role }[]
+  invites: { id: string; email: string; role: Role }[]
+  managed: boolean
+}
+
+/** What `GET /wikis/:wikiId/members` shows the person. */
+export async function sharingOf(
+  app: Awaited<ReturnType<typeof startApp>>,
+  user: TestUser,
+  wikiId: string
+) {
+  return (await app.as(user).get(`/wikis/${wikiId}/members`)).json<Sharing>()
+}
+
+/** Invites the email to the wiki, and gives the invitation's id. */
+export async function anInvitation(
+  app: Awaited<ReturnType<typeof startApp>>,
+  admin: TestUser,
+  wikiId: string,
+  email = anEmail('carol')
+) {
+  await invite(app, admin, wikiId, email)
+  const invitation = (await sharingOf(app, admin, wikiId)).invites.find(
+    listed => listed.email === email.toLowerCase()
+  )
+  if (!invitation) throw new Error(`${email} is not invited`)
+  return invitation.id
+}
+
+/** `DELETE /wikis/:wikiId/invites/:inviteId` by the person. */
+export function cancelInvitation(
+  app: Awaited<ReturnType<typeof startApp>>,
+  admin: TestUser,
+  wikiId: string,
+  inviteId: string
+) {
+  return app.as(admin).delete(`/wikis/${wikiId}/invites/${inviteId}`)
 }
 
 /** Invites the person back into the wiki, which they join as they sign in. */
