@@ -1,10 +1,5 @@
 import '@blocknote/mantine/style.css'
 
-import {
-  BlockNoteSchema,
-  defaultBlockSpecs,
-  type BlockSpecs
-} from '@blocknote/core'
 import { en, fr } from '@blocknote/core/locales'
 // Of the three UI packages of BlockNote, the one its docs recommend for new
 // projects (blocknotejs.org/docs/getting-started). The ShadCN one is for apps
@@ -16,40 +11,19 @@ import { Box, useColorScheme } from '@linagora/twake-mui'
 import { useState, type ReactElement } from 'react'
 
 import {
-  keptBlockSpec,
   keptBlockStyles,
   pastesWithoutKeptBlocks
 } from '@/ds/blocknote/KeptBlock'
-import {
-  EDITOR_BLOCKS,
-  fromEditor,
-  KEPT_BLOCK,
-  toEditor
-} from '@/ds/editorBlocks'
+import { pagesSchema } from '@/ds/blocknote/pagesSchema'
+import { EDITOR_BLOCKS, fromEditor, toEditor } from '@/ds/editorBlocks'
 
 type Blocks = Record<string, unknown>[]
 
 /**
- * The blocks of the editor: those it writes, and the kept block, which the
- * block menu does not offer and a paste does not make (see
- * pastesWithoutKeptBlocks), named by `kindOf`. Its blocks are given as any
- * blocks, as BlockNote's heading fails BlockNote's own constraint on them
- * under exactOptionalPropertyTypes (its optional isToggleable); spread,
- * they type as the kept block alone.
- */
-const schemaOf = (kindOf: (type: string) => string) =>
-  BlockNoteSchema.create<BlockSpecs>({
-    blockSpecs: {
-      ...Object.fromEntries(
-        EDITOR_BLOCKS.map(type => [type, defaultBlockSpecs[type]])
-      ),
-      [KEPT_BLOCK]: keptBlockSpec({ kindOf })
-    }
-  })
-
-/**
  * BlockNote, the editor of the pages, writing blocks from `initial` on. A
- * block it does not write, it keeps as stored (see toEditor).
+ * block it does not write, it keeps as stored (see toEditor), named by
+ * `blockKind`: the block menu does not offer the kept block, and a paste
+ * does not make it (see pastesWithoutKeptBlocks).
  */
 export function BlocksEditorView({
   initial,
@@ -65,7 +39,9 @@ export function BlocksEditorView({
   onChange: (blocks: Blocks) => void
 }): ReactElement {
   // Made once, as the editor is.
-  const [schema] = useState(() => schemaOf(blockKind))
+  const [schema] = useState(() =>
+    pagesSchema(EDITOR_BLOCKS, { kindOf: blockKind })
+  )
   const editor = useCreateBlockNote({
     schema,
     dictionary: lang === 'fr' ? fr : en,
