@@ -472,6 +472,36 @@ describe('POST /pages/:pageId/versions/:number/restore', () => {
     expect(await versionOf(api, alice, wiki.id)).toBe(before)
   })
 
+  // Two checks apply to each: the version's address, checked as a draft's,
+  // comes first (api.md).
+  it.each([
+    ['forbidden, to a viewer', { role: 'viewer', deleted: undefined }],
+    ['in_trash, for a page in the trash', { role: 'editor', deleted: true }]
+  ] as const)(
+    'answers invalid_grist_url, not %s, for a version at an address off the deployment’s Grist origins',
+    async (_case, { role, deleted }) => {
+      const alice = aUser()
+      const bob = aUser({ organizationId: alice.organizationId })
+      const wiki = await aWikiOf(api, alice)
+      await joinWiki(db, alice, wiki.id, bob, role)
+      // Written straight into the wiki, as created while the deployment's
+      // Grist origins named this one.
+      const pageId = await aPageIn(db, alice, wiki.id, {
+        title: 'Budget',
+        position: 'a0',
+        gristUrl: `${FORMER_GRIST_ORIGIN}/o/docs/4kq2/Budget`,
+        ...(deleted && { deleted })
+      })
+      const before = await versionOf(api, alice, wiki.id)
+
+      const response = await restoreVersion(api, bob, pageId, 1)
+
+      expect(response.statusCode).toBe(400)
+      expect(response.json()).toEqual({ error: 'invalid_grist_url' })
+      expect(await versionOf(api, alice, wiki.id)).toBe(before)
+    }
+  )
+
   it('answers in_trash for a page in the trash, and leaves the wiki as it was', async () => {
     const alice = aUser()
     const wiki = await aWikiOf(api, alice)
