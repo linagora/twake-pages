@@ -31,6 +31,19 @@ origin() {
   printf '%s' "$1" | sed -E 's#^(https?://[^/?#]+).*$#\1#'
 }
 
+# Stops unless $2 is a bare origin of http or https, named $1 in the messages.
+check_origin() {
+  case "$2" in
+    http://* | https://*) ;;
+    *) fail "$1 must start with http:// or https://" ;;
+  esac
+  check_sources "$1" "$2"
+  case "$2" in
+    *[[:space:]]* | *"'"* | *"{"* | *"}"*) fail "$1 must be a bare origin" ;;
+  esac
+  [ "${2%/}" = "$(origin "$2")" ] || fail "$1 must be a bare origin"
+}
+
 mkdir -p "$OUT"
 
 : >"$OUT/env.js"
@@ -92,15 +105,7 @@ api_upstream=${API_UPSTREAM:-}
 if [ -z "$api_upstream" ]; then
   echo 'location /api/ { return 404; }' >"$OUT/api.conf"
 else
-  case "$api_upstream" in
-    http://* | https://*) ;;
-    *) fail "API_UPSTREAM must start with http:// or https://" ;;
-  esac
-  check_sources API_UPSTREAM "$api_upstream"
-  case "$api_upstream" in
-    *[[:space:]]* | *"'"* | *"{"* | *"}"*) fail "API_UPSTREAM must be a bare origin" ;;
-  esac
-  [ "${api_upstream%/}" = "$(origin "$api_upstream")" ] || fail "API_UPSTREAM must be a bare origin"
+  check_origin API_UPSTREAM "$api_upstream"
   resolver=$(awk '$1 == "nameserver" { print $2; exit }' /etc/resolv.conf)
   case "$resolver" in *:*) resolver="[$resolver]" ;; esac
   cat >"$OUT/api.conf" <<EOF
