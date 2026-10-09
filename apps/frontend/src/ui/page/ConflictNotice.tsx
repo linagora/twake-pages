@@ -12,7 +12,7 @@ import { useId, type ReactElement } from 'react'
 import type { VersionSummary } from '@/domain/page'
 import { displayName } from '@/domain/person'
 import { useI18n } from '@/ui/i18n/useI18n'
-import { localZone } from '@/ui/settings/zone'
+import { localTime } from '@/ui/settings/zone'
 
 /**
  * The version published after the one the draft started from, by whom and
@@ -29,19 +29,13 @@ export function ConflictNotice({
   onPublishOver: () => void
 }): ReactElement {
   const { t, lang } = useI18n()
-  // In the person's timezone, as Twake Tasks shows reminders.
-  const time = new Intl.DateTimeFormat(lang, {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-    timeZone: localZone()
-  }).format(new Date(current.createdAt))
 
   return (
     <Alert severity="warning" className="u-mb-1">
       {t('editor.conflict', {
         author: displayName(current.author),
         number: current.number,
-        time
+        time: localTime(current.createdAt, lang)
       })}
       <div className="u-mt-half">
         <Button variant="text" onClick={onReload}>

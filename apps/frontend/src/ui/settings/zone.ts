@@ -16,3 +16,14 @@ export function followZone(zone: string | null): void {
 
 export const localZone = (): string =>
   followedZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone
+
+/**
+ * A time, by its day and its hour, in the person's timezone, as Twake Tasks
+ * shows reminders.
+ */
+export const localTime = (time: string, lang: string): string =>
+  new Intl.DateTimeFormat(lang, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+    timeZone: localZone()
+  }).format(new Date(time))
