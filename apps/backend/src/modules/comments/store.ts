@@ -70,18 +70,25 @@ function commentWithPage(tx: Tx, commentId: string) {
 }
 
 /**
- * The person's own comment, behind its wiki's row lock, refused in the order
- * api.md writes: `not_found` out of their reach, `forbidden` to anyone but
- * its author, then `not_found` once deleted, and `in_trash` on a page in the
- * trash. It takes the lock as pageToChange does, but reads the comment, which
- * names its page, and refuses anyone but its author before the lock, where
- * pageToChange would read the page behind it first.
+ * The comment the person changes, behind its wiki's row lock, refused in the
+ * order api.md writes: `not_found` out of their reach, `forbidden` to anyone
+ * but its author, and an admin when `byAdmin`, then `not_found` once
+ * deleted, and `in_trash` on a page in the trash. It takes the lock as
+ * pageToChange does, but reads the comment, which names its page, and
+ * refuses whoever may not change it before the lock, by the role checkRole
+ * answers, which pageToChange keeps to itself.
  */
-async function commentToChange(tx: Tx, identity: Identity, commentId: string) {
+async function commentToChange(
+  tx: Tx,
+  identity: Identity,
+  commentId: string,
+  { byAdmin = false } = {}
+) {
   const [found] = await commentWithPage(tx, commentId)
   if (!found) throw new Refused('not_found')
-  await checkRole(tx, identity, found.page.wikiId, 'viewer')
-  if (found.comment.authorId !== identity.userId) {
+  const role = await checkRole(tx, identity, found.page.wikiId, 'viewer')
+  const byAuthor = found.comment.authorId === identity.userId
+  if (!byAuthor && !(byAdmin && role === 'admin')) {
     throw new Refused('forbidden')
   }
   await bumpWiki(tx, found.page.wikiId)
@@ -169,6 +176,20 @@ export function createCommentStore(db: Db) {
         )
         for (const member of mentioned) await follow(tx, page, member.userId)
         return commentOf(edited)
+      })
+    },
+
+    /**
+     * Deletes the comment with its replies, which its parent key takes. Twake
+     * Tasks keeps every comment as written, where a wiki's stay with its page
+     * as long as it lives: their author mends or deletes them, and an admin
+     * deletes what the wiki should not keep, though only the author edits a
+     * comment, whose words stay theirs.
+     */
+    deleteComment(identity: Identity, commentId: string) {
+      return writeOrRefuse(db, identity, async tx => {
+        await commentToChange(tx, identity, commentId, { byAdmin: true })
+        await tx.delete(comments).where(eq(comments.id, commentId))
       })
     }
   }

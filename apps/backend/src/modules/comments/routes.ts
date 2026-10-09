@@ -82,4 +82,18 @@ export function registerComments(
       return result.ok ? result.value : refuse(reply, result.error)
     }
   )
+
+  app.delete(
+    '/comments/:commentId',
+    { preHandler: deps.requireIdentity },
+    async (request, reply) => {
+      const identity = request.identity
+      if (!identity) return reply.code(401).send()
+      const params = commentParams.safeParse(request.params)
+      if (!params.success) return refuse(reply, 'not_found')
+      const result = await store.deleteComment(identity, params.data.commentId)
+      if (!result.ok) return refuse(reply, result.error)
+      return reply.code(204).send()
+    }
+  )
 }

@@ -26,6 +26,7 @@ import {
   type Person,
   type TestUser
 } from '../../testing/app.ts'
+import { behindAChange } from '../wikis/testing.ts'
 
 let api: Awaited<ReturnType<typeof startApp>>
 const { sql, db } = createDb(inject('databaseUrl'))
@@ -857,4 +858,236 @@ describe('PATCH /comments/:commentId', () => {
       expect(response.json()).toEqual({ error: 'not_found' })
     }
   )
+})
+
+/** `DELETE /comments/:commentId` by the person. */
+const deleteComment = (user: TestUser, commentId: string) =>
+  api.as(user).delete(`/comments/${commentId}`)
+
+describe('DELETE /comments/:commentId', () => {
+  it.each(someoneOfEachTenant)(
+    'lets the author %s delete their comment, with its replies',
+    async (_case, someone) => {
+      const alice = someone()
+      const bob = aColleagueOf(alice, 'bob')
+      const wiki = await aWikiOf(api, alice)
+      await joinWiki(db, alice, wiki.id, bob, 'viewer')
+      const written = await aCommentOn(bob, wiki.homePageId, { body: 'Plan' })
+      await aCommentOn(alice, wiki.homePageId, {
+        body: 'Agreed',
+        parentId: written.id
+      })
+      const other = await aCommentOn(alice, wiki.homePageId, {
+        body: 'Question'
+      })
+
+      const response = await deleteComment(bob, written.id)
+
+      expect(response.statusCode).toBe(204)
+      expect(await commentsOf(alice, wiki.homePageId)).toEqual([other])
+    }
+  )
+
+  it('lets the author delete a reply, which leaves its comment', async () => {
+    const alice = aUser()
+    const wiki = await aWikiOf(api, alice)
+    const written = await aCommentOn(alice, wiki.homePageId, { body: 'Plan' })
+    const reply = await aCommentOn(alice, wiki.homePageId, {
+      body: 'Agreed',
+      parentId: written.id
+    })
+
+    const response = await deleteComment(alice, reply.id)
+
+    expect(response.statusCode).toBe(204)
+    expect(await commentsOf(alice, wiki.homePageId)).toEqual([written])
+  })
+
+  it('lets an admin delete the comment of someone else', async () => {
+    const alice = aUser()
+    const bob = aColleagueOf(alice, 'bob')
+    const wiki = await aWikiOf(api, alice)
+    await joinWiki(db, alice, wiki.id, bob, 'viewer')
+    const written = await aCommentOn(bob, wiki.homePageId, { body: 'Plan' })
+
+    const response = await deleteComment(alice, written.id)
+
+    expect(response.statusCode).toBe(204)
+    expect(await commentsOf(bob, wiki.homePageId)).toEqual([])
+  })
+
+  it('moves the version of the wiki once for a deletion', async () => {
+    const alice = aUser()
+    const wiki = await aWikiOf(api, alice)
+    const written = await aCommentOn(alice, wiki.homePageId, { body: 'Plan' })
+    const before = await versionOf(api, alice, wiki.id)
+
+    await deleteComment(alice, written.id)
+
+    expect(await versionOf(api, alice, wiki.id)).toBe(before + 1)
+  })
+
+  it.each(['viewer', 'editor'] as const)(
+    'answers forbidden to %ss deleting the comment of someone else, and keeps the version and the comment',
+    async role => {
+      const alice = aUser()
+      const bob = aColleagueOf(alice, 'bob')
+      const carol = aColleagueOf(alice, 'carol')
+      const wiki = await aWikiOf(api, alice)
+      await joinWiki(db, alice, wiki.id, bob, 'viewer')
+      await joinWiki(db, alice, wiki.id, carol, role)
+      const written = await aCommentOn(bob, wiki.homePageId, { body: 'Plan' })
+      const before = await versionOf(api, alice, wiki.id)
+
+      const response = await deleteComment(carol, written.id)
+
+      expect(response.statusCode).toBe(403)
+      expect(response.json()).toEqual({ error: 'forbidden' })
+      expect(await versionOf(api, alice, wiki.id)).toBe(before)
+      expect(await commentsOf(alice, wiki.homePageId)).toEqual([written])
+    }
+  )
+
+  it('answers forbidden, before in_trash, to an editor deleting the comment of someone else on a page in the trash, and keeps the version', async () => {
+    const alice = aUser()
+    const bob = aColleagueOf(alice, 'bob')
+    const wiki = await aWikiOf(api, alice)
+    await joinWiki(db, alice, wiki.id, bob, 'editor')
+    const plans = await aPage(api, alice, wiki.id, { title: 'Plans' })
+    const written = await aCommentOn(alice, plans, { body: 'Plan' })
+    await trash(alice, plans)
+    const before = await versionOf(api, alice, wiki.id)
+
+    const response = await deleteComment(bob, written.id)
+
+    expect(response.statusCode).toBe(403)
+    expect(response.json()).toEqual({ error: 'forbidden' })
+    expect(await versionOf(api, alice, wiki.id)).toBe(before)
+  })
+
+  it('answers in_trash to the author deleting a comment on a page in the trash, and keeps the version and the comment', async () => {
+    const alice = aUser()
+    const wiki = await aWikiOf(api, alice)
+    const plans = await aPage(api, alice, wiki.id, { title: 'Plans' })
+    const written = await aCommentOn(alice, plans, { body: 'Plan' })
+    await trash(alice, plans)
+    const before = await versionOf(api, alice, wiki.id)
+
+    const response = await deleteComment(alice, written.id)
+
+    expect(response.statusCode).toBe(409)
+    expect(response.json()).toEqual({ error: 'in_trash' })
+    expect(await versionOf(api, alice, wiki.id)).toBe(before)
+    expect(await commentsOf(alice, plans)).toEqual([written])
+  })
+
+  it('answers not_found to someone who is no member deleting a comment, and keeps the version and the comment', async () => {
+    const alice = aUser()
+    const bob = aColleagueOf(alice, 'bob')
+    const wiki = await aWikiOf(api, alice)
+    const written = await aCommentOn(alice, wiki.homePageId, { body: 'Plan' })
+    const before = await versionOf(api, alice, wiki.id)
+
+    const response = await deleteComment(bob, written.id)
+
+    expect(response.statusCode).toBe(404)
+    expect(response.json()).toEqual({ error: 'not_found' })
+    expect(await versionOf(api, alice, wiki.id)).toBe(before)
+    expect(await commentsOf(alice, wiki.homePageId)).toEqual([written])
+  })
+
+  it('answers not_found to someone who is no member deleting a comment on a page in the trash, before in_trash, and keeps the version', async () => {
+    const alice = aUser()
+    const bob = aColleagueOf(alice, 'bob')
+    const wiki = await aWikiOf(api, alice)
+    const plans = await aPage(api, alice, wiki.id, { title: 'Plans' })
+    const written = await aCommentOn(alice, plans, { body: 'Plan' })
+    await trash(alice, plans)
+    const before = await versionOf(api, alice, wiki.id)
+
+    const response = await deleteComment(bob, written.id)
+
+    expect(response.statusCode).toBe(404)
+    expect(response.json()).toEqual({ error: 'not_found' })
+    expect(await versionOf(api, alice, wiki.id)).toBe(before)
+  })
+
+  // No route shows a deleted wiki's version, so it is read from its row.
+  it.each(waysOutOfAWiki)(
+    'answers not_found to the author deleting their comment on a page of %s, and keeps the version',
+    async (_case, someone, takeOut) => {
+      const alice = someone()
+      const carol = aColleagueOf(alice, 'carol')
+      const wiki = await aWikiOf(api, carol)
+      await joinWiki(db, carol, wiki.id, alice, 'viewer')
+      const written = await aCommentOn(alice, wiki.homePageId, {
+        body: 'Plan'
+      })
+      await takeOut(api, carol, wiki.id, alice)
+      const before = await wikiRowsOf(db, carol, wiki.id)
+
+      const response = await deleteComment(alice, written.id)
+
+      expect(response.statusCode).toBe(404)
+      expect(response.json()).toEqual({ error: 'not_found' })
+      expect(await wikiRowsOf(db, carol, wiki.id)).toEqual(before)
+    }
+  )
+
+  it.each(malformedOrUnknownIds)(
+    'answers not_found for a comment with %s',
+    async (_case, commentId) => {
+      const alice = aUser()
+
+      const response = await deleteComment(alice, commentId)
+
+      expect(response.statusCode).toBe(404)
+      expect(response.json()).toEqual({ error: 'not_found' })
+    }
+  )
+
+  // The reply waits for the wiki's row lock, which the deletion takes first,
+  // then reads its parent as the deletion left it.
+  it('answers invalid_request to a reply that waits behind the deletion of its comment, and moves the version once', async () => {
+    const alice = aUser()
+    const bob = aColleagueOf(alice, 'bob')
+    const wiki = await aWikiOf(api, alice)
+    await joinWiki(db, alice, wiki.id, bob, 'viewer')
+    const written = await aCommentOn(alice, wiki.homePageId, { body: 'Plan' })
+    const before = await versionOf(api, alice, wiki.id)
+
+    const [deletion, reply] = await behindAChange(db, alice, wiki.id, [
+      () => deleteComment(alice, written.id),
+      () =>
+        commentOn(bob, wiki.homePageId, {
+          body: 'Agreed',
+          parentId: written.id
+        })
+    ])
+
+    expect(deletion?.statusCode).toBe(204)
+    expect(reply?.statusCode).toBe(400)
+    expect(reply?.json()).toEqual({ error: 'invalid_request' })
+    expect(await versionOf(api, alice, wiki.id)).toBe(before + 1)
+    expect(await commentsOf(alice, wiki.homePageId)).toEqual([])
+  })
+
+  it('answers not_found to an edit that waits behind the deletion of its comment, and moves the version once', async () => {
+    const alice = aUser()
+    const bob = aColleagueOf(alice, 'bob')
+    const wiki = await aWikiOf(api, alice)
+    await joinWiki(db, alice, wiki.id, bob, 'viewer')
+    const written = await aCommentOn(bob, wiki.homePageId, { body: 'Plan' })
+    const before = await versionOf(api, alice, wiki.id)
+
+    const [deletion, edit] = await behindAChange(db, alice, wiki.id, [
+      () => deleteComment(alice, written.id),
+      () => editComment(bob, written.id, { body: 'Better plan' })
+    ])
+
+    expect(deletion?.statusCode).toBe(204)
+    expect(edit?.statusCode).toBe(404)
+    expect(edit?.json()).toEqual({ error: 'not_found' })
+    expect(await versionOf(api, alice, wiki.id)).toBe(before + 1)
+  })
 })
