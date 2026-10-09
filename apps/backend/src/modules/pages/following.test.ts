@@ -6,15 +6,16 @@ import {
   aUser,
   aWikiOf,
   backIn,
+  follow,
+  isFollowing,
   joinWiki,
   malformedOrUnknownIds,
-  pageOf,
   someoneOfEachTenant,
   startApp,
+  stopFollowing,
   versionOf,
   WAYS_TO_LEAVE,
-  waysOutOfAWiki,
-  type TestUser
+  waysOutOfAWiki
 } from '../../testing/app.ts'
 
 let api: Awaited<ReturnType<typeof startApp>>
@@ -29,16 +30,6 @@ afterAll(async () => {
   await sql.end()
 })
 
-const follow = (user: TestUser, pageId: string) =>
-  api.as(user).put(`/pages/${pageId}/follow`)
-
-const unfollow = (user: TestUser, pageId: string) =>
-  api.as(user).delete(`/pages/${pageId}/follow`)
-
-/** Whether the person follows the page, as `GET /pages/:pageId` tells them. */
-const isFollowing = async (user: TestUser, pageId: string) =>
-  (await pageOf(api, user, pageId)).following
-
 describe('PUT and DELETE /pages/:pageId/follow', () => {
   it.each(someoneOfEachTenant)(
     'lets a viewer %s follow a page, until they stop',
@@ -48,16 +39,16 @@ describe('PUT and DELETE /pages/:pageId/follow', () => {
       const wiki = await aWikiOf(api, alice)
       await joinWiki(db, alice, wiki.id, bob, 'viewer')
 
-      const followed = await follow(bob, wiki.homePageId)
-      const following = await isFollowing(bob, wiki.homePageId)
-      const stopped = await unfollow(bob, wiki.homePageId)
+      const followed = await follow(api, bob, wiki.homePageId)
+      const following = await isFollowing(api, bob, wiki.homePageId)
+      const stopped = await stopFollowing(api, bob, wiki.homePageId)
 
       expect([followed, stopped].map(response => response.statusCode)).toEqual([
         204, 204
       ])
       expect({
         following,
-        left: await isFollowing(bob, wiki.homePageId)
+        left: await isFollowing(api, bob, wiki.homePageId)
       }).toEqual({ following: true, left: false })
     }
   )
@@ -69,13 +60,13 @@ describe('PUT and DELETE /pages/:pageId/follow', () => {
       const bob = aColleagueOf(alice, 'bob')
       const wiki = await aWikiOf(api, alice)
       await joinWiki(db, alice, wiki.id, bob, 'viewer')
-      await follow(bob, wiki.homePageId)
+      await follow(api, bob, wiki.homePageId)
 
-      await unfollow(bob, wiki.homePageId)
+      await stopFollowing(api, bob, wiki.homePageId)
 
       expect({
-        alice: await isFollowing(alice, wiki.homePageId),
-        bob: await isFollowing(bob, wiki.homePageId)
+        alice: await isFollowing(api, alice, wiki.homePageId),
+        bob: await isFollowing(api, bob, wiki.homePageId)
       }).toEqual({ alice: true, bob: false })
     }
   )
@@ -84,10 +75,10 @@ describe('PUT and DELETE /pages/:pageId/follow', () => {
     const alice = aUser()
     const wiki = await aWikiOf(api, alice)
 
-    const again = await follow(alice, wiki.homePageId)
+    const again = await follow(api, alice, wiki.homePageId)
 
     expect(again.statusCode).toBe(204)
-    expect(await isFollowing(alice, wiki.homePageId)).toBe(true)
+    expect(await isFollowing(api, alice, wiki.homePageId)).toBe(true)
   })
 
   // As a page opens from the trash, which keeps it until it is restored.
@@ -100,14 +91,14 @@ describe('PUT and DELETE /pages/:pageId/follow', () => {
       deleted: true
     })
 
-    const followed = await follow(alice, drafts)
-    const following = await isFollowing(alice, drafts)
-    const stopped = await unfollow(alice, drafts)
+    const followed = await follow(api, alice, drafts)
+    const following = await isFollowing(api, alice, drafts)
+    const stopped = await stopFollowing(api, alice, drafts)
 
     expect([followed, stopped].map(response => response.statusCode)).toEqual([
       204, 204
     ])
-    expect({ following, left: await isFollowing(alice, drafts) }).toEqual({
+    expect({ following, left: await isFollowing(api, alice, drafts) }).toEqual({
       following: true,
       left: false
     })
@@ -119,8 +110,8 @@ describe('PUT and DELETE /pages/:pageId/follow', () => {
     const wiki = await aWikiOf(api, alice)
     const before = await versionOf(api, alice, wiki.id)
 
-    await unfollow(alice, wiki.homePageId)
-    await follow(alice, wiki.homePageId)
+    await stopFollowing(api, alice, wiki.homePageId)
+    await follow(api, alice, wiki.homePageId)
 
     expect(await versionOf(api, alice, wiki.id)).toBe(before)
   })
@@ -131,12 +122,12 @@ describe('PUT and DELETE /pages/:pageId/follow', () => {
     const wiki = await aWikiOf(api, alice)
     const before = await versionOf(api, alice, wiki.id)
 
-    const response = await follow(bob, wiki.homePageId)
+    const response = await follow(api, bob, wiki.homePageId)
     await joinWiki(db, alice, wiki.id, bob, 'viewer')
 
     expect(response.statusCode).toBe(404)
     expect(response.json()).toEqual({ error: 'not_found' })
-    expect(await isFollowing(bob, wiki.homePageId)).toBe(false)
+    expect(await isFollowing(api, bob, wiki.homePageId)).toBe(false)
     expect(await versionOf(api, alice, wiki.id)).toBe(before)
   })
 
@@ -147,18 +138,18 @@ describe('PUT and DELETE /pages/:pageId/follow', () => {
       const bob = aColleagueOf(alice, 'bob')
       const wiki = await aWikiOf(api, alice)
       await joinWiki(db, alice, wiki.id, bob, 'viewer')
-      await follow(bob, wiki.homePageId)
+      await follow(api, bob, wiki.homePageId)
       await takeOut(api, alice, wiki.id, bob)
       const before = await versionOf(api, alice, wiki.id)
 
-      const response = await unfollow(bob, wiki.homePageId)
+      const response = await stopFollowing(api, bob, wiki.homePageId)
       const after = await versionOf(api, alice, wiki.id)
       await backIn(api, alice, bob, wiki.id)
 
       expect(response.statusCode).toBe(404)
       expect(response.json()).toEqual({ error: 'not_found' })
       expect(after).toBe(before)
-      expect(await isFollowing(bob, wiki.homePageId)).toBe(true)
+      expect(await isFollowing(api, bob, wiki.homePageId)).toBe(true)
     }
   )
 
@@ -172,8 +163,8 @@ describe('PUT and DELETE /pages/:pageId/follow', () => {
       await takeOut(api, carol, wiki.id, alice)
 
       const responses = [
-        await follow(alice, wiki.homePageId),
-        await unfollow(alice, wiki.homePageId)
+        await follow(api, alice, wiki.homePageId),
+        await stopFollowing(api, alice, wiki.homePageId)
       ]
 
       expect(responses.map(response => response.statusCode)).toEqual([404, 404])
@@ -190,8 +181,8 @@ describe('PUT and DELETE /pages/:pageId/follow', () => {
       const alice = aUser()
 
       const responses = [
-        await follow(alice, pageId),
-        await unfollow(alice, pageId)
+        await follow(api, alice, pageId),
+        await stopFollowing(api, alice, pageId)
       ]
 
       expect(responses.map(response => response.statusCode)).toEqual([404, 404])

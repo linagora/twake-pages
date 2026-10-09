@@ -679,10 +679,36 @@ export async function backIn(
   await wikisOf(app, member)
 }
 
+/** `PUT /pages/:pageId/follow` by the person. */
+export function follow(
+  app: Awaited<ReturnType<typeof startApp>>,
+  user: TestUser,
+  pageId: string
+) {
+  return app.as(user).put(`/pages/${pageId}/follow`)
+}
+
+/** `DELETE /pages/:pageId/follow` by the person. */
+export function stopFollowing(
+  app: Awaited<ReturnType<typeof startApp>>,
+  user: TestUser,
+  pageId: string
+) {
+  return app.as(user).delete(`/pages/${pageId}/follow`)
+}
+
+/** Whether the person follows the page, as `GET /pages/:pageId` shows it. */
+export async function isFollowing(
+  app: Awaited<ReturnType<typeof startApp>>,
+  user: TestUser,
+  pageId: string
+) {
+  return (await pageOf(app, user, pageId)).following
+}
+
 /**
- * Whether the person follows the page, as `GET /pages/:pageId` shows it, and
- * how many of their notifications about its wiki are unread, as `GET /wikis`
- * counts them.
+ * Whether the person follows the page, and how many of their notifications
+ * about its wiki are unread, as `GET /wikis` counts them.
  */
 export async function followingAndUnreadOf(
   app: Awaited<ReturnType<typeof startApp>>,
@@ -692,7 +718,7 @@ export async function followingAndUnreadOf(
 ) {
   const wiki = (await wikisOf(app, user)).find(listed => listed.id === wikiId)
   return {
-    following: (await pageOf(app, user, pageId)).following,
+    following: await isFollowing(app, user, pageId),
     unread: wiki?.unread
   }
 }
