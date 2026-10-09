@@ -13,5 +13,7 @@ export const SearchBar = styled(TwakeSearchBar)(({ theme }) => ({
   '& .SearchBar-icon': { color: theme.vars.palette.text.secondary },
   '& .SearchBar-focusHighlight': {
     backgroundColor: theme.vars.palette.action.hover
-  }
+  },
+  // The bar has its own clear button: a search input hides the browser's.
+  '& input::-webkit-search-cancel-button': { display: 'none' }
 }))
