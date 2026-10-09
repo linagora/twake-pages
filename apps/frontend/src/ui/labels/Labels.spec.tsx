@@ -2,6 +2,7 @@ import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
 import { fakePagesApi } from '@/testing/fakePagesApi'
+import { typeIn } from '@/testing/forms'
 import { renderRoute, WIKI_BASES } from '@/testing/renderWithProviders'
 
 const BOB = 'bob@example.com'
@@ -25,11 +26,9 @@ async function handbookWithHowTo() {
   return { pagesApi, wiki, onboarding }
 }
 
-async function openLabels() {
+async function openLabels(): Promise<HTMLElement> {
   fireEvent.click(await screen.findByRole('button', { name: 'Edit labels' }))
-  return within(
-    await screen.findByRole('dialog', { name: 'Labels of Onboarding' })
-  )
+  return screen.findByRole('dialog', { name: 'Labels of Onboarding' })
 }
 
 // The picker hides the rest of the screen from assistive technologies.
@@ -122,7 +121,7 @@ describe('the labels picker', () => {
     const { pagesApi, wiki, onboarding } = await handbookWithHowTo()
     renderRoute(`/wikis/${wiki.id}/pages/${onboarding.id}`, { pagesApi })
 
-    const picker = await openLabels()
+    const picker = within(await openLabels())
     const howto = await picker.findByRole('menuitemcheckbox', {
       name: 'howto'
     })
@@ -177,7 +176,7 @@ describe('the labels picker', () => {
     ])
     renderRoute(`/wikis/${wiki.id}/pages/${onboarding.id}`, { pagesApi })
 
-    const picker = await openLabels()
+    const picker = within(await openLabels())
     const howto = await picker.findByRole('menuitemcheckbox', {
       name: 'howto'
     })
@@ -188,5 +187,21 @@ describe('the labels picker', () => {
       expect(await shownLabels()).toEqual(['hr'])
     })
     expect(pagesApi.setLabels).toHaveBeenLastCalledWith(onboarding.id, ['hr'])
+  })
+
+  it('highlights the searched part of each label', async () => {
+    const { pagesApi, wiki, onboarding } = await handbookWithHowTo()
+    renderRoute(`/wikis/${wiki.id}/pages/${onboarding.id}`, { pagesApi })
+
+    const dialog = await openLabels()
+    await within(dialog).findByRole('menuitemcheckbox', { name: 'howto' })
+    typeIn(dialog, 'Search labels', 'OW')
+
+    const option = within(dialog).getByRole('menuitemcheckbox', {
+      name: 'howto'
+    })
+    expect(
+      [...option.querySelectorAll('mark')].map(mark => mark.textContent)
+    ).toEqual(['ow'])
   })
 })

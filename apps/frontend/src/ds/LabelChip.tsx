@@ -1,6 +1,8 @@
 import { Box } from '@linagora/twake-mui'
 import type { ReactElement } from 'react'
 
+import { Highlight } from '@/ds/Highlight'
+
 function hueOf(name: string): number {
   let hash = 7
   for (let index = 0; index < name.length; index++) {
@@ -9,8 +11,28 @@ function hueOf(name: string): number {
   return hash
 }
 
+// A label comes with no words the backend found, so the chip finds the search
+// in the name itself, as Twake Tasks finds the query in the text it marks.
+function partsOf(name: string, search: string) {
+  if (search === '') return [{ text: name, highlighted: false }]
+  const [before = '', ...after] = name.split(search)
+  return [
+    { text: before, highlighted: false },
+    ...after.flatMap(text => [
+      { text: search, highlighted: true },
+      { text, highlighted: false }
+    ])
+  ].filter(part => part.text !== '')
+}
+
 // Labels have no stored colour, so each name gets a stable hue.
-export function LabelChip({ name }: { name: string }): ReactElement {
+export function LabelChip({
+  name,
+  highlight = ''
+}: {
+  name: string
+  highlight?: string
+}): ReactElement {
   const hue = hueOf(name)
   return (
     <Box
@@ -36,7 +58,7 @@ export function LabelChip({ name }: { name: string }): ReactElement {
         })
       })}
     >
-      {name}
+      <Highlight parts={partsOf(name, highlight)} />
     </Box>
   )
 }

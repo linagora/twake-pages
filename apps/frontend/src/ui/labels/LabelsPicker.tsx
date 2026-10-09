@@ -56,7 +56,7 @@ export function LabelsPicker({
             toggle(name)
           }}
         >
-          <LabelChip name={name} />
+          <LabelChip name={name} highlight={query} />
         </PickerOption>
       ))}
     </PickerPopover>
