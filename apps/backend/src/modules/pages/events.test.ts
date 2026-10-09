@@ -9,6 +9,7 @@ import {
   aUser,
   aWikiOf,
   createPage,
+  deletePage,
   joinWiki,
   movePage,
   paragraph,
@@ -294,5 +295,65 @@ describe('com.twake.pages.page.published.v1', () => {
         }
       }
     ])
+  })
+})
+
+describe('com.twake.pages.page.deleted.v1', () => {
+  it('goes out through the outbox when an editor deletes a page, with how many went with it', async () => {
+    const alice = aUser()
+    const bob = aUser({ organizationId: alice.organizationId })
+    const wiki = await aWikiOf(api, alice)
+    await joinWiki(db, alice, wiki.id, bob, 'editor')
+    const onboarding = await aPage(api, alice, wiki.id, { title: 'Onboarding' })
+    const laptop = await aPage(api, alice, wiki.id, {
+      title: 'Laptop setup',
+      parentId: onboarding
+    })
+    await aPage(api, alice, wiki.id, { title: 'Accounts', parentId: laptop })
+
+    await deletePage(api, bob, onboarding)
+
+    expect(await eventsOf(onboarding)).toEqual([
+      expect.objectContaining({ type: 'com.twake.pages.page.created.v1' }),
+      {
+        specversion: '1.0',
+        id: expect.stringMatching(UUID_V7) as string,
+        source: 'twake://pages',
+        type: 'com.twake.pages.page.deleted.v1',
+        time: expect.stringMatching(TIME) as string,
+        twakeorg: alice.organizationId,
+        twakeactorid: bob.userId,
+        twakeactor: bob.email,
+        data: {
+          object: {
+            type: 'page',
+            id: onboarding,
+            title: 'Onboarding',
+            container: { kind: 'wiki', id: wiki.id }
+          },
+          descendants: 2
+        }
+      }
+    ])
+    // The child pages go with their parent, which the event tells of.
+    expect(await eventsOf(laptop)).toEqual([
+      expect.objectContaining({ type: 'com.twake.pages.page.created.v1' })
+    ])
+  })
+
+  it('counts no child page deleted before, which keeps its own branch', async () => {
+    const alice = aUser()
+    const wiki = await aWikiOf(api, alice)
+    const onboarding = await aPage(api, alice, wiki.id, { title: 'Onboarding' })
+    const laptop = await aPage(api, alice, wiki.id, {
+      title: 'Laptop setup',
+      parentId: onboarding
+    })
+    await deletePage(api, alice, laptop)
+
+    await deletePage(api, alice, onboarding)
+
+    const [, deleted] = await eventsOf(onboarding)
+    expect(deleted?.data).toHaveProperty('descendants', 0)
   })
 })

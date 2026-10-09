@@ -3,15 +3,17 @@ import type { Db, Tx } from '../../infra/db.ts'
 import type { HttpServer } from '../../infra/http.ts'
 import { Refused, refuse, writeOrRefuse } from '../../infra/refusals.ts'
 import type { Identity, RequireIdentity } from '../auth/index.ts'
+import { queuePageEvent } from './events.ts'
 import { pageParams } from './routes.ts'
 import { pages } from './schema.ts'
 import { pageToChange } from './store.ts'
 
 // The page and its live descendants go to the trash with one stamp, the page
 // as the root of their branch, as Twake Tasks hides a task with its shown
-// sub-tasks. A descendant deleted before keeps its own branch.
+// sub-tasks. A descendant deleted before keeps its own branch. Answers how
+// many descendants went with the page.
 async function putInTrash(tx: Tx, identity: Identity, pageId: string) {
-  await tx.execute(sql`
+  const branch = await tx.execute<{ id: string }>(sql`
     with recursive branch as (
       select id from ${pages} where id = ${pageId}
       union all
@@ -22,7 +24,9 @@ async function putInTrash(tx: Tx, identity: Identity, pageId: string) {
     update ${pages}
     set deleted_at = now(), deleted_by = ${identity.userId},
       trash_root_id = ${pageId}
-    where id in (select id from branch)`)
+    where id in (select id from branch)
+    returning id`)
+  return branch.length - 1
 }
 
 function createTrashStore(db: Db) {
@@ -36,7 +40,8 @@ function createTrashStore(db: Db) {
         const page = await pageToChange(tx, identity, pageId)
         if (page.deletedAt !== null) throw new Refused('in_trash')
         if (page.home) throw new Refused('home_page')
-        await putInTrash(tx, identity, page.id)
+        const descendants = await putInTrash(tx, identity, page.id)
+        await queuePageEvent(tx, identity, 'deleted', page, { descendants })
         return null
       })
     }
