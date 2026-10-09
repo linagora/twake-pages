@@ -1,7 +1,8 @@
-import { screen, within } from '@testing-library/react'
+import { fireEvent, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError } from '@/application/pages'
+import type { Role } from '@/domain/wiki'
 import { findEmptyState } from '@/testing/emptyState'
 import { fakePagesApi } from '@/testing/fakePagesApi'
 import { renderRoute, WIKI_BASES } from '@/testing/renderWithProviders'
@@ -38,12 +39,29 @@ async function engineeringTrash() {
   return { pagesApi, wiki, onboarding, releases }
 }
 
-describe('the trash', () => {
-  afterEach(() => {
-    followZone(null)
-    vi.useRealTimers()
+/**
+ * The trash of Engineering, open to a person of that `role`, once Bob, who
+ * runs the wiki, deleted Onboarding.
+ */
+async function trashListFor(role: Role) {
+  const pagesApi = fakePagesApi()
+  const wiki = pagesApi.withWiki({
+    name: 'Engineering',
+    role,
+    members: { [BOB]: 'admin' }
   })
+  const onboarding = pagesApi.withPage(wiki.id, { title: 'Onboarding' })
+  await pagesApi.signedInAs(BOB).deletePage(onboarding.id)
+  renderRoute(`/wikis/${wiki.id}/trash`, { pagesApi })
+  return within(await screen.findByRole('list', { name: 'Trash' }))
+}
 
+afterEach(() => {
+  followZone(null)
+  vi.useRealTimers()
+})
+
+describe('the trash', () => {
   it.each(WIKI_BASES)(
     'lists at %s/<wiki>/trash the deleted pages newest first, each leading to its page',
     async base => {
@@ -138,5 +156,56 @@ describe('the trash', () => {
     expect(
       screen.queryByRole('list', { name: 'Trash' })
     ).not.toBeInTheDocument()
+  })
+})
+
+describe('a page restored from the trash', () => {
+  it('goes back to the tree with the pages inside, once an editor restores it', async () => {
+    const { pagesApi, wiki, onboarding } = await engineeringTrash()
+    renderRoute(`/wikis/${wiki.id}/trash`, { pagesApi })
+
+    const trash = within(await screen.findByRole('list', { name: 'Trash' }))
+    fireEvent.click(trash.getByRole('button', { name: 'Restore Onboarding' }))
+
+    expect(
+      await screen.findByText('Onboarding is back in the tree.')
+    ).toBeVisible()
+    expect(
+      trash.queryByRole('listitem', { name: 'Onboarding' })
+    ).not.toBeInTheDocument()
+    const tree = within(screen.getByRole('tree', { name: 'Pages' }))
+    fireEvent.keyDown(tree.getByRole('treeitem', { name: 'Onboarding' }), {
+      key: 'ArrowRight'
+    })
+    expect(
+      within(tree.getByRole('group', { name: 'Onboarding' })).getByRole(
+        'treeitem',
+        { name: 'Laptop setup' }
+      )
+    ).toBeVisible()
+    expect(pagesApi.restorePage).toHaveBeenCalledWith(onboarding.id)
+  })
+
+  it('is offered to editors only', async () => {
+    const trash = await trashListFor('viewer')
+
+    expect(trash.getByRole('listitem', { name: 'Onboarding' })).toBeVisible()
+    expect(
+      trash.queryByRole('button', { name: 'Restore Onboarding' })
+    ).not.toBeInTheDocument()
+  })
+
+  it('says so when it cannot be restored, and stays in the trash', async () => {
+    const { pagesApi, wiki } = await engineeringTrash()
+    pagesApi.restorePage.mockRejectedValue(new ApiError(500, null))
+    renderRoute(`/wikis/${wiki.id}/trash`, { pagesApi })
+
+    const trash = within(await screen.findByRole('list', { name: 'Trash' }))
+    fireEvent.click(trash.getByRole('button', { name: 'Restore Onboarding' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Onboarding could not be restored.'
+    )
+    expect(trash.getByRole('listitem', { name: 'Onboarding' })).toBeVisible()
   })
 })

@@ -292,7 +292,11 @@
     "empty": "The trash is empty",
     "inside": "%{smart_count} page inside |||| %{smart_count} pages inside",
     "deletedBy": "Deleted by %{name} on %{time}",
-    "daysLeft": "%{smart_count} day left |||| %{smart_count} days left"
+    "daysLeft": "%{smart_count} day left |||| %{smart_count} days left",
+    "restore": "Restore",
+    "restorePage": "Restore %{title}",
+    "restored": "%{title} is back in the tree.",
+    "restoreFailed": "%{title} could not be restored."
   },
   "notifications": {
     "title": "Notifications"

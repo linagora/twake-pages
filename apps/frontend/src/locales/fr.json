@@ -292,7 +292,11 @@
     "empty": "La corbeille est vide",
     "inside": "%{smart_count} page à l'intérieur |||| %{smart_count} pages à l'intérieur",
     "deletedBy": "Supprimée par %{name} le %{time}",
-    "daysLeft": "Encore %{smart_count} jour |||| Encore %{smart_count} jours"
+    "daysLeft": "Encore %{smart_count} jour |||| Encore %{smart_count} jours",
+    "restore": "Restaurer",
+    "restorePage": "Restaurer %{title}",
+    "restored": "La page %{title} est de retour dans l'arborescence.",
+    "restoreFailed": "La page %{title} n'a pas pu être restaurée."
   },
   "notifications": {
     "title": "Notifications"
