@@ -3,6 +3,7 @@ import { inTenant, type Db, type Tx } from '../../infra/db.ts'
 import { Refused, writeOrRefuse } from '../../infra/refusals.ts'
 import type { Identity } from '../auth/index.ts'
 import { follow, pageInReach, pageToChange } from '../pages/store.ts'
+import { membersMentioned } from './mentions.ts'
 import { comments } from './schema.ts'
 
 /**
@@ -73,7 +74,10 @@ export function createCommentStore(db: Db) {
       })
     },
 
-    /** A comment by the person, who then follows the page. */
+    /**
+     * A comment by the person, who then follows the page, as do the members
+     * it mentions.
+     */
     addComment(identity: Identity, pageId: string, input: NewComment) {
       return writeOrRefuse(db, identity, async tx => {
         const page = await pageToComment(tx, identity, pageId)
@@ -93,6 +97,8 @@ export function createCommentStore(db: Db) {
           .returning()
         if (!added) throw new Error('comment insert returned nothing')
         await follow(tx, page, identity.userId)
+        const mentioned = await membersMentioned(tx, page.wikiId, input.body)
+        for (const member of mentioned) await follow(tx, page, member.userId)
         return commentOf(added)
       })
     }

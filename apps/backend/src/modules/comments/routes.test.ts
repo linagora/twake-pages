@@ -3,10 +3,13 @@ import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest'
 import { createDb, inTenant } from '../../infra/db.ts'
 import {
   aColleagueOf,
+  anInvitation,
   aPage,
   aPageIn,
   aUser,
   aWikiOf,
+  backIn,
+  invite,
   isFollowing,
   joinWiki,
   malformedOrUnknownIds,
@@ -19,6 +22,7 @@ import {
   versionOf,
   waysOutOfAWiki,
   wikiRowsOf,
+  wikisOf,
   type Person,
   type TestUser
 } from '../../testing/app.ts'
@@ -441,4 +445,128 @@ describe('POST and GET /pages/:pageId/comments', () => {
       ])
     }
   )
+})
+
+/**
+ * Comments that mention the member of the email, as the frontend's
+ * domain/comment.spec.ts and Twake Tasks' Comments.spec.tsx read them, and as
+ * Twake Tasks does not in brackets or quotes.
+ */
+const MENTIONING: [string, (email: string) => string][] = [
+  ['after a space, before a comma', email => `Thanks @${email}, it is done.`],
+  ['at the start, in another case', email => `@${email.toUpperCase()} ok?`],
+  ['before a full stop', email => `Ask @${email}.`],
+  ['in brackets', email => `Done (@${email})`],
+  ['in quotes', email => `"@${email}" said so`]
+]
+
+/**
+ * Emails of the other forms Twake Tasks takes, which a mention takes too: a
+ * percent sign before the @, and a domain of one word.
+ */
+const MENTIONED_EMAILS: [string, () => string][] = [
+  [
+    'a percent sign before its @',
+    () => `jean%dupont-${randomUUID()}@example.com`
+  ],
+  ['a domain of one word', () => `jean-${randomUUID()}@localhost`]
+]
+
+/** Comments that write the member's email without mentioning them. */
+const NOT_MENTIONING: [string, (email: string) => string][] = [
+  ['without its @', email => `write to ${email}`],
+  ['inside another address', email => `write to bob@${email}`]
+]
+
+describe('mentions in POST /pages/:pageId/comments', () => {
+  it.each(MENTIONING)(
+    'make a member mentioned %s follow the page, the mention kept as typed',
+    async (_case, bodyOf) => {
+      const alice = aUser()
+      const jean = aColleagueOf(alice, 'jean_dupont')
+      const wiki = await aWikiOf(api, alice)
+      await joinWiki(db, alice, wiki.id, jean, 'viewer')
+
+      const response = await commentOn(alice, wiki.homePageId, {
+        body: bodyOf(jean.email)
+      })
+
+      expect(response.json<Comment>().body).toBe(bodyOf(jean.email))
+      expect(await isFollowing(api, jean, wiki.homePageId)).toBe(true)
+    }
+  )
+
+  it.each(MENTIONED_EMAILS)(
+    'make a member whose email has %s follow the page',
+    async (_case, emailOf) => {
+      const alice = aUser()
+      const jean = aUser({
+        organizationId: alice.organizationId,
+        email: emailOf()
+      })
+      const wiki = await aWikiOf(api, alice)
+      await joinWiki(db, alice, wiki.id, jean, 'viewer')
+
+      await commentOn(alice, wiki.homePageId, { body: `Ask @${jean.email}` })
+
+      expect(await isFollowing(api, jean, wiki.homePageId)).toBe(true)
+    }
+  )
+
+  it.each(NOT_MENTIONING)(
+    'are none for a member whose email a comment writes %s',
+    async (_case, bodyOf) => {
+      const alice = aUser()
+      const jean = aColleagueOf(alice, 'jean_dupont')
+      const wiki = await aWikiOf(api, alice)
+      await joinWiki(db, alice, wiki.id, jean, 'viewer')
+
+      await commentOn(alice, wiki.homePageId, { body: bodyOf(jean.email) })
+
+      expect(await isFollowing(api, jean, wiki.homePageId)).toBe(false)
+    }
+  )
+
+  it.each(someoneOfEachTenant)(
+    'make a viewer %s follow the page, whatever the case of their email',
+    async (_case, someone) => {
+      const alice = someone()
+      const bob = aColleagueOf(alice, 'Bob.Martin')
+      const wiki = await aWikiOf(api, alice)
+      await joinWiki(db, alice, wiki.id, bob, 'viewer')
+
+      await commentOn(alice, wiki.homePageId, {
+        body: `Thanks @${bob.email.toLowerCase()}`
+      })
+
+      expect(await isFollowing(api, bob, wiki.homePageId)).toBe(true)
+    }
+  )
+
+  // Only a member's email mentions: an invitation makes no member yet.
+  it('make someone invited to the wiki no follower, once they join', async () => {
+    const alice = aUser()
+    const carol = aColleagueOf(alice, 'carol')
+    const wiki = await aWikiOf(api, alice)
+    await anInvitation(api, alice, wiki.id, carol.email)
+
+    await commentOn(alice, wiki.homePageId, { body: `Welcome @${carol.email}` })
+    await wikisOf(api, carol)
+
+    expect(await isFollowing(api, carol, wiki.homePageId)).toBe(false)
+  })
+
+  it('make a member who left the wiki no follower, once back', async () => {
+    const alice = aUser()
+    const bob = aColleagueOf(alice, 'bob')
+    const wiki = await aWikiOf(api, alice)
+    await invite(api, alice, wiki.id, bob.email)
+    await wikisOf(api, bob)
+    await removeMember(api, alice, wiki.id, bob.userId)
+
+    await commentOn(alice, wiki.homePageId, { body: `Ask @${bob.email}` })
+    await backIn(api, alice, bob, wiki.id)
+
+    expect(await isFollowing(api, bob, wiki.homePageId)).toBe(false)
+  })
 })
