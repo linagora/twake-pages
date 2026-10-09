@@ -520,6 +520,17 @@ export async function aWikiOf(
   return response.json<Wiki>()
 }
 
+/** `POST /wikis/:wikiId/invites` by the person, as an editor by default. */
+export function invite(
+  app: Awaited<ReturnType<typeof startApp>>,
+  admin: TestUser,
+  wikiId: string,
+  email: string,
+  role: Role = 'editor'
+) {
+  return app.as(admin).post(`/wikis/${wikiId}/invites`, { email, role })
+}
+
 /** What `createPage` sends, at the top of the tree unless it names a parent. */
 export interface PageToCreate {
   title: string

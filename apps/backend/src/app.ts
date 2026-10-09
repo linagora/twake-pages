@@ -17,6 +17,7 @@ import { registerSearch } from './modules/pages/search.ts'
 import { registerSettings } from './modules/settings/routes.ts'
 import { registerLive } from './modules/wikis/live.ts'
 import { registerWikis } from './modules/wikis/routes.ts'
+import { registerSharing } from './modules/wikis/sharing.ts'
 
 export async function buildApp(deps: {
   logger: Logger
@@ -39,6 +40,7 @@ export async function buildApp(deps: {
       })
       const streamVersions = versionStreams(api)
       registerWikis(api, { db: deps.db, requireIdentity })
+      registerSharing(api, { db: deps.db, requireIdentity })
       registerPages(api, {
         db: deps.db,
         requireIdentity,

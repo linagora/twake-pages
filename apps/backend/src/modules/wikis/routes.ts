@@ -20,7 +20,7 @@ const wikiEdit = z
   .partial()
   .refine(changes => Object.keys(changes).length > 0)
 
-const wikiParams = z.object({ wikiId: z.uuid() })
+export const wikiParams = z.object({ wikiId: z.uuid() })
 
 export function registerWikis(
   app: HttpServer,

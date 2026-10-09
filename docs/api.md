@@ -20,7 +20,7 @@ A refusal answers `{ error: <Refusal> }` with its status:
 | `not_in_trash` | 409 | restoring or purging a page that is not the root of a deleted branch |
 | `in_trash` | 409 | publishing, moving, labelling or commenting a deleted page |
 | `last_admin` | 409 | removing or demoting the last admin of a shared wiki |
-| `not_same_organization` | 400 | sharing outside the organization (B2B), or with a B2B email from B2C |
+| `not_same_organization` | 400 | inviting an email of another domain than the person's: outside the organization (B2B), or a B2B email from B2C |
 | `invalid_label` | 400 | a label name that is not 1 to 50 letters with their marks, decimal digits, `-` or `_` |
 
 ## Types
@@ -163,6 +163,8 @@ The personal wiki is stored with the name `Personal`. Clients show a translated 
 | `PATCH /wikis/:wikiId/members/:userId` | `{ role }` | `204` | admin, shared wiki |
 | `DELETE /wikis/:wikiId/members/:userId` | | `204`; a member may remove themself | admin, shared wiki |
 | `GET /people?q=` | | `{ people: { email, name }[] }`, at most 10, same organization; `[]` in B2C | anyone |
+
+An invitation goes to an email of the inviting person's domain only, else `not_same_organization`. Twake Workplace gives an organization one mail domain, and B2C users that of their provider: the domain thus gives an email's tenant without saying whether it has an account.
 
 ## Pages
 
