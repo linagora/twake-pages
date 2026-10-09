@@ -11,6 +11,7 @@ import {
   aWikiOf,
   backIn,
   commentOn,
+  commentsOf,
   deleteComment,
   editComment,
   invite,
@@ -47,10 +48,6 @@ afterAll(async () => {
 /** `GET /pages/:pageId/comments` by the person. */
 const listComments = (user: TestUser, pageId: string) =>
   api.as(user).get(`/pages/${pageId}/comments`)
-
-/** The page's comments, as `GET /pages/:pageId/comments` lists them. */
-const commentsOf = async (user: TestUser, pageId: string) =>
-  (await listComments(user, pageId)).json<{ comments: Comment[] }>().comments
 
 /** Puts the page in the trash, with the comments written on it. */
 const trash = (user: TestUser, pageId: string) =>
@@ -125,7 +122,7 @@ describe('POST and GET /pages/:pageId/comments', () => {
         createdAt: expect.any(String) as string,
         editedAt: null
       })
-      expect(await commentsOf(alice, wiki.homePageId)).toEqual([written])
+      expect(await commentsOf(api, alice, wiki.homePageId)).toEqual([written])
     }
   )
 
@@ -145,7 +142,7 @@ describe('POST and GET /pages/:pageId/comments', () => {
       parentId: first.id
     })
 
-    const listed = await commentsOf(bob, wiki.homePageId)
+    const listed = await commentsOf(api, bob, wiki.homePageId)
 
     expect(listed.map(({ body, parentId }) => ({ body, parentId }))).toEqual([
       { body: 'Plan', parentId: null },
@@ -190,7 +187,7 @@ describe('POST and GET /pages/:pageId/comments', () => {
 
     await removeMember(api, bob, wiki.id, bob.userId)
 
-    const listed = await commentsOf(alice, wiki.homePageId)
+    const listed = await commentsOf(api, alice, wiki.homePageId)
     expect(listed.map(({ author }) => author)).toEqual([personOf(bob)])
   })
 
@@ -243,7 +240,7 @@ describe('POST and GET /pages/:pageId/comments', () => {
 
     await trash(alice, plans)
 
-    expect(await commentsOf(alice, plans)).toEqual([written])
+    expect(await commentsOf(api, alice, plans)).toEqual([written])
   })
 
   it('answers in_trash to a comment on a page in the trash, and keeps the version', async () => {
@@ -261,7 +258,7 @@ describe('POST and GET /pages/:pageId/comments', () => {
     expect(response.statusCode).toBe(409)
     expect(response.json()).toEqual({ error: 'in_trash' })
     expect(await versionOf(api, alice, wiki.id)).toBe(before)
-    expect(await commentsOf(alice, drafts)).toEqual([])
+    expect(await commentsOf(api, alice, drafts)).toEqual([])
   })
 
   it('answers in_trash to a reply to a reply on a page in the trash, before its parent', async () => {
@@ -298,7 +295,7 @@ describe('POST and GET /pages/:pageId/comments', () => {
       expect(response.statusCode).toBe(400)
       expect(response.json()).toEqual({ error: 'invalid_request' })
       expect(await versionOf(api, alice, wiki.id)).toBe(before)
-      expect(await commentsOf(alice, wiki.homePageId)).toEqual([])
+      expect(await commentsOf(api, alice, wiki.homePageId)).toEqual([])
     }
   )
 
@@ -312,7 +309,7 @@ describe('POST and GET /pages/:pageId/comments', () => {
         wikiId: wiki.id,
         pageId: wiki.homePageId
       })
-      const listed = await commentsOf(alice, wiki.homePageId)
+      const listed = await commentsOf(api, alice, wiki.homePageId)
       const before = await versionOf(api, alice, wiki.id)
 
       const response = await commentOn(api, alice, wiki.homePageId, {
@@ -323,7 +320,7 @@ describe('POST and GET /pages/:pageId/comments', () => {
       expect(response.statusCode).toBe(400)
       expect(response.json()).toEqual({ error: 'invalid_request' })
       expect(await versionOf(api, alice, wiki.id)).toBe(before)
-      expect(await commentsOf(alice, wiki.homePageId)).toEqual(listed)
+      expect(await commentsOf(api, alice, wiki.homePageId)).toEqual(listed)
     }
   )
 
@@ -345,7 +342,7 @@ describe('POST and GET /pages/:pageId/comments', () => {
       { error: 'not_found' }
     ])
     expect(await versionOf(api, alice, wiki.id)).toBe(before)
-    expect(await commentsOf(alice, wiki.homePageId)).toHaveLength(1)
+    expect(await commentsOf(api, alice, wiki.homePageId)).toHaveLength(1)
   })
 
   it('answers invalid_request to a malformed comment by someone who is no member, before not_found, and keeps the version', async () => {
@@ -593,7 +590,7 @@ describe('PATCH /comments/:commentId', () => {
         body: 'Better plan',
         editedAt: expect.any(String) as string
       })
-      expect(await commentsOf(alice, wiki.homePageId)).toEqual([edited])
+      expect(await commentsOf(api, alice, wiki.homePageId)).toEqual([edited])
     }
   )
 
@@ -689,7 +686,7 @@ describe('PATCH /comments/:commentId', () => {
       expect(response.statusCode).toBe(400)
       expect(response.json()).toEqual({ error: 'invalid_request' })
       expect(await versionOf(api, alice, wiki.id)).toBe(before)
-      expect(await commentsOf(alice, wiki.homePageId)).toEqual([written])
+      expect(await commentsOf(api, alice, wiki.homePageId)).toEqual([written])
     }
   )
 
@@ -714,7 +711,7 @@ describe('PATCH /comments/:commentId', () => {
       expect(response.statusCode).toBe(403)
       expect(response.json()).toEqual({ error: 'forbidden' })
       expect(await versionOf(api, alice, wiki.id)).toBe(before)
-      expect(await commentsOf(alice, wiki.homePageId)).toEqual([written])
+      expect(await commentsOf(api, alice, wiki.homePageId)).toEqual([written])
     }
   )
 
@@ -767,7 +764,7 @@ describe('PATCH /comments/:commentId', () => {
     expect(response.statusCode).toBe(409)
     expect(response.json()).toEqual({ error: 'in_trash' })
     expect(await versionOf(api, alice, wiki.id)).toBe(before)
-    expect(await commentsOf(alice, plans)).toEqual([written])
+    expect(await commentsOf(api, alice, plans)).toEqual([written])
   })
 
   it('answers not_found to someone who is no member editing a comment, and keeps the version and the comment', async () => {
@@ -784,7 +781,7 @@ describe('PATCH /comments/:commentId', () => {
     expect(response.statusCode).toBe(404)
     expect(response.json()).toEqual({ error: 'not_found' })
     expect(await versionOf(api, alice, wiki.id)).toBe(before)
-    expect(await commentsOf(alice, wiki.homePageId)).toEqual([written])
+    expect(await commentsOf(api, alice, wiki.homePageId)).toEqual([written])
   })
 
   it('answers invalid_request to a malformed edit by someone who is no member, before not_found, and keeps the version', async () => {
@@ -895,7 +892,7 @@ describe('DELETE /comments/:commentId', () => {
       const response = await deleteComment(api, bob, written.id)
 
       expect(response.statusCode).toBe(204)
-      expect(await commentsOf(alice, wiki.homePageId)).toEqual([other])
+      expect(await commentsOf(api, alice, wiki.homePageId)).toEqual([other])
     }
   )
 
@@ -913,7 +910,7 @@ describe('DELETE /comments/:commentId', () => {
     const response = await deleteComment(api, alice, reply.id)
 
     expect(response.statusCode).toBe(204)
-    expect(await commentsOf(alice, wiki.homePageId)).toEqual([written])
+    expect(await commentsOf(api, alice, wiki.homePageId)).toEqual([written])
   })
 
   it('lets an admin delete the comment of someone else', async () => {
@@ -928,7 +925,7 @@ describe('DELETE /comments/:commentId', () => {
     const response = await deleteComment(api, alice, written.id)
 
     expect(response.statusCode).toBe(204)
-    expect(await commentsOf(bob, wiki.homePageId)).toEqual([])
+    expect(await commentsOf(api, bob, wiki.homePageId)).toEqual([])
   })
 
   it('moves the version of the wiki once for a deletion', async () => {
@@ -963,7 +960,7 @@ describe('DELETE /comments/:commentId', () => {
       expect(response.statusCode).toBe(403)
       expect(response.json()).toEqual({ error: 'forbidden' })
       expect(await versionOf(api, alice, wiki.id)).toBe(before)
-      expect(await commentsOf(alice, wiki.homePageId)).toEqual([written])
+      expect(await commentsOf(api, alice, wiki.homePageId)).toEqual([written])
     }
   )
 
@@ -997,7 +994,7 @@ describe('DELETE /comments/:commentId', () => {
     expect(response.statusCode).toBe(409)
     expect(response.json()).toEqual({ error: 'in_trash' })
     expect(await versionOf(api, alice, wiki.id)).toBe(before)
-    expect(await commentsOf(alice, plans)).toEqual([written])
+    expect(await commentsOf(api, alice, plans)).toEqual([written])
   })
 
   it('answers not_found to someone who is no member deleting a comment, and keeps the version and the comment', async () => {
@@ -1014,7 +1011,7 @@ describe('DELETE /comments/:commentId', () => {
     expect(response.statusCode).toBe(404)
     expect(response.json()).toEqual({ error: 'not_found' })
     expect(await versionOf(api, alice, wiki.id)).toBe(before)
-    expect(await commentsOf(alice, wiki.homePageId)).toEqual([written])
+    expect(await commentsOf(api, alice, wiki.homePageId)).toEqual([written])
   })
 
   it('answers not_found to someone who is no member deleting a comment on a page in the trash, before in_trash, and keeps the version', async () => {
@@ -1092,7 +1089,7 @@ describe('DELETE /comments/:commentId', () => {
     expect(reply?.statusCode).toBe(400)
     expect(reply?.json()).toEqual({ error: 'invalid_request' })
     expect(await versionOf(api, alice, wiki.id)).toBe(before + 1)
-    expect(await commentsOf(alice, wiki.homePageId)).toEqual([])
+    expect(await commentsOf(api, alice, wiki.homePageId)).toEqual([])
   })
 
   it('answers not_found to an edit that waits behind the deletion of its comment, and moves the version once', async () => {

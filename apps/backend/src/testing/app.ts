@@ -733,6 +733,16 @@ export async function followingAndUnreadOf(
   }
 }
 
+/** The page's comments, as `GET /pages/:pageId/comments` lists them. */
+export async function commentsOf(
+  app: Awaited<ReturnType<typeof startApp>>,
+  user: TestUser,
+  pageId: string
+) {
+  const listed = await app.as(user).get(`/pages/${pageId}/comments`)
+  return listed.json<{ comments: Comment[] }>().comments
+}
+
 /** `POST /pages/:pageId/comments` by the person. */
 export function commentOn(
   app: Awaited<ReturnType<typeof startApp>>,
