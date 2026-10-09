@@ -7,6 +7,7 @@ import {
   aUser,
   aWikiOf,
   createPage,
+  favoritesAndRecentOf,
   invite,
   joinWiki,
   pageOf,
@@ -18,7 +19,6 @@ import {
   WAYS_TO_LEAVE,
   wikisOf,
   type Page,
-  type PageRef,
   type TestUser
 } from '../../testing/app.ts'
 import { notify } from '../notifications/testing.ts'
@@ -808,18 +808,6 @@ describe('DELETE /wikis/:wikiId/members/:userId', () => {
   })
 })
 
-/** The pages the person lists across wikis, as favorites and as recent. */
-async function listsOf(user: TestUser) {
-  const idsAt = async (path: string) =>
-    (await api.as(user).get(path))
-      .json<{ pages: PageRef[] }>()
-      .pages.map(page => page.id)
-  return {
-    favorites: await idsAt('/favorites'),
-    recent: await idsAt('/recent')
-  }
-}
-
 /** Invites the person back into the wiki, which they join as they sign in. */
 async function backIn(admin: TestUser, member: TestUser, wikiId: string) {
   await invite(api, admin, wikiId, member.email)
@@ -838,12 +826,15 @@ describe.each(someoneOfEachTenant)(
         await joinWiki(db, alice, wiki.id, bob, 'viewer')
         await api.as(bob).put(`/pages/${wiki.homePageId}/favorite`)
         await pageOf(api, bob, wiki.homePageId)
-        const before = await listsOf(bob)
+        const before = await favoritesAndRecentOf(api, bob)
 
         await leave(api, alice, wiki.id, bob)
 
         await backIn(alice, bob, wiki.id)
-        expect({ before, after: await listsOf(bob) }).toEqual({
+        expect({
+          before,
+          after: await favoritesAndRecentOf(api, bob)
+        }).toEqual({
           before: { favorites: [wiki.homePageId], recent: [wiki.homePageId] },
           after: { favorites: [], recent: [] }
         })

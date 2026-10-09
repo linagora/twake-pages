@@ -439,6 +439,24 @@ export async function pageOf(
   return (await api.as(user).get(`/pages/${pageId}`)).json<Page>()
 }
 
+/**
+ * The ids of the pages the person lists across wikis: their favorites, as
+ * `GET /favorites` lists them, and their recent pages, as `GET /recent` does.
+ */
+export async function favoritesAndRecentOf(
+  api: Awaited<ReturnType<typeof startApp>>,
+  user: TestUser
+) {
+  const idsAt = async (path: string) =>
+    (await api.as(user).get(path))
+      .json<{ pages: PageRef[] }>()
+      .pages.map(page => page.id)
+  return {
+    favorites: await idsAt('/favorites'),
+    recent: await idsAt('/recent')
+  }
+}
+
 /** The titles of the parent's children, in their order in the wiki's tree. */
 export async function titlesUnder(
   api: Awaited<ReturnType<typeof startApp>>,
