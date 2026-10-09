@@ -240,7 +240,9 @@ A label name, in `PUT /pages/:pageId/labels` as in `:name`, is trimmed, lowercas
 | `PATCH /comments/:commentId` | `{ body }` | `Comment` | its author |
 | `DELETE /comments/:commentId` | | `204`, with its replies | its author, or an admin |
 
-`body` is 1 to 10 000 characters, trimmed. `parentId` names a comment of the same page that is not itself a reply. `@email` of a member of the wiki mentions them: they follow the page and get a `mentioned` notification; an email that is no member's is left as text.
+`body` is 1 to 10 000 characters, trimmed, with no NUL character and no lone surrogate, which the server refuses rather than strips. `parentId`, left out or null for a comment that answers none, names a comment of the same page that is not itself a reply, else `invalid_request`. `@email` of a member of the wiki mentions them: they follow the page and get a `mentioned` notification; an email that is no member's is left as text.
+
+Writing a comment refuses in this order: a malformed body (`invalid_request`); the person's role (`not_found`); then, behind the wiki's row lock, the page in the trash (`in_trash`), then a parent that is no comment of the page, or is a reply (`invalid_request`).
 
 ## Following and notifications
 
