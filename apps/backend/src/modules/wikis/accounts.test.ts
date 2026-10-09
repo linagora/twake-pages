@@ -10,6 +10,9 @@ import {
   aPageIn,
   aSpaceWiki,
   aUser,
+  backIn,
+  createPage,
+  followingAndUnreadOf,
   joinWiki,
   personalWikiOf,
   purgeJobOf,
@@ -18,6 +21,7 @@ import {
   versionOf,
   wikiRowsOf,
   wikisOf,
+  type Page,
   type TestUser,
   type WikiSummary
 } from '../../testing/app.ts'
@@ -378,6 +382,26 @@ describe.each(deletions)(
       await deliver(routingKey, body(gone))
 
       expect(await keptFor(gone)).toEqual(NOTHING_KEPT)
+    })
+
+    // Those stay when it leaves the wiki, out of its sight in B2C, for when it
+    // comes back.
+    it('loses its follows and notifications of a wiki it left', async () => {
+      const gone = makeUser()
+      const admin = aPeerOf(gone)
+      // Signed in, so a deletion by email finds it once out of the wiki.
+      await wikisOf(api, gone)
+      const wiki = await aWiki(admin, 'Roadmap', [[gone, 'editor']])
+      const notes = await createPage(api, gone, wiki.id, { title: 'Notes' })
+      await notify(db, admin, wiki, gone)
+      await removeMember(api, gone, wiki.id, gone.userId)
+
+      await deliver(routingKey, body(gone))
+
+      await backIn(api, admin, gone, wiki.id)
+      expect(
+        await followingAndUnreadOf(api, gone, wiki.id, notes.json<Page>().id)
+      ).toEqual({ following: false, unread: 0 })
     })
 
     it('leaves the notifications its changes sent to others', async () => {

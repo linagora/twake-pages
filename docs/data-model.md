@@ -107,6 +107,8 @@ As in Twake Tasks, about pages: `id, page_id (cascade), wiki_id, org_id, user_id
 
 A member who leaves a wiki, removed by its admin or its space, or by themself, loses their favorites and visits of its pages in the same transaction: `app_leave_wiki(wiki, person)` deletes them under `app.leaving_user`, which the `own` policy honors in `USING` only, before the membership goes. Every way out of a wiki goes through `takeOutOfWiki()`, which calls it, but the deletion of an account, which forgets the person's favorites and visits of every wiki at once.
 
+Their follows and notifications of the wiki stay, out of their sight in B2C until they are a member again. A deleted account loses them with the rest, through `app_forget_user(person)` rather than `takeOutOfWiki()`: it deletes the account's favorites, visits, follows and notifications under the same flag, which the B2C scope of the `page_followers` and `notifications` tenant policies honors in `USING` only.
+
 ### Platform tables
 
 Copied from Twake Tasks with the names it uses: `spaces` (space id, organization, `wiki_id`, `last_event_at`; the wiki's `deleted_at` marks a deleted space), `processed_events`, `outbox`, `jobs`, `user_settings`, and the auth tables (revoked sessions).

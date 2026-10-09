@@ -1,4 +1,4 @@
-import { sql } from 'drizzle-orm'
+import { sql, type SQL } from 'drizzle-orm'
 import {
   foreignKey,
   index,
@@ -7,11 +7,13 @@ import {
   pgTable,
   primaryKey,
   text,
-  uuid
+  uuid,
+  type AnyPgColumn
 } from 'drizzle-orm/pg-core'
 import {
   currentUser,
   id,
+  leavingUser,
   organizationId,
   tenant,
   tenantPolicy,
@@ -19,6 +21,12 @@ import {
 } from '../../infra/db.ts'
 import { comments } from '../comments/schema.ts'
 import { pages, visiblePage } from '../pages/schema.ts'
+
+// A person keeps their follows and notifications of a wiki they leave, which
+// in B2C its pages then hide even from them: app_forget_user reaches them
+// under app.leaving_user, in USING only (see its migration).
+const visibleOrLeaving = (pageId: AnyPgColumn, userId: AnyPgColumn): SQL =>
+  sql`${visiblePage(pageId)} or ${userId} = ${leavingUser}`
 
 export const pageFollowers = pgTable.withRLS(
   'page_followers',
@@ -36,7 +44,11 @@ export const pageFollowers = pgTable.withRLS(
       columns: [table.tenant, table.pageId],
       foreignColumns: [pages.tenant, pages.id]
     }),
-    tenantPolicy(table.organizationId, visiblePage(table.pageId))
+    tenantPolicy(
+      table.organizationId,
+      visibleOrLeaving(table.pageId, table.userId),
+      visiblePage(table.pageId)
+    )
   ]
 )
 
@@ -84,7 +96,11 @@ export const notifications = pgTable.withRLS(
       columns: [table.tenant, table.pageId],
       foreignColumns: [pages.tenant, pages.id]
     }),
-    tenantPolicy(table.organizationId, visiblePage(table.pageId)),
+    tenantPolicy(
+      table.organizationId,
+      visibleOrLeaving(table.pageId, table.userId),
+      visiblePage(table.pageId)
+    ),
     // Anyone who sees the page may notify someone of a change to it.
     ...(['select', 'update', 'delete'] as const).map(command =>
       pgPolicy(`own_${command}`, {

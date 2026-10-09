@@ -37,8 +37,8 @@ export const tenant = () =>
 const currentOrganization = sql`nullif(current_setting('app.org_id', true), '')`
 export const currentUser = sql`nullif(current_setting('app.user_id', true), '')::uuid`
 
-// The person app_leave_wiki takes out of a wiki, while it forgets their rows
-// for whoever removes them.
+// The person app_leave_wiki takes out of a wiki, or app_forget_user out of
+// Pages, while it forgets their rows.
 export const leavingUser = sql`nullif(current_setting('app.leaving_user', true), '')::uuid`
 
 // B2C rows have no organization: a request without one only sees those, and
