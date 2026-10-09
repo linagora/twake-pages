@@ -304,7 +304,7 @@ export async function addPage(
 }
 
 /** The page as a change to it reads it, in the trash or not. */
-export async function pageAt(tx: Tx, pageId: string) {
+async function pageAt(tx: Tx, pageId: string) {
   const [page] = await tx
     .select({
       id: pages.id,
@@ -313,10 +313,33 @@ export async function pageAt(tx: Tx, pageId: string) {
       parentId: pages.parentId,
       title: pages.title,
       home: pages.home,
+      kind: pages.kind,
+      version: pages.version,
       deletedAt: pages.deletedAt
     })
     .from(pages)
     .where(eq(pages.id, pageId))
+  return page
+}
+
+/**
+ * The page an editor changes, in the trash or not, read behind its wiki's
+ * row lock, which every change to the wiki's pages takes, as the changes
+ * before left it: `not_found` out of the person's reach, `forbidden` to a
+ * viewer. Twake Tasks reads a task behind its board's lock the same way, but
+ * its routes name the board, where a page's name the page alone, whose wiki
+ * is read first.
+ */
+export async function pageToChange(tx: Tx, identity: Identity, pageId: string) {
+  const [found] = await tx
+    .select({ wikiId: pages.wikiId })
+    .from(pages)
+    .where(eq(pages.id, pageId))
+  if (!found) throw new Refused('not_found')
+  await checkRole(tx, identity, found.wikiId, 'editor')
+  await bumpWiki(tx, found.wikiId)
+  const page = await pageAt(tx, pageId)
+  if (!page) throw new Refused('not_found')
   return page
 }
 
@@ -330,27 +353,7 @@ export async function pageToPublish(
   identity: Identity,
   pageId: string
 ) {
-  const [found] = await tx
-    .select({ wikiId: pages.wikiId })
-    .from(pages)
-    .where(eq(pages.id, pageId))
-  if (!found) throw new Refused('not_found')
-  await checkRole(tx, identity, found.wikiId, 'editor')
-  await bumpWiki(tx, found.wikiId)
-  // Read after the lock, which every change to the wiki's pages takes,
-  // as Twake Tasks reads a task's description version after its board's.
-  const [page] = await tx
-    .select({
-      id: pages.id,
-      wikiId: pages.wikiId,
-      organizationId: pages.organizationId,
-      kind: pages.kind,
-      version: pages.version,
-      deletedAt: pages.deletedAt
-    })
-    .from(pages)
-    .where(eq(pages.id, pageId))
-  if (!page) throw new Refused('not_found')
+  const page = await pageToChange(tx, identity, pageId)
   if (page.deletedAt) throw new Refused('in_trash')
   return page
 }

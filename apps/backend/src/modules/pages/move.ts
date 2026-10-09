@@ -3,14 +3,12 @@ import type { Db } from '../../infra/db.ts'
 import { positionBetween } from '../../infra/order.ts'
 import { Refused, writeOrRefuse } from '../../infra/refusals.ts'
 import type { Identity } from '../auth/index.ts'
-import { checkRole } from '../wikis/access.ts'
-import { bumpWiki } from '../wikis/live.ts'
 import { queuePageEvent } from './events.ts'
 import { pages } from './schema.ts'
 import {
   ancestorsOf,
   checkParent,
-  pageAt,
+  pageToChange,
   siblingsUnder,
   type PageMove
 } from './store.ts'
@@ -20,15 +18,9 @@ export function createMoveStore(db: Db) {
     /** The page goes with its child pages, which keep their places under it. */
     movePage(identity: Identity, pageId: string, move: PageMove) {
       return writeOrRefuse(db, identity, async tx => {
-        const found = await pageAt(tx, pageId)
-        if (!found) throw new Refused('not_found')
-        await checkRole(tx, identity, found.wikiId, 'editor')
-        await bumpWiki(tx, found.wikiId)
-        // Read again behind the wiki's row lock, as the changes before this
-        // one left it: of two moves at the same time, the later sees the
-        // earlier, so they never make a page its own ancestor.
-        const page = await pageAt(tx, pageId)
-        if (!page) throw new Refused('not_found')
+        // Read behind the wiki's row lock: of two moves at the same time, the
+        // later sees the earlier, so they never make a page its own ancestor.
+        const page = await pageToChange(tx, identity, pageId)
         if (page.deletedAt !== null) throw new Refused('in_trash')
         if (page.home) throw new Refused('home_page')
         if (move.parentId !== null) {

@@ -13,11 +13,10 @@ import { inTenant, type Db, type Tx } from '../../infra/db.ts'
 import type { HttpServer } from '../../infra/http.ts'
 import { Refused, refuse, writeOrRefuse } from '../../infra/refusals.ts'
 import type { Identity, RequireIdentity } from '../auth/index.ts'
-import { checkRole, roleOn } from '../wikis/access.ts'
-import { bumpWiki } from '../wikis/live.ts'
+import { roleOn } from '../wikis/access.ts'
 import { pageParams, wikiParams } from './routes.ts'
 import { labels, pageLabels, pages } from './schema.ts'
-import { labelsOf } from './store.ts'
+import { labelsOf, pageToChange } from './store.ts'
 
 // At most 50 names, as Twake Tasks takes at most 50 label ids.
 const labelling = z.object({ names: z.array(z.string()).max(50) })
@@ -113,25 +112,13 @@ function createLabelStore(db: Db) {
      */
     setLabels(identity: Identity, pageId: string, names: string[]) {
       return writeOrRefuse(db, identity, async tx => {
-        const [found] = await tx
-          .select({ wikiId: pages.wikiId })
-          .from(pages)
-          .where(eq(pages.id, pageId))
-        if (!found) throw new Refused('not_found')
-        await checkRole(tx, identity, found.wikiId, 'editor')
-        const wiki = await bumpWiki(tx, found.wikiId)
-        // Read after the lock, which every change to the wiki's pages takes.
-        const [page] = await tx
-          .select({ deletedAt: pages.deletedAt })
-          .from(pages)
-          .where(eq(pages.id, pageId))
-        if (!page) throw new Refused('not_found')
+        const page = await pageToChange(tx, identity, pageId)
         if (page.deletedAt) throw new Refused('in_trash')
+        // A page is of its wiki's tenant, which its labels take.
+        const wiki = { id: page.wikiId, organizationId: page.organizationId }
         const wanted = labelNamesOf(names)
         const kept =
-          wanted.length === 0
-            ? []
-            : await ensureLabels(tx, { id: found.wikiId, ...wiki }, wanted)
+          wanted.length === 0 ? [] : await ensureLabels(tx, wiki, wanted)
         const dropped = await tx
           .delete(pageLabels)
           .where(
