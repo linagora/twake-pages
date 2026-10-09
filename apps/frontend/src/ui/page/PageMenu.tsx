@@ -1,4 +1,4 @@
-import { Dots, Icon, Moveto, Plus } from '@linagora/twake-icons'
+import { Dots, Icon, Moveto, Plus, Trash } from '@linagora/twake-icons'
 import {
   IconButton,
   ListItemIcon,
@@ -11,6 +11,7 @@ import { useNavigate } from 'react-router'
 
 import type { Page } from '@/domain/page'
 import { useI18n } from '@/ui/i18n/useI18n'
+import { DeletePageDialog } from '@/ui/page/DeletePageDialog'
 import { MovePageDialog } from '@/ui/page/MovePageDialog'
 import { NewPageDialog } from '@/ui/page/NewPageDialog'
 import { useWiki } from '@/ui/wiki/queries'
@@ -23,13 +24,14 @@ export function PageMenu({ page }: { page: Page }): ReactElement | null {
   const [anchor, setAnchor] = useState<HTMLElement | null>(null)
   const [creating, setCreating] = useState(false)
   const [moving, setMoving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const close = (): void => {
     setAnchor(null)
   }
 
-  // The home page has no children and never moves, and a page in the trash
-  // takes none and stays put: with nothing else to offer, the menu does not
-  // show.
+  // The home page has no children, never moves and is never deleted, and a
+  // page in the trash takes none, stays put and is deleted already: with
+  // nothing else to offer, the menu does not show.
   const editable = wiki.data !== undefined && wiki.data.role !== 'viewer'
   if (!editable || page.home || page.deletedAt !== null) return null
 
@@ -74,6 +76,17 @@ export function PageMenu({ page }: { page: Page }): ReactElement | null {
           </ListItemIcon>
           <ListItemText>{t('page.move')}</ListItemText>
         </MenuItem>
+        <MenuItem
+          onClick={() => {
+            close()
+            setDeleting(true)
+          }}
+        >
+          <ListItemIcon>
+            <Icon icon={Trash} />
+          </ListItemIcon>
+          <ListItemText>{t('page.delete')}</ListItemText>
+        </MenuItem>
       </Menu>
       {creating && (
         <NewPageDialog
@@ -95,6 +108,14 @@ export function PageMenu({ page }: { page: Page }): ReactElement | null {
           setMoving(false)
         }}
       />
+      {deleting && (
+        <DeletePageDialog
+          page={page}
+          onClose={() => {
+            setDeleting(false)
+          }}
+        />
+      )}
     </>
   )
 }

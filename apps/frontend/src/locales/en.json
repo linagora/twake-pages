@@ -120,7 +120,8 @@
     "history": "Page history",
     "menu": "Page options",
     "newChild": "New child page",
-    "move": "Move"
+    "move": "Move",
+    "delete": "Delete"
   },
   "newPage": {
     "title": "New page",
@@ -144,6 +145,13 @@
     "failed": "The page could not be moved.",
     "under": "%{title} moved under %{parent}, position %{position} of %{count}.",
     "toTop": "%{title} moved to the top of the tree, position %{position} of %{count}."
+  },
+  "deletePage": {
+    "title": "Delete %{title}?",
+    "text": "It goes to the trash with any child pages, for every member, and is deleted for good after 30 days.",
+    "confirm": "Delete",
+    "cancel": "Cancel",
+    "failed": "The page could not be deleted."
   },
   "templates": {
     "blank": {

@@ -120,7 +120,8 @@
     "history": "Historique de la page",
     "menu": "Options de la page",
     "newChild": "Nouvelle page enfant",
-    "move": "Déplacer"
+    "move": "Déplacer",
+    "delete": "Supprimer"
   },
   "newPage": {
     "title": "Nouvelle page",
@@ -144,6 +145,13 @@
     "failed": "La page n'a pas pu être déplacée.",
     "under": "Page %{title} déplacée sous %{parent}, position %{position} sur %{count}.",
     "toTop": "Page %{title} déplacée en haut de l'arborescence, position %{position} sur %{count}."
+  },
+  "deletePage": {
+    "title": "Supprimer %{title} ?",
+    "text": "Elle part dans la corbeille avec ses éventuelles pages enfants, pour tous les membres, et est définitivement supprimée après 30 jours.",
+    "confirm": "Supprimer",
+    "cancel": "Annuler",
+    "failed": "La page n'a pas pu être supprimée."
   },
   "templates": {
     "blank": {

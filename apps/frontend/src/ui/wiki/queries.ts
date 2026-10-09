@@ -345,6 +345,39 @@ export function useMovePage(
   })
 }
 
+/**
+ * Makes the change through the API it is given, then reads the wiki again,
+ * refused or not, as Twake Tasks' useBoardChange reads its board again: a
+ * refusal may come from a wiki shown behind it.
+ */
+function useWikiChange<T>(
+  wikiId: string,
+  change: (api: PagesApi, input: T) => Promise<unknown>
+): UseMutationResult<unknown, Error, T> {
+  const api = usePagesApi()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (input: T) => change(api, input),
+    onSettled: () =>
+      queryClient.invalidateQueries({ queryKey: wikiKey(wikiId) })
+  })
+}
+
+/**
+ * `onDeleted` runs once the page is in the trash, even when the stream told
+ * of it first and the screen that deleted it is gone, and before the wiki is
+ * read again: the person leaves the page rather than see it in the trash.
+ */
+export function useDeletePage(
+  page: Page,
+  onDeleted: () => void
+): UseMutationResult<unknown, Error, void> {
+  return useWikiChange(page.wikiId, async api => {
+    await api.deletePage(page.id)
+    onDeleted()
+  })
+}
+
 /** A page as shown below a wiki, which may not be its own. */
 export function usePage(wikiId: string, pageId: string): UseQueryResult<Page> {
   const api = usePagesApi()
