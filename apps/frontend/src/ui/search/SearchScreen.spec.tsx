@@ -1,7 +1,8 @@
-import { fireEvent, screen, within } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
 import { ApiError } from '@/application/pages'
+import { findAppSearch } from '@/testing/appSearch'
 import { findEmptyState } from '@/testing/emptyState'
 import { fakePagesApi, paragraph } from '@/testing/fakePagesApi'
 import { renderRoute } from '@/testing/renderWithProviders'
@@ -188,5 +189,49 @@ describe('SearchScreen', () => {
     expect(screen.queryByRole('progressbar')).not.toBeInTheDocument()
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+})
+
+describe('the search of the app bar', () => {
+  it('searches every wiki for the words typed', async () => {
+    const { pagesApi } = handbook()
+    const { router } = renderRoute('/', { pagesApi })
+
+    fireEvent.change(await findAppSearch(), { target: { value: ' badge ' } })
+    const reloads = fireEvent.submit(
+      screen.getByRole('search', { name: 'Search' })
+    )
+
+    expect(reloads).toBe(false)
+    expect(
+      (await resultsFor('badge')).getByRole('listitem', { name: 'Onboarding' })
+    ).toBeInTheDocument()
+    expect(router.state.location.pathname).toBe('/search')
+    expect(router.state.location.search).toBe('?q=badge')
+    expect(pagesApi.search).toHaveBeenCalledWith('badge')
+  })
+
+  it('keeps the words searched in its field', async () => {
+    renderRoute('/search?q=badge', { pagesApi: handbook().pagesApi })
+
+    expect(await findAppSearch()).toHaveValue('badge')
+  })
+
+  it('empties its field when leaving the search', async () => {
+    renderRoute('/search?q=badge', { pagesApi: handbook().pagesApi })
+    const field = await findAppSearch()
+
+    fireEvent.click(screen.getByRole('link', { name: 'Twake Pages' }))
+
+    await waitFor(() => {
+      expect(field).toHaveValue('')
+    })
+  })
+
+  it("leaves the words of a wiki's search to the wiki", async () => {
+    const { pagesApi, wiki } = handbook()
+    renderRoute(`/wikis/${wiki.id}/search?q=badge`, { pagesApi })
+
+    expect(await findAppSearch()).toHaveValue('')
   })
 })

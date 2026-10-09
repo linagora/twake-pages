@@ -20,11 +20,13 @@ import {
   AppFrame,
   BrandMark,
   TopBar,
+  TopBarSearch,
   TopBarSpacer
 } from '@/ds/AppFrame'
 import { displayName } from '@/domain/person'
 import { useI18n } from '@/ui/i18n/useI18n'
 import { PersonAvatar } from '@/ui/people/PersonAvatar'
+import { AppSearchField } from '@/ui/search/SearchField'
 import { useSession } from '@/ui/session/SessionGate'
 import { useSettings } from '@/ui/settings/useSettings'
 import { PlatformBar } from '@/ui/shell/PlatformBar'
@@ -57,8 +59,22 @@ function Header(): ReactElement {
   const { t } = useI18n()
   const { sdk } = useSession()
 
+  // The platform bar is 48px tall: a medium search bar would fill it.
+  const search = (
+    <TopBarSearch>
+      <AppSearchField size={sdk ? 'small' : 'medium'} />
+    </TopBarSearch>
+  )
+
   // The platform bar holds the account.
-  if (sdk) return <PlatformBar sdk={sdk} slots={{}} />
+  if (sdk) {
+    return (
+      <PlatformBar
+        sdk={sdk}
+        slots={{ search: <div className="u-mh-1">{search}</div> }}
+      />
+    )
+  }
 
   return (
     <TopBar>
@@ -70,6 +86,7 @@ function Header(): ReactElement {
       >
         <BrandMark name={t('app.name')} />
       </Link>
+      {search}
       <TopBarSpacer />
       <AccountMenu />
     </TopBar>

@@ -3,6 +3,7 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import type { ReactElement, ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { findAppSearch } from '@/testing/appSearch'
 import { fakePagesApi } from '@/testing/fakePagesApi'
 import { fakeSession, fakeUser } from '@/testing/fakeSession'
 import { renderRoute } from '@/testing/renderWithProviders'
@@ -60,6 +61,16 @@ describe('AppShell', () => {
       expect(createSdk).not.toHaveBeenCalled()
     }
   )
+
+  it.each([
+    ['its own header', null],
+    ['the platform bar', 'id-token']
+  ])('offers the search of every wiki in %s', async (_bar, idToken) => {
+    const session = fakeSession(() => Promise.resolve(fakeUser(idToken)))
+    renderRoute('/', { session })
+
+    expect(await findAppSearch()).toBeInTheDocument()
+  })
 
   it('shows the name and picture the person chose in Twake Workplace', async () => {
     const pagesApi = fakePagesApi()

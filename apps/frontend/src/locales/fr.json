@@ -208,6 +208,7 @@
   },
   "search": {
     "title": "Recherche",
+    "label": "Rechercher",
     "inWiki": "Rechercher dans ce wiki",
     "results": "Résultats pour « %{text} »",
     "empty": "Aucune page ne correspond",
