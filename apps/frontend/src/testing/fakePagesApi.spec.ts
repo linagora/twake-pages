@@ -1425,7 +1425,39 @@ describe('fakePagesApi', () => {
       ])
     })
 
-    it('cuts an excerpt of the text around the first word found', async () => {
+    it('ranks the pages whose titles hold more of the words first, then by the words found, for ts_rank, then the last published first', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki()
+      api.withPage(wiki.id, { title: 'Onboarding badge' })
+      api.withPage(wiki.id, {
+        title: 'Badges and badgers',
+        content: [paragraph('Onboarding')]
+      })
+      api.withPage(wiki.id, {
+        title: 'First day',
+        content: [paragraph('Your onboarding badge: badges and a badger.')]
+      })
+      api.withPage(wiki.id, {
+        title: 'Lobby',
+        content: [paragraph('Show your onboarding badge.')]
+      })
+      api.withPage(wiki.id, {
+        title: 'Hall',
+        content: [paragraph('Wear your onboarding badge.')]
+      })
+
+      expect(
+        (await api.search('onboarding badge')).map(result => result.page.title)
+      ).toEqual([
+        'Onboarding badge',
+        'Badges and badgers',
+        'First day',
+        'Hall',
+        'Lobby'
+      ])
+    })
+
+    it('quotes five words before the first word found in the text and eight after, and nothing when the text holds none, as the backend does', async () => {
       const api = fakePagesApi()
       const wiki = api.withWiki()
       api.withPage(wiki.id, {
@@ -1437,18 +1469,34 @@ describe('fakePagesApi', () => {
           paragraph('Ask Bob')
         ]
       })
+      api.withPage(wiki.id, { title: 'Desk' })
       const excerpt = async (query: string) =>
         (await api.search(query))[0]?.excerpt
 
       expect(await excerpt('laptop')).toBe(
-        `first day, IT prepares a ${found('laptop')} with the tools you need and an account`
+        `…first day, IT prepares a ${found('laptop')} with the tools you need and an account…`
       )
       expect(await excerpt('bob')).toBe(
-        `account for every app. Ask ${found('Bob')}`
+        `…account for every app. Ask ${found('Bob')}`
       )
-      expect(await excerpt('onboarding')).toBe(
-        'Before your first day, IT prepares a laptop with'
+      expect(await excerpt('day')).toBe(
+        `Before your first ${found('day')}, IT prepares a laptop with the tools you…`
       )
+      expect(await excerpt('onboarding')).toBe('')
+      expect(await excerpt('desk')).toBe('')
+    })
+
+    it('shows the markers the text holds itself as blanks', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki()
+      api.withPage(wiki.id, {
+        title: 'Keys',
+        content: [paragraph(`The key${FOUND_START}badge${FOUND_END} you wear`)]
+      })
+
+      await expect(api.search('key')).resolves.toMatchObject([
+        { excerpt: `The ${found('key')} badge you wear` }
+      ])
     })
 
     it('reads the text of table cells and captions, as the backend keeps it', async () => {
@@ -1519,6 +1567,21 @@ describe('fakePagesApi', () => {
       await expect(api.search('a'.repeat(201))).rejects.toEqual(
         new ApiError(400, 'invalid_request')
       )
+    })
+
+    it('refuses a text the backend cannot store, before it looks at the wiki', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki()
+      api.withPage(wiki.id, { title: 'Release notes' })
+      const refused = new ApiError(400, 'invalid_request')
+
+      await expect(
+        api.search(`release${String.fromCharCode(0)}`)
+      ).rejects.toEqual(refused)
+      await expect(
+        api.search(`release ${String.fromCharCode(0xd800)}`)
+      ).rejects.toEqual(refused)
+      await expect(api.search(' ', 'no-such-wiki')).rejects.toEqual(refused)
     })
   })
 })

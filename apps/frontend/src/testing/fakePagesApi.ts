@@ -251,6 +251,10 @@ function plainText(blocks: unknown[]): string {
   return lines.filter(line => line.trim() !== '').join('\n')
 }
 
+// ts_rank's default weights of the words of the title, A, and of the text, B.
+const TITLE_WEIGHT = 1
+const TEXT_WEIGHT = 0.4
+
 // ADR012: the last word typed matches as a prefix.
 function queryOf(query: string) {
   const words = wordsOf(query)
@@ -259,38 +263,48 @@ function queryOf(query: string) {
       ? (word: string) => word.startsWith(each)
       : (word: string) => word === each
   )
+  const finds = (word: string) => tests.some(test => test(word))
   return {
     matches: (pageWords: string[]) =>
       tests.length > 0 && tests.every(test => pageWords.some(test)),
-    finds: (word: string) => tests.some(test => test(word))
+    finds,
+    /**
+     * What the backend ranks a page by: how many of the words its title
+     * holds, then ts_rank, which the fake stands in for with the words it
+     * finds, weighed as ts_rank weighs the title and the text.
+     */
+    rankOf: (titleWords: string[], textWords: string[]) => ({
+      inTitle: tests.filter(test => titleWords.some(test)).length,
+      found:
+        titleWords.filter(finds).length * TITLE_WEIGHT +
+        textWords.filter(finds).length * TEXT_WEIGHT
+    })
   }
 }
 
 const WORDS_BEFORE = 5
 const WORDS_AFTER = 8
 
+/**
+ * The backend's excerpt: the words of the text between blanks, five before
+ * the first word found and eight after, with an ellipsis where the text goes
+ * on, and none when the text holds none of the words found. The markers the
+ * text holds itself show as blanks.
+ */
 function excerptOf(text: string, finds: (word: string) => boolean) {
-  const words = [...text.matchAll(WORD)]
-  const first = Math.max(
-    0,
-    words.findIndex(word => finds(word[0].toLowerCase()))
-  )
-  const shown = words.slice(
-    Math.max(0, first - WORDS_BEFORE),
-    first + WORDS_AFTER + 1
-  )
-  let excerpt = ''
-  let end: number | null = null
-  for (const word of shown) {
-    if (end !== null) {
-      excerpt += text.slice(end, word.index).replace(/\s+/gu, ' ')
-    }
-    excerpt += finds(word[0].toLowerCase())
-      ? `${FOUND_START}${word[0]}${FOUND_END}`
-      : word[0]
-    end = word.index + word[0].length
-  }
-  return excerpt
+  const words = text
+    .replaceAll(FOUND_START, ' ')
+    .replaceAll(FOUND_END, ' ')
+    .replace(WORD, word =>
+      finds(word.toLowerCase()) ? `${FOUND_START}${word}${FOUND_END}` : word
+    )
+    .split(/\s+/u)
+    .filter(word => word !== '')
+  const first = words.findIndex(word => word.includes(FOUND_START))
+  if (first === -1) return ''
+  const from = Math.max(0, first - WORDS_BEFORE)
+  const to = Math.min(words.length, first + 1 + WORDS_AFTER)
+  return `${from > 0 ? '…' : ''}${words.slice(from, to).join(' ')}${to < words.length ? '…' : ''}`
 }
 
 // Answers like the network would: later, and with copies.
@@ -1349,10 +1363,12 @@ function signedIn(world: World, person: Person): FakePagesApi {
           .slice(0, 20)
       )
     ),
-    // data-model.md weighs the title above the text.
+    // api.md ranks the pages whose titles hold more of the words first, then
+    // by ts_rank, then the last published first. The backend checks the text
+    // as a title, before the wiki.
     search: vi.fn<PagesApi['search']>((query, wikiId) =>
       answer(() => {
-        const { matches, finds } = queryOf(checkText(query, 200))
+        const { matches, finds, rankOf } = queryOf(checkTitle(query))
         if (wikiId !== undefined) access(wikiId)
         return myLivePages()
           .filter(seen => wikiId === undefined || seen.wiki.id === wikiId)
@@ -1369,15 +1385,14 @@ function signedIn(world: World, person: Person): FakePagesApi {
                   excerpt: excerptOf(text, finds),
                   updatedAt: createdAt
                 },
-                inTitle: titleWords.filter(finds).length,
-                inText: textWords.filter(finds).length
+                ...rankOf(titleWords, textWords)
               }
             ]
           })
           .sort(
             (a, b) =>
               b.inTitle - a.inTitle ||
-              b.inText - a.inText ||
+              b.found - a.found ||
               (a.result.updatedAt < b.result.updatedAt ? 1 : -1)
           )
           .slice(0, 50)
