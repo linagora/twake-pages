@@ -1,4 +1,5 @@
 import {
+  keepPreviousData,
   skipToken,
   useMutation,
   useQuery,
@@ -17,6 +18,7 @@ import type {
   NewVersion,
   NewWiki,
   PagesApi,
+  PersonMatch,
   RecentPage,
   Sharing,
   Tree,
@@ -52,6 +54,11 @@ const versionKey = (wikiId: string, pageId: string, number: number | null) =>
   [...historyKey(wikiId, pageId), number] as const
 // Below the wiki, so a change of its members elsewhere reloads them too.
 const sharingKey = (wikiId: string) => [...wikiKey(wikiId), 'sharing'] as const
+// The people of an organization belong to no wiki, so they sit below no
+// wiki's key.
+const peopleKey = (text: string) => ['people', text] as const
+// What the backend takes as a search of people.
+const LONGEST_PEOPLE_SEARCH = 200
 
 /**
  * A page carries no version of its wiki, so it keeps the one known as its
@@ -263,6 +270,24 @@ export function useRemoveMember(
       return queryClient.invalidateQueries({ queryKey: wikisKey, exact: true })
     },
     onSettled: () => reloadSharing(queryClient, wikiId)
+  })
+}
+
+/**
+ * The people of the person's organization whose email or name holds what was
+ * typed, none in B2C. Those found last stay until the next search answers,
+ * so the suggestions do not blink as the person types.
+ */
+export function usePeopleMatching(
+  typed: string
+): UseQueryResult<PersonMatch[]> {
+  const api = usePagesApi()
+  const text = typed.trim()
+  return useQuery({
+    queryKey: peopleKey(text),
+    queryFn: () => api.searchPeople(text),
+    enabled: text !== '' && text.length <= LONGEST_PEOPLE_SEARCH,
+    placeholderData: keepPreviousData
   })
 }
 

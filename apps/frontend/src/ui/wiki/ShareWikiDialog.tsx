@@ -27,6 +27,7 @@ import { ROLES, type Role, type Wiki } from '@/domain/wiki'
 import { useI18n, type TranslationKey } from '@/ui/i18n/useI18n'
 import { PersonAvatar } from '@/ui/people/PersonAvatar'
 import {
+  usePeopleMatching,
   useRemoveMember,
   useSharing,
   useSharingChange
@@ -121,6 +122,62 @@ function RoleMenu({
   )
 }
 
+/**
+ * The email to invite, with the people of the organization it may be as
+ * suggestions: none in B2C, where an email is typed whole.
+ */
+function EmailField({
+  value,
+  onChange
+}: {
+  value: string
+  onChange: (email: string) => void
+}): ReactElement {
+  const { t } = useI18n()
+  const people = usePeopleMatching(value)
+
+  return (
+    <Autocomplete
+      freeSolo
+      options={value.trim() === '' ? [] : (people.data ?? [])}
+      // The backend finds them by name too, which the email shown lacks.
+      filterOptions={options => options}
+      getOptionLabel={option =>
+        typeof option === 'string' ? option : option.email
+      }
+      renderOption={({ key, ...props }, person) => (
+        <li key={key} {...props}>
+          <ListItemText
+            primary={displayName(person)}
+            secondary={
+              displayName(person) === person.email ? undefined : person.email
+            }
+          />
+        </li>
+      )}
+      inputValue={value}
+      onInputChange={(_event, typed) => {
+        onChange(typed)
+      }}
+      renderInput={params => (
+        <TextField
+          {...params}
+          label={t('sharing.email')}
+          type="email"
+          size="small"
+          helperText={
+            people.isError ? t('sharing.suggestionsFailed') : undefined
+          }
+          slotProps={{
+            ...params.slotProps,
+            htmlInput: { ...params.slotProps.htmlInput, maxLength: 254 }
+          }}
+        />
+      )}
+    />
+  )
+}
+
 /** Who has access to a wiki, and how its admin shares it, by email. */
 export function ShareWikiDialog({
   wiki,
@@ -175,26 +232,7 @@ export function ShareWikiDialog({
             })
           }}
         >
-          <Autocomplete
-            freeSolo
-            options={[]}
-            inputValue={email}
-            onInputChange={(_event, value) => {
-              setEmail(value)
-            }}
-            renderInput={params => (
-              <TextField
-                {...params}
-                label={t('sharing.email')}
-                type="email"
-                size="small"
-                slotProps={{
-                  ...params.slotProps,
-                  htmlInput: { ...params.slotProps.htmlInput, maxLength: 254 }
-                }}
-              />
-            )}
-          />
+          <EmailField value={email} onChange={setEmail} />
           <RoleMenu value={role} onChange={setRole} />
           <Button type="submit" disabled={change.isPending || !email.trim()}>
             {t('sharing.invite')}

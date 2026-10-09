@@ -27,8 +27,16 @@ export function InviteRow({
         display: 'flex',
         alignItems: 'center',
         gap: 2,
-        '& > .MuiTextField-root': { flex: 1, minWidth: 0 },
-        '& > :not(.MuiTextField-root)': { flexShrink: 0 }
+        // The field takes the room left: a TextField, or the Autocomplete
+        // that wraps one to suggest people, where Twake Tasks has the
+        // TextField alone.
+        '& > .MuiTextField-root, & > .MuiAutocomplete-root': {
+          flex: 1,
+          minWidth: 0
+        },
+        '& > :not(.MuiTextField-root):not(.MuiAutocomplete-root)': {
+          flexShrink: 0
+        }
       }}
     >
       {children}

@@ -50,6 +50,44 @@ describe('ShareWikiDialog', () => {
     })
   })
 
+  it('suggests the people of the organization who signed in, by name or email, and invites the one chosen', async () => {
+    const pagesApi = fakePagesApi()
+    await pagesApi.signedInAs('bob@example.com', 'Bob Stone').listWikis()
+    const wiki = pagesApi.withWiki({ name: 'Engineering' })
+    const dialog = await openSharing(pagesApi, wiki.id)
+    const form = within(dialog.getByRole('form', { name: 'Invite' }))
+
+    fireEvent.change(form.getByRole('combobox', { name: 'Email' }), {
+      target: { value: 'stone' }
+    })
+    fireEvent.click(
+      await screen.findByRole('option', { name: 'Bob Stone bob@example.com' })
+    )
+    fireEvent.click(form.getByRole('button', { name: 'Invite' }))
+
+    expect(await dialog.findByText('Invited bob@example.com.')).toBeVisible()
+  })
+
+  it('tells when the suggestions could not be loaded, and still invites the email typed', async () => {
+    const pagesApi = fakePagesApi()
+    const wiki = pagesApi.withWiki({ name: 'Engineering' })
+    pagesApi.searchPeople.mockRejectedValue(new ApiError(403, null))
+    const dialog = await openSharing(pagesApi, wiki.id)
+    const form = within(dialog.getByRole('form', { name: 'Invite' }))
+    const email = form.getByRole('combobox', { name: 'Email' })
+
+    fireEvent.change(email, { target: { value: 'bob@example.com' } })
+
+    expect(
+      await form.findByText('The suggestions could not be loaded.')
+    ).toBeVisible()
+    expect(email).toHaveAccessibleDescription(
+      'The suggestions could not be loaded.'
+    )
+    fireEvent.click(form.getByRole('button', { name: 'Invite' }))
+    expect(await dialog.findByText('Invited bob@example.com.')).toBeVisible()
+  })
+
   it('shows the invitations another admin makes as they are made', async () => {
     const pagesApi = fakePagesApi()
     const wiki = pagesApi.withWiki({

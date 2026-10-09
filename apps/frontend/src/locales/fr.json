@@ -97,7 +97,8 @@
     "failed": "La modification n'a pas pu être enregistrée.",
     "notSameOrganization": "Seules les personnes de votre organisation peuvent être invitées.",
     "lastAdmin": "Un wiki garde au moins un administrateur.",
-    "loadFailed": "Les membres n'ont pas pu être chargés."
+    "loadFailed": "Les membres n'ont pas pu être chargés.",
+    "suggestionsFailed": "Les suggestions n'ont pas pu être chargées."
   },
   "tree": {
     "title": "Pages",

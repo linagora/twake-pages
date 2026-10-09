@@ -97,7 +97,8 @@
     "failed": "The change could not be saved.",
     "notSameOrganization": "Only people of your organization can be invited.",
     "lastAdmin": "A wiki keeps at least one admin.",
-    "loadFailed": "The members could not be loaded."
+    "loadFailed": "The members could not be loaded.",
+    "suggestionsFailed": "The suggestions could not be loaded."
   },
   "tree": {
     "title": "Pages",
