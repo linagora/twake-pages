@@ -12,6 +12,7 @@ import {
   aUser,
   backIn,
   createPage,
+  follow,
   followingAndUnreadOf,
   invite,
   joinWiki,
@@ -88,10 +89,11 @@ const membersOf = (reader: TestUser, wikiId: string) =>
 
 /**
  * Makes the page one of the person's favorites and recent pages, and them its
- * follower, which no route does yet.
+ * follower through its route, whose answer is checked: a follow never made
+ * would pass the tests, which check it is gone.
  */
-const favoriteOpenAndFollow = (user: TestUser, pageId: string) =>
-  inTenant(db, user, async tx => {
+const favoriteOpenAndFollow = async (user: TestUser, pageId: string) => {
+  await inTenant(db, user, async tx => {
     const row = {
       pageId,
       organizationId: user.organizationId,
@@ -99,8 +101,9 @@ const favoriteOpenAndFollow = (user: TestUser, pageId: string) =>
     }
     await tx.insert(pageFavorites).values(row)
     await tx.insert(pageVisits).values(row)
-    await tx.insert(pageFollowers).values(row)
   })
+  expect((await follow(api, user, pageId)).statusCode).toBe(204)
+}
 
 /**
  * What Pages keeps for the person about pages: their favorites, recent pages,

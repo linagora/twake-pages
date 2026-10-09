@@ -9,6 +9,7 @@ import {
   aWikiOf,
   createPage,
   deletePage,
+  follow,
   GRIST_ORIGIN,
   INVALID_PARENTS,
   joinWiki,
@@ -31,7 +32,6 @@ import {
   type Page,
   type TestUser
 } from '../../testing/app.ts'
-import { pageFollowers } from '../notifications/schema.ts'
 import { MAX_BLOCKS_BYTES } from './blocks.ts'
 import { pageVisits } from './schema.ts'
 
@@ -46,16 +46,6 @@ afterAll(async () => {
   await api.close()
   await sql.end()
 })
-
-// Following is not served yet, so followers are written as it will write them.
-const follow = (user: TestUser, pageId: string) =>
-  inTenant(db, user, tx =>
-    tx.insert(pageFollowers).values({
-      pageId,
-      organizationId: user.organizationId,
-      userId: user.userId
-    })
-  )
 
 const keepAsFavorite = (user: TestUser, pageId: string) =>
   api.as(user).put(`/pages/${pageId}/favorite`)
@@ -203,7 +193,7 @@ describe('GET /pages/:pageId', () => {
       position: 'a0'
     })
     await joinWiki(db, alice, wiki.id, bob, 'viewer')
-    await follow(alice, plans)
+    await follow(api, alice, plans)
     await keepAsFavorite(bob, plans)
 
     const marks = await Promise.all(
