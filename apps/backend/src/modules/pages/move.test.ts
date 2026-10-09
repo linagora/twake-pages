@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { sql as raw } from 'drizzle-orm'
+import { eq, sql as raw } from 'drizzle-orm'
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest'
 import { createDb, inTenant } from '../../infra/db.ts'
 import {
@@ -19,7 +19,7 @@ import {
   type NeighbourPages,
   type TestUser
 } from '../../testing/app.ts'
-import { bumpWiki } from '../wikis/live.ts'
+import { wikis } from '../wikis/schema.ts'
 import type { PageMove } from './store.ts'
 
 let api: Awaited<ReturnType<typeof startApp>>
@@ -63,8 +63,11 @@ async function waitingBehind(pid: number, count: number) {
 }
 
 /**
- * Sends the requests during a change to the wiki, which holds its row lock,
- * each once the one before waits its turn, then ends the change.
+ * Sends the requests while a transaction holds the wiki's row lock, as a
+ * change to the wiki does, each once the one before waits its turn, then
+ * ends the transaction. It locks the row without changing it, so the first
+ * request sent takes the row before the others: behind a row that changed,
+ * they would all race for its new version.
  */
 async function behindAChange(
   user: TestUser,
@@ -73,7 +76,12 @@ async function behindAChange(
 ) {
   const sent: Promise<Answer>[] = []
   await inTenant(db, user, async tx => {
-    await bumpWiki(tx, wikiId)
+    const [wiki] = await tx
+      .select({ id: wikis.id })
+      .from(wikis)
+      .where(eq(wikis.id, wikiId))
+      .for('no key update')
+    if (!wiki) throw new Error('no wiki to lock')
     const [change] = await tx.execute<{ pid: number }>(
       raw`select pg_backend_pid() as pid`
     )
@@ -283,8 +291,8 @@ describe('POST /pages/:pageId/move', () => {
     expect(first?.statusCode).toBe(200)
     expect(second?.statusCode).toBe(400)
     expect(second?.json()).toEqual({ error: 'invalid_parent' })
-    // Moved by the change and the first move, never by the refused one.
-    expect(await versionOf(api, alice, wiki.id)).toBe(before + 2)
+    // Moved by the first move, never by the refused one.
+    expect(await versionOf(api, alice, wiki.id)).toBe(before + 1)
     expect(await titlesUnder(api, alice, wiki.id, null)).toEqual(['Goals'])
     expect(await titlesUnder(api, alice, wiki.id, goals)).toEqual(['Plans'])
   })
