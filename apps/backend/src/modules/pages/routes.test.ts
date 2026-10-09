@@ -14,6 +14,7 @@ import {
   joinWiki,
   malformedOrUnknownIds,
   neighbourPagesIn,
+  OFF_GRIST_ORIGINS,
   pageOf,
   pagesIn,
   personOf,
@@ -805,8 +806,6 @@ describe('POST /wikis/:wikiId/pages', () => {
 
     const scriptLink = aLink('javascript:alert(1)')
 
-    const gristHost = new URL(GRIST_ORIGIN).host
-
     it.each([
       ['a link to javascript:alert(1)', linkingTo('javascript:alert(1)')],
       [
@@ -865,26 +864,10 @@ describe('POST /wikis/:wikiId/pages', () => {
       ],
       ['an image at a path', anAddressed('image', '/files/desk.png')],
       ['an image at a number', anAddressed('image', 12)],
-      [
-        'a Grist embed on another origin',
-        anAddressed('gristEmbed', 'https://docs.example.com/o/docs/4kq2')
-      ],
-      [
-        'a Grist embed on a look-alike origin',
-        anAddressed('gristEmbed', `${GRIST_ORIGIN}.example.net/o/docs/4kq2`)
-      ],
-      [
-        'a Grist embed on the Grist host over http:',
-        anAddressed('gristEmbed', `http://${gristHost}/o/docs/4kq2`)
-      ],
-      [
-        'a Grist embed on another origin behind a user name',
-        anAddressed('gristEmbed', `https://${gristHost}@docs.example.com/`)
-      ],
-      [
-        'a Grist embed at no address at all',
-        anAddressed('gristEmbed', 'Tasks')
-      ],
+      ...OFF_GRIST_ORIGINS.map(([where, url]) => [
+        `a Grist embed ${where}`,
+        anAddressed('gristEmbed', url)
+      ]),
       [
         'a NUL character in a text',
         aBlock('paragraph', { content: [styled('Steps\u0000')] })

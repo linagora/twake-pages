@@ -543,6 +543,23 @@ export async function personalWikiOf(
 /** The Grist origin of the app the tests start. */
 export const GRIST_ORIGIN = 'https://grist.example.com'
 
+const gristHost = new URL(GRIST_ORIGIN).host
+
+/**
+ * Addresses off the Grist origins of the app the tests start, which it refuses
+ * for a Grist embed as for a database page.
+ */
+export const OFF_GRIST_ORIGINS: [string, string][] = [
+  ['on another origin', 'https://docs.example.com/o/docs/4kq2'],
+  ['on a look-alike origin', `${GRIST_ORIGIN}.example.net/o/docs/4kq2`],
+  ['on the Grist host over http:', `http://${gristHost}/o/docs/4kq2`],
+  [
+    'on another origin behind a user name',
+    `https://${gristHost}@docs.example.com/`
+  ],
+  ['at no address at all', 'Tasks']
+]
+
 export async function startApp() {
   const { sql, db } = createDb(inject('databaseUrl'))
   const settingsChanges = await listenToChanges(sql, SETTINGS_CHANNEL)
