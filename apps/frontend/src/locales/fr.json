@@ -204,7 +204,8 @@
     }
   },
   "labels": {
-    "title": "Pages avec l'étiquette %{name}"
+    "title": "Pages avec l'étiquette %{name}",
+    "ofPage": "Étiquettes de la page"
   },
   "search": {
     "title": "Recherche",

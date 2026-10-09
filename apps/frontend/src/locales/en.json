@@ -204,7 +204,8 @@
     }
   },
   "labels": {
-    "title": "Pages labelled %{name}"
+    "title": "Pages labelled %{name}",
+    "ofPage": "Page labels"
   },
   "search": {
     "title": "Search",
