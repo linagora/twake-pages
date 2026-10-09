@@ -2,46 +2,9 @@ import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
 import { ApiError } from '@/application/pages'
-import { fakePagesApi } from '@/testing/fakePagesApi'
+import { engineering } from '@/testing/engineering'
 import { chooseIn } from '@/testing/forms'
 import { pathToThePage } from '@/testing/pagePath'
-import { renderRoute } from '@/testing/renderWithProviders'
-
-const BOB = 'bob@example.com'
-
-/**
- * The Engineering wiki, open on `open`: Onboarding, with Laptop setup and
- * First week under it, then Releases, with its Checklist. Bob edits it too.
- */
-function engineering(open: 'Laptop setup' | 'Onboarding' = 'Laptop setup') {
-  const pagesApi = fakePagesApi()
-  const wiki = pagesApi.withWiki({
-    name: 'Engineering',
-    members: { [BOB]: 'editor' }
-  })
-  const onboarding = pagesApi.withPage(wiki.id, { title: 'Onboarding' })
-  const laptop = pagesApi.withPage(wiki.id, {
-    title: 'Laptop setup',
-    parentId: onboarding.id
-  })
-  pagesApi.withPage(wiki.id, { title: 'First week', parentId: onboarding.id })
-  const releases = pagesApi.withPage(wiki.id, { title: 'Releases' })
-  const checklist = pagesApi.withPage(wiki.id, {
-    title: 'Checklist',
-    parentId: releases.id
-  })
-  const page = open === 'Onboarding' ? onboarding : laptop
-  renderRoute(`/wikis/${wiki.id}/pages/${page.id}`, { pagesApi })
-  return {
-    pagesApi,
-    bob: pagesApi.signedInAs(BOB),
-    wiki,
-    onboarding,
-    laptop,
-    releases,
-    checklist
-  }
-}
 
 /** Opens the dialog that moves the open page, once the tree shows. */
 async function openMove(title: string): Promise<HTMLElement> {
