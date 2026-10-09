@@ -1,4 +1,4 @@
-import { screen, within } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
 import { ApiError } from '@/application/pages'
@@ -338,5 +338,85 @@ describe('the Edit action of a page', () => {
     expect(
       screen.queryByRole('link', { name: 'Edit page' })
     ).not.toBeInTheDocument()
+  })
+})
+
+describe('a page in the trash', () => {
+  it('goes back to the tree once an editor restores it', async () => {
+    const { pagesApi, wiki, releases } = handbook()
+    await pagesApi.deletePage(releases.id)
+    renderRoute(`/wikis/${wiki.id}/pages/${releases.id}`, { pagesApi })
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Restore' }))
+
+    await waitFor(() => {
+      expect(
+        screen.queryByText('This page is in the trash.')
+      ).not.toBeInTheDocument()
+    })
+    expect(
+      within(screen.getByRole('group', { name: 'Engineering' })).getByRole(
+        'treeitem',
+        { name: 'Releases' }
+      )
+    ).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('link', { name: 'Edit page' })).toBeVisible()
+    expect(pagesApi.restorePage).toHaveBeenCalledWith(releases.id)
+  })
+
+  it('is restored by editors only', async () => {
+    const pagesApi = fakePagesApi()
+    const wiki = pagesApi.withWiki({
+      role: 'viewer',
+      members: { 'bob@example.com': 'editor' }
+    })
+    const checklist = pagesApi.withPage(wiki.id, { title: 'Checklist' })
+    await pagesApi.signedInAs('bob@example.com').deletePage(checklist.id)
+    renderRoute(`/wikis/${wiki.id}/pages/${checklist.id}`, { pagesApi })
+
+    await screen.findByText('This page is in the trash.')
+    // Named after the wiki once its role is known.
+    await screen.findByRole('link', { name: 'Handbook' })
+    expect(
+      screen.queryByRole('button', { name: 'Restore' })
+    ).not.toBeInTheDocument()
+  })
+
+  it.each(WIKI_BASES)(
+    'leads at %s/<wiki> from a page deleted with its parent to that page, which restores both',
+    async base => {
+      const { pagesApi, wiki, engineering, checklist } = handbook()
+      await pagesApi.deletePage(engineering.id)
+      renderRoute(`${base}/${wiki.id}/pages/${checklist.id}`, { pagesApi })
+
+      expect(
+        await screen.findByText(
+          'This page is in the trash, deleted with Engineering.'
+        )
+      ).toBeVisible()
+      expect(
+        screen.getByRole('link', { name: 'Open Engineering' })
+      ).toHaveAttribute('href', `${base}/${wiki.id}/pages/${engineering.id}`)
+      await screen.findByRole('link', { name: 'Handbook' })
+      expect(
+        screen.queryByRole('button', { name: 'Restore' })
+      ).not.toBeInTheDocument()
+    }
+  )
+
+  it('says so when it cannot be restored', async () => {
+    const { pagesApi, wiki, releases } = handbook()
+    await pagesApi.deletePage(releases.id)
+    pagesApi.restorePage.mockRejectedValue(new ApiError(409, 'not_in_trash'))
+    renderRoute(`/wikis/${wiki.id}/pages/${releases.id}`, { pagesApi })
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Restore' }))
+
+    expect(
+      await screen.findByText('The page could not be restored.')
+    ).toBeVisible()
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'The page could not be restored.'
+    )
   })
 })

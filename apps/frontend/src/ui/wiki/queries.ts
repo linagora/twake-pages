@@ -378,6 +378,16 @@ export function useDeletePage(
   })
 }
 
+/**
+ * The wiki, read again once the restore ends, shows the branch back in the
+ * tree, and the page at its new place.
+ */
+export function useRestorePage(
+  wikiId: string
+): UseMutationResult<unknown, Error, string> {
+  return useWikiChange(wikiId, (api, pageId: string) => api.restorePage(pageId))
+}
+
 /** A page as shown below a wiki, which may not be its own. */
 export function usePage(wikiId: string, pageId: string): UseQueryResult<Page> {
   const api = usePagesApi()

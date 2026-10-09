@@ -1,4 +1,4 @@
-import { Alert, Breadcrumbs, Link, Typography } from '@linagora/twake-mui'
+import { Breadcrumbs, Link, Typography } from '@linagora/twake-mui'
 import type { ReactElement } from 'react'
 import { Link as RouterLink, useParams } from 'react-router'
 
@@ -11,6 +11,7 @@ import { FavoriteButton } from '@/ui/page/FavoriteButton'
 import { PageContent } from '@/ui/page/PageContent'
 import { PageMenu } from '@/ui/page/PageMenu'
 import { PageVersion } from '@/ui/page/PageVersion'
+import { TrashNotice } from '@/ui/page/TrashNotice'
 import { useWikiPage } from '@/ui/page/useWikiPage'
 import { UnavailableScreen } from '@/ui/shell/Problems'
 import { useDocumentTitle } from '@/ui/useDocumentTitle'
@@ -60,13 +61,9 @@ export function PageScreen(): ReactElement {
           </>
         }
       />
-      {/* As Twake Tasks tells of an archived board. The page stays readable,
-          sent to the trash while open or opened from it. */}
-      {page.data.deletedAt !== null && (
-        <Alert severity="info" className="u-mb-1">
-          {t('page.inTrash')}
-        </Alert>
-      )}
+      {/* The page stays readable, sent to the trash while open or opened
+          from it. */}
+      {page.data.deletedAt !== null && <TrashNotice page={page.data} />}
       <PageContent page={page.data} />
     </main>
   )
