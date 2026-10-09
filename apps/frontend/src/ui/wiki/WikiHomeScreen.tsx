@@ -1,4 +1,4 @@
-import { Icon, Plus, Share } from '@linagora/twake-icons'
+import { Icon, Plus, Share, Team } from '@linagora/twake-icons'
 import { Button, Typography } from '@linagora/twake-mui'
 import { useState, type ReactElement } from 'react'
 import { useNavigate, useParams } from 'react-router'
@@ -26,6 +26,8 @@ export function WikiHomeScreen(): ReactElement {
   const name = wiki.data ? wikiName(wiki.data) : null
   const [creating, setCreating] = useState(false)
   const [sharing, setSharing] = useState(false)
+  // A space wiki has the members of its space, whom its admin cannot change.
+  const shares = wiki.data?.role === 'admin' && wiki.data.kind === 'shared'
   useDocumentTitle(name)
 
   return (
@@ -62,15 +64,23 @@ export function WikiHomeScreen(): ReactElement {
                   wikiId={wikiId}
                   pageId={wiki.data.homePageId}
                 />
-                {wiki.data.role === 'admin' && wiki.data.kind === 'shared' && (
+                {/*
+                  Unlike Twake Tasks, whose board shows its members as
+                  avatars beside a Share button that tells why it is
+                  unavailable, one button opens them, to share the wiki
+                  for the admin of a shared wiki, read only for the
+                  others: Pages has neither of those two components. No
+                  one else is in a personal wiki.
+                */}
+                {wiki.data.kind !== 'personal' && (
                   <Button
                     variant="secondary"
-                    startIcon={<Icon icon={Share} />}
+                    startIcon={<Icon icon={shares ? Share : Team} />}
                     onClick={() => {
                       setSharing(true)
                     }}
                   >
-                    {t('sharing.share')}
+                    {shares ? t('sharing.share') : t('sharing.members')}
                   </Button>
                 )}
                 {wiki.data.role !== 'viewer' && (
@@ -95,6 +105,7 @@ export function WikiHomeScreen(): ReactElement {
           {sharing && (
             <ShareWikiDialog
               wiki={wiki.data}
+              readOnly={!shares}
               onClose={() => {
                 setSharing(false)
               }}

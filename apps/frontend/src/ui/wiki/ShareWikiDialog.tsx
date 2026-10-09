@@ -178,12 +178,19 @@ function EmailField({
   )
 }
 
-/** Who has access to a wiki, and how its admin shares it, by email. */
+/**
+ * Who has access to a wiki, and how its admin shares it, by email. Unlike
+ * Twake Tasks, which lists the members to the others in a dialog of its own,
+ * the others see this one `readOnly`, from the same list: each role shows as
+ * text, to tell them whom to ask for a change.
+ */
 export function ShareWikiDialog({
   wiki,
+  readOnly,
   onClose
 }: {
   wiki: Wiki
+  readOnly: boolean
   onClose: () => void
 }): ReactElement {
   const { t } = useI18n()
@@ -209,7 +216,9 @@ export function ShareWikiDialog({
         className="u-flex u-flex-items-center u-flex-justify-between"
       >
         <span className="u-ellipsis">
-          {t('sharing.title', { name: wikiName(wiki) })}
+          {readOnly
+            ? t('sharing.people')
+            : t('sharing.title', { name: wikiName(wiki) })}
         </span>
         <IconButton
           aria-label={t('sharing.close')}
@@ -220,24 +229,26 @@ export function ShareWikiDialog({
         </IconButton>
       </DialogTitle>
       <DialogContent className="u-pb-1-half">
-        <InviteRow
-          label={t('sharing.invite')}
-          onSubmit={() => {
-            const to = email.trim().toLowerCase()
-            change.mutate(api => api.invite(wiki.id, to, role), {
-              onSuccess: () => {
-                setInvited(to)
-                setEmail('')
-              }
-            })
-          }}
-        >
-          <EmailField value={email} onChange={setEmail} />
-          <RoleMenu value={role} onChange={setRole} />
-          <Button type="submit" disabled={change.isPending || !email.trim()}>
-            {t('sharing.invite')}
-          </Button>
-        </InviteRow>
+        {!readOnly && (
+          <InviteRow
+            label={t('sharing.invite')}
+            onSubmit={() => {
+              const to = email.trim().toLowerCase()
+              change.mutate(api => api.invite(wiki.id, to, role), {
+                onSuccess: () => {
+                  setInvited(to)
+                  setEmail('')
+                }
+              })
+            }}
+          >
+            <EmailField value={email} onChange={setEmail} />
+            <RoleMenu value={role} onChange={setRole} />
+            <Button type="submit" disabled={change.isPending || !email.trim()}>
+              {t('sharing.invite')}
+            </Button>
+          </InviteRow>
+        )}
         {invited && (
           <Typography role="status" variant="body2" className="u-mt-1">
             {t('sharing.invited', { email: invited })}
@@ -249,9 +260,16 @@ export function ShareWikiDialog({
             {t('sharing.loadFailed')}
           </Typography>
         )}
-        <Typography variant="subtitle2" className="u-mt-1-half">
-          {t('sharing.people')}
-        </Typography>
+        {wiki.kind === 'space' && (
+          <Typography variant="body2" color="textSecondary">
+            {t('sharing.fromSpace')}
+          </Typography>
+        )}
+        {!readOnly && (
+          <Typography variant="subtitle2" className="u-mt-1-half">
+            {t('sharing.people')}
+          </Typography>
+        )}
         <List dense>
           {sharing.data?.members.map(member => (
             <PersonRow
@@ -268,43 +286,55 @@ export function ShareWikiDialog({
                 />
               }
             >
-              <RoleMenu
-                value={member.role}
-                onChange={next => {
-                  change.mutate(api =>
-                    api.setMemberRole(wiki.id, member.id, next)
-                  )
-                }}
-                action={{
-                  label: t('sharing.remove'),
-                  run: () => {
-                    remove.mutate(member)
-                  }
-                }}
-              />
-            </PersonRow>
-          ))}
-          {sharing.data?.invites.map(invitation => (
-            <PersonRow
-              key={invitation.id}
-              label={invitation.email}
-              avatar={<PersonAvatar email={invitation.email} size={32} />}
-            >
-              {/* Unlike Twake Tasks' "Pending": the word the domain gives it. */}
-              <Chip size="small" label={t('sharing.invitation')} />
-              <RoleMenu
-                value={invitation.role}
-                action={{
-                  label: t('sharing.cancelInvitation'),
-                  run: () => {
+              {readOnly ? (
+                <Typography variant="body2" color="textSecondary">
+                  {t(`sharing.roles.${member.role}`)}
+                </Typography>
+              ) : (
+                <RoleMenu
+                  value={member.role}
+                  onChange={next => {
                     change.mutate(api =>
-                      api.cancelInvite(wiki.id, invitation.id)
+                      api.setMemberRole(wiki.id, member.id, next)
                     )
-                  }
-                }}
-              />
+                  }}
+                  action={{
+                    label: t('sharing.remove'),
+                    run: () => {
+                      remove.mutate(member)
+                    }
+                  }}
+                />
+              )}
             </PersonRow>
           ))}
+          {/*
+            The backend sends the invitations to admins only, but those read
+            while the person was its admin stay until the members are read
+            again.
+          */}
+          {!readOnly &&
+            sharing.data?.invites.map(invitation => (
+              <PersonRow
+                key={invitation.id}
+                label={invitation.email}
+                avatar={<PersonAvatar email={invitation.email} size={32} />}
+              >
+                {/* Unlike Twake Tasks' "Pending": the word the domain gives it. */}
+                <Chip size="small" label={t('sharing.invitation')} />
+                <RoleMenu
+                  value={invitation.role}
+                  action={{
+                    label: t('sharing.cancelInvitation'),
+                    run: () => {
+                      change.mutate(api =>
+                        api.cancelInvite(wiki.id, invitation.id)
+                      )
+                    }
+                  }}
+                />
+              </PersonRow>
+            ))}
         </List>
       </DialogContent>
     </Dialog>

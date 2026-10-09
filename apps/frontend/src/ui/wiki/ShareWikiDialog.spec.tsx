@@ -14,13 +14,18 @@ import { renderRoute } from '@/testing/renderWithProviders'
 
 const WIKI_NOT_FOUND = "This wiki doesn't exist, or you can't open it."
 
+// How a member who does not share the wiki opens its members.
+const READ_ONLY = { button: 'Members', dialog: 'People with access' }
+
 /** Opens the dialog of the wiki's members from its home page. */
-async function openSharing(pagesApi: FakePagesApi, wikiId: string) {
+async function openSharing(
+  pagesApi: FakePagesApi,
+  wikiId: string,
+  { button = 'Share', dialog = 'Share Engineering' } = {}
+) {
   renderRoute(`/wikis/${wikiId}`, { pagesApi })
-  fireEvent.click(await screen.findByRole('button', { name: 'Share' }))
-  return within(
-    await screen.findByRole('dialog', { name: 'Share Engineering' })
-  )
+  fireEvent.click(await screen.findByRole('button', { name: button }))
+  return within(await screen.findByRole('dialog', { name: dialog }))
 }
 
 describe('ShareWikiDialog', () => {
@@ -354,5 +359,83 @@ describe('ShareWikiDialog', () => {
     expect(await dialog.findByRole('alert')).toHaveTextContent(
       'The members could not be loaded.'
     )
+  })
+
+  it.each(['editor', 'viewer'] as const)(
+    'shows the members, read only, to a member who is %s',
+    async role => {
+      const pagesApi = fakePagesApi()
+      const wiki = pagesApi.withWiki({
+        name: 'Engineering',
+        role,
+        members: { 'bob@example.com': 'admin' }
+      })
+
+      const dialog = await openSharing(pagesApi, wiki.id, READ_ONLY)
+
+      expect(
+        await dialog.findByRole('listitem', { name: 'bob@example.com' })
+      ).toHaveTextContent('Admin')
+      expect(screen.queryByRole('button', { name: 'Share' })).toBeNull()
+      expect(dialog.queryByRole('form', { name: 'Invite' })).toBeNull()
+      expect(dialog.queryByRole('button', { name: /^Role: / })).toBeNull()
+    }
+  )
+
+  it('hides the invitations from an admin made an editor, before the members are read again', async () => {
+    const pagesApi = fakePagesApi()
+    const wiki = pagesApi.withWiki({
+      name: 'Engineering',
+      members: { 'carol@example.com': 'admin' }
+    })
+    await pagesApi.invite(wiki.id, 'erin@example.com', 'viewer')
+    const carol = pagesApi.signedInAs('carol@example.com')
+    const dialog = await openSharing(pagesApi, wiki.id)
+    await dialog.findByRole('listitem', { name: 'erin@example.com' })
+    pagesApi.getMembers.mockImplementation(() => new Promise(() => undefined))
+
+    await act(() => carol.setMemberRole(wiki.id, pagesApi.person.id, 'editor'))
+
+    expect(
+      await screen.findByRole('dialog', { name: 'People with access' })
+    ).toBeVisible()
+    expect(
+      dialog.getByRole('listitem', { name: 'carol@example.com' })
+    ).toHaveTextContent('Admin')
+    expect(
+      dialog.queryByRole('listitem', { name: 'erin@example.com' })
+    ).toBeNull()
+  })
+
+  it('shows the members of a space wiki read only, as coming from its space', async () => {
+    const pagesApi = fakePagesApi()
+    const wiki = pagesApi.withWiki({
+      name: 'Engineering',
+      kind: 'space',
+      members: { 'bob@example.com': 'viewer' }
+    })
+
+    const dialog = await openSharing(pagesApi, wiki.id, READ_ONLY)
+
+    expect(
+      dialog.getByText('The members of this wiki come from its space.')
+    ).toBeVisible()
+    expect(
+      await dialog.findByRole('listitem', { name: 'bob@example.com' })
+    ).toHaveTextContent('Viewer')
+    expect(dialog.queryByRole('form', { name: 'Invite' })).toBeNull()
+    expect(dialog.queryByRole('button', { name: /^Role: / })).toBeNull()
+  })
+
+  it('offers no sharing of the personal wiki', async () => {
+    const pagesApi = fakePagesApi()
+    const personal = pagesApi.withWiki({ kind: 'personal' })
+    renderRoute(`/wikis/${personal.id}`, { pagesApi })
+
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Personal' })
+    ).toBeVisible()
+    expect(screen.queryByRole('button', { name: 'Share' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Members' })).toBeNull()
   })
 })

@@ -79,6 +79,7 @@
   },
   "sharing": {
     "share": "Partager",
+    "members": "Membres",
     "title": "Partager %{name}",
     "invite": "Inviter",
     "email": "E-mail",
@@ -90,6 +91,7 @@
     "roleOf": "Rôle : %{role}",
     "invited": "%{email} a été invité.",
     "people": "Personnes ayant accès",
+    "fromSpace": "Les membres de ce wiki viennent de son espace.",
     "invitation": "Invitation",
     "cancelInvitation": "Annuler l'invitation",
     "remove": "Retirer",
