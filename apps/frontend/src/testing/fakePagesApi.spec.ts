@@ -1425,17 +1425,21 @@ describe('fakePagesApi', () => {
       ])
     })
 
-    it('ranks the pages whose titles hold more of the words first, then by the words found, for ts_rank, then the last published first', async () => {
+    it('ranks the pages whose titles hold more of the words first, then, as ts_rank does, those whose texts hold them side by side more often, then the last published first', async () => {
       const api = fakePagesApi()
       const wiki = api.withWiki()
       api.withPage(wiki.id, { title: 'Onboarding badge' })
       api.withPage(wiki.id, {
-        title: 'Badges and badgers',
+        title: 'Badge requests',
         content: [paragraph('Onboarding')]
       })
       api.withPage(wiki.id, {
         title: 'First day',
-        content: [paragraph('Your onboarding badge: badges and a badger.')]
+        content: [
+          paragraph(
+            'Show your onboarding badge, then wear your onboarding badge.'
+          )
+        ]
       })
       api.withPage(wiki.id, {
         title: 'Lobby',
@@ -1450,7 +1454,7 @@ describe('fakePagesApi', () => {
         (await api.search('onboarding badge')).map(result => result.page.title)
       ).toEqual([
         'Onboarding badge',
-        'Badges and badgers',
+        'Badge requests',
         'First day',
         'Hall',
         'Lobby'
