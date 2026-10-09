@@ -10,13 +10,13 @@ import {
   malformedOrUnknownIds,
   movePage,
   neighbourPagesIn,
+  placeOf,
   someoneOfEachTenant,
   STALE_NEIGHBOURS,
   startApp,
   titlesUnder,
   versionOf,
-  type NeighbourPages,
-  type TestUser
+  type NeighbourPages
 } from '../../testing/app.ts'
 import { behindAChange } from '../wikis/testing.ts'
 import type { PageMove } from './store.ts'
@@ -32,15 +32,6 @@ afterAll(async () => {
   await api.close()
   await sql.end()
 })
-
-/** Where the wiki's tree shows the page. */
-const placeOf = async (user: TestUser, wikiId: string, pageId: string) => {
-  const tree = (await api.as(user).get(`/wikis/${wikiId}/tree`)).json<{
-    pages: { id: string; parentId: string | null; position: string }[]
-  }>()
-  const page = tree.pages.find(({ id }) => id === pageId)
-  return page && { parentId: page.parentId, position: page.position }
-}
 
 describe('POST /pages/:pageId/move', () => {
   it.each(someoneOfEachTenant)(
@@ -61,7 +52,9 @@ describe('POST /pages/:pageId/move', () => {
       })
 
       expect(response.statusCode).toBe(200)
-      expect(response.json()).toEqual(await placeOf(alice, wiki.id, laptop))
+      expect(response.json()).toEqual(
+        await placeOf(api, alice, wiki.id, laptop)
+      )
       expect(await titlesUnder(api, alice, wiki.id, null)).toEqual([
         'Onboarding'
       ])

@@ -488,6 +488,20 @@ export async function titlesUnder(
     .map(page => page.title)
 }
 
+/** Where the wiki's tree shows the page to the person. */
+export async function placeOf(
+  api: Awaited<ReturnType<typeof startApp>>,
+  user: TestUser,
+  wikiId: string,
+  pageId: string
+) {
+  const tree = (await api.as(user).get(`/wikis/${wikiId}/tree`)).json<{
+    pages: { id: string; parentId: string | null; position: string }[]
+  }>()
+  const page = tree.pages.find(({ id }) => id === pageId)
+  return page && { parentId: page.parentId, position: page.position }
+}
+
 /** The person's wikis, as `GET /wikis` lists them. */
 export async function wikisOf(
   api: Awaited<ReturnType<typeof startApp>>,
