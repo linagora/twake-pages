@@ -9,5 +9,7 @@ declare global {
     SSO_POST_LOGOUT_REDIRECT?: string
     /** The sources the pages show images from, separated by spaces. */
     CSP_IMG_SRC?: string
+    /** The origins of Grist the pages frame documents from, separated by spaces. */
+    GRIST_URL?: string
   }
 }

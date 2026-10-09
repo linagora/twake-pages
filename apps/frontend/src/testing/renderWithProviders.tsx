@@ -14,8 +14,9 @@ import { makeQueryClient } from '@/app/queryClient'
 import { routes } from '@/app/routes'
 import type { ImageSources } from '@/domain/images'
 import { blockNoteChunk } from '@/ds/blockNoteChunk'
-import { fakePagesApi } from '@/testing/fakePagesApi'
+import { fakePagesApi, GRIST_ORIGIN } from '@/testing/fakePagesApi'
 import { fakeSession } from '@/testing/fakeSession'
+import { GristOriginsProvider } from '@/ui/GristOriginsProvider'
 import type { SupportedLanguage } from '@/ui/i18n/languages'
 import { ImageSourcesProvider } from '@/ui/ImageSourcesProvider'
 import { PagesApiProvider } from '@/ui/PagesApiProvider'
@@ -31,6 +32,8 @@ interface Options {
   pagesApi?: PagesApi
   /** Where the app shows images from: by default, its own origin only. */
   imageSources?: ImageSources
+  /** The origins of Grist the pages frame documents from: by default, the fake's. */
+  gristOrigins?: readonly string[]
   /** The overlay of TwakeSpace, for a view framed there */
   overlay?: SpaceOverlay | null
 }
@@ -42,6 +45,7 @@ export function renderWithProviders(
     session = fakeSession(),
     pagesApi = fakePagesApi(),
     imageSources = { self: window.location.origin, added: [] },
+    gristOrigins = [GRIST_ORIGIN],
     overlay = null
   }: Options = {}
 ): RenderResult {
@@ -50,7 +54,9 @@ export function renderWithProviders(
       <SessionGate session={session}>
         <PagesApiProvider api={pagesApi}>
           <ImageSourcesProvider sources={imageSources}>
-            {ui}
+            <GristOriginsProvider origins={gristOrigins}>
+              {ui}
+            </GristOriginsProvider>
           </ImageSourcesProvider>
         </PagesApiProvider>
       </SessionGate>

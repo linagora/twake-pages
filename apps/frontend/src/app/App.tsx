@@ -8,6 +8,7 @@ import { AppProviders } from '@/app/AppProviders'
 import { makeQueryClient } from '@/app/queryClient'
 import { routes } from '@/app/routes'
 import type { ImageSources } from '@/domain/images'
+import { GristOriginsProvider } from '@/ui/GristOriginsProvider'
 import { findPreferredLanguage } from '@/ui/i18n/languages'
 import { ImageSourcesProvider } from '@/ui/ImageSourcesProvider'
 import { PagesApiProvider } from '@/ui/PagesApiProvider'
@@ -18,6 +19,7 @@ export interface AppProps {
   session: SessionService
   pagesApi: PagesApi
   imageSources: ImageSources
+  gristOrigins: readonly string[]
   overlay?: SpaceOverlay | null
 }
 
@@ -25,6 +27,7 @@ export function App({
   session,
   pagesApi,
   imageSources,
+  gristOrigins,
   overlay = null
 }: AppProps): ReactElement {
   const [queryClient] = useState(makeQueryClient)
@@ -35,9 +38,11 @@ export function App({
       <SessionGate session={session}>
         <PagesApiProvider api={pagesApi}>
           <ImageSourcesProvider sources={imageSources}>
-            <FollowSettings>
-              <AppRouter />
-            </FollowSettings>
+            <GristOriginsProvider origins={gristOrigins}>
+              <FollowSettings>
+                <AppRouter />
+              </FollowSettings>
+            </GristOriginsProvider>
           </ImageSourcesProvider>
         </PagesApiProvider>
       </SessionGate>
