@@ -1363,9 +1363,14 @@ function signedIn(world: World, person: Person): FakePagesApi {
     listComments: vi.fn<PagesApi['listComments']>(pageId =>
       answer(() => {
         const { page } = pageAccess(pageId)
+        // By time, then by id, as the backend lists them, though the fake's
+        // times never tie.
         return [...world.comments.values()]
           .filter(comment => comment.pageId === page.id)
-          .sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1))
+          .sort(
+            (a, b) =>
+              a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id)
+          )
           .map(commentFor)
       })
     ),
