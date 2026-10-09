@@ -24,7 +24,13 @@ import type {
   Tree,
   WikiChanges
 } from '@/application/pages'
-import type { Page, PageRef, Version, VersionSummary } from '@/domain/page'
+import type {
+  Page,
+  PageRef,
+  TrashEntry,
+  Version,
+  VersionSummary
+} from '@/domain/page'
 import type { SearchResult } from '@/domain/search'
 import type { Member, Wiki, WikiSummary } from '@/domain/wiki'
 import { usePagesApi } from '@/ui/PagesApiProvider'
@@ -45,6 +51,7 @@ const pageKey = (wikiId: string, pageId: string) =>
 const wikiSearchKey = (wikiId: string, text: string) =>
   [...wikiKey(wikiId), 'search', text] as const
 const labelsKey = (wikiId: string) => [...wikiKey(wikiId), 'labels'] as const
+const trashKey = (wikiId: string) => [...wikiKey(wikiId), 'trash'] as const
 // Unlike Twake Tasks, which keeps a task's history below the task, a page's
 // history is not below the pages' key: useLiveWiki takes every query there
 // for a read page, with its version of the wiki.
@@ -375,6 +382,15 @@ export function useDeletePage(
   return useWikiChange(page.wikiId, async api => {
     await api.deletePage(page.id)
     onDeleted()
+  })
+}
+
+/** The wiki's deleted branches, newest first, read again with the wiki. */
+export function useTrash(wikiId: string): UseQueryResult<TrashEntry[]> {
+  const api = usePagesApi()
+  return useQuery({
+    queryKey: trashKey(wikiId),
+    queryFn: () => api.listTrash(wikiId)
   })
 }
 

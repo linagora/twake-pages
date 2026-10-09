@@ -275,6 +275,29 @@ export function FeedItem({
   )
 }
 
+/**
+ * A note on an item of the feed, in a tone that rises with its urgency, as
+ * Twake Tasks notes the days a task has left in its trash.
+ */
+export function FeedNote({
+  tone,
+  children
+}: {
+  tone: 'textSecondary' | 'warning' | 'error'
+  children: ReactNode
+}): ReactElement {
+  return (
+    <Typography
+      variant="caption"
+      component="p"
+      color={tone}
+      sx={{ fontWeight: tone === 'textSecondary' ? 400 : 500 }}
+    >
+      {children}
+    </Typography>
+  )
+}
+
 export function PanelSection({
   title,
   action,

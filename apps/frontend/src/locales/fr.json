@@ -286,7 +286,13 @@
     "failed": "La recherche n'a pas pu aboutir."
   },
   "trash": {
-    "title": "Corbeille"
+    "title": "Corbeille",
+    "retention": "Les pages de la corbeille sont définitivement supprimées après 30 jours.",
+    "loadFailed": "La corbeille n'a pas pu être chargée.",
+    "empty": "La corbeille est vide",
+    "inside": "%{smart_count} page à l'intérieur |||| %{smart_count} pages à l'intérieur",
+    "deletedBy": "Supprimée par %{name} le %{time}",
+    "daysLeft": "Encore %{smart_count} jour |||| Encore %{smart_count} jours"
   },
   "notifications": {
     "title": "Notifications"

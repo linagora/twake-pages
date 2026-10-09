@@ -286,7 +286,13 @@
     "failed": "The pages could not be searched."
   },
   "trash": {
-    "title": "Trash"
+    "title": "Trash",
+    "retention": "Pages in the trash are deleted for good after 30 days.",
+    "loadFailed": "The trash could not be loaded.",
+    "empty": "The trash is empty",
+    "inside": "%{smart_count} page inside |||| %{smart_count} pages inside",
+    "deletedBy": "Deleted by %{name} on %{time}",
+    "daysLeft": "%{smart_count} day left |||| %{smart_count} days left"
   },
   "notifications": {
     "title": "Notifications"
