@@ -16,6 +16,7 @@ import { enqueue } from '../../events/outbox.ts'
 import { parseOrDrop, type Handler } from '../../events/router.ts'
 import { asOrganization, type Db, type Tx } from '../../infra/db.ts'
 import { bumpWiki } from '../wikis/live.ts'
+import { takeOutOfWiki } from '../wikis/members.ts'
 import { memberRole, wikiMembers, wikis } from '../wikis/schema.ts'
 import { addHomePage, putOutOfReach } from '../wikis/store.ts'
 import { spaces } from './schema.ts'
@@ -229,8 +230,9 @@ async function renameSpace(tx: Tx, space: SpaceRef, name: string) {
 }
 
 /**
- * Takes the wiki from these people. What they wrote stays, and the
- * notifications about it stop reaching them with their membership.
+ * Takes the wiki from these people, as its admin would: their favorites and
+ * visits of its pages go, what they wrote stays, and the notifications about
+ * it stop reaching them with their membership.
  */
 async function removeMembers(
   tx: Tx,
@@ -239,11 +241,17 @@ async function removeMembers(
 ): Promise<void> {
   const wikiId = await liveWikiOf(tx, space)
   if (!wikiId) return
-  const removed = await tx
-    .delete(wikiMembers)
+  const leaving = await tx
+    .select({ userId: wikiMembers.userId })
+    .from(wikiMembers)
     .where(and(eq(wikiMembers.wikiId, wikiId), which))
-    .returning({ userId: wikiMembers.userId })
-  if (removed.length > 0) await bumpWiki(tx, wikiId)
+  if (leaving.length === 0) return
+  await bumpWiki(tx, wikiId)
+  await takeOutOfWiki(
+    tx,
+    wikiId,
+    leaving.map(member => member.userId)
+  )
 }
 
 /** Puts the space's wiki out of reach now, for the wiki purge job to take. */

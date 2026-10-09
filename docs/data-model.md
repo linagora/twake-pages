@@ -105,7 +105,7 @@ As in Twake Tasks, about pages: `id, page_id (cascade), wiki_id, org_id, user_id
 
 `(user_id, page_id)` primary key, `org_id`, `tenant`, `created_at` or `visited_at`; tenant policy on the page and the restrictive `own` policy (`ownRows`) of Twake Tasks. Visits are capped at the 100 most recent per person, those of wikis the person left included: `app_trim_visits()` deletes the older ones under `app.visits_lookup`, which the B2C scope of the `page_visits` tenant policy honors in `USING` only, as the `wiki_members` one honors `app.membership_lookup`.
 
-A member who leaves a wiki, removed by its admin or by themself, loses their favorites and visits of its pages in the same transaction: `app_leave_wiki(wiki, person)` deletes them under `app.leaving_user`, which the `own` policy honors in `USING` only, before the membership goes.
+A member who leaves a wiki, removed by its admin or its space, or by themself, loses their favorites and visits of its pages in the same transaction: `app_leave_wiki(wiki, person)` deletes them under `app.leaving_user`, which the `own` policy honors in `USING` only, before the membership goes. Every way out of a wiki goes through `takeOutOfWiki()`, which calls it, but the deletion of an account, which forgets the person's favorites and visits of every wiki at once.
 
 ### Platform tables
 

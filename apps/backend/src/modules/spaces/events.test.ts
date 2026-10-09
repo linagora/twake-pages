@@ -9,6 +9,7 @@ import {
   aPageIn,
   aUser,
   createPage,
+  favoritesAndRecentOf,
   purgeJobOf,
   startApp,
   versionOf,
@@ -382,6 +383,52 @@ describe('twake.space.member.removed', () => {
       expect.objectContaining({ name: 'Ops' })
     ])
   })
+})
+
+// The space takes people out of its wiki as sharing does: back in the space,
+// they find none of the favorites and visits they had of its pages.
+describe('a person the space takes out of its wiki', () => {
+  it.each([
+    [
+      'twake.space.member.removed',
+      (_admin: TestUser, leaver: TestUser) => ({
+        members: [{ uuid: leaver.userId, email: leaver.email }]
+      })
+    ],
+    [
+      'twake.space.synced',
+      (admin: TestUser) => ({
+        name: 'Ops',
+        members: [member(admin, 'admin')],
+        groups: []
+      })
+    ]
+  ])(
+    'loses their favorites and visits of its pages, on %s',
+    async (routingKey, bodyOf) => {
+      const admin = aUser()
+      const leaver = aUser({ organizationId: admin.organizationId })
+      const space = await aSpaceOf(admin, [leaver])
+      const wiki = await spaceWikiOf(leaver)
+      await api.as(leaver).put(`/pages/${wiki.homePageId}/favorite`)
+      await api.as(leaver).get(`/pages/${wiki.homePageId}`)
+      const before = await favoritesAndRecentOf(api, leaver)
+
+      await deliver(routingKey, { ...space, ...bodyOf(admin, leaver) })
+
+      await deliver('twake.space.member.added', {
+        ...space,
+        members: [member(leaver, 'editor')]
+      })
+      expect({
+        before,
+        after: await favoritesAndRecentOf(api, leaver)
+      }).toEqual({
+        before: { favorites: [wiki.homePageId], recent: [wiki.homePageId] },
+        after: { favorites: [], recent: [] }
+      })
+    }
+  )
 })
 
 describe('twake.space.deleted', () => {

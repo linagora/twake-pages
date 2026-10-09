@@ -3,8 +3,8 @@ import type { Tx } from '../../infra/db.ts'
 import { wikiMembers } from './schema.ts'
 
 /**
- * Takes the people out of the wiki, removed by its admin or leaving it. Gives
- * those who were members.
+ * Takes the people out of the wiki: removed by its admin, leaving it, or out
+ * of its space. Gives those who were members.
  *
  * Their favorites and visits of its pages go with them, while what they wrote,
  * their follows and their notifications stay, out of their lists until they
