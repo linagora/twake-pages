@@ -12,7 +12,6 @@ import {
 } from '@/testing/blocks'
 import {
   fakePagesApi,
-  GRIST_ORIGIN,
   paragraph,
   type FakePagesApi
 } from '@/testing/fakePagesApi'
@@ -343,9 +342,9 @@ const VIDEO: Block = {
 }
 
 // As another client of the API may store one: with no id and no children.
-const GRIST_EMBED: Block = {
-  type: 'gristEmbed',
-  props: { url: `${GRIST_ORIGIN}/o/docs/budget` }
+const AUDIO: Block = {
+  type: 'audio',
+  props: { url: 'https://media.example.com/welcome.mp3' }
 }
 
 describe('a block of the page that the editor does not offer', () => {
@@ -361,7 +360,7 @@ describe('a block of the page that the editor does not offer', () => {
         },
         children: []
       },
-      GRIST_EMBED,
+      AUDIO,
       { type: 'mermaid', props: { code: 'graph TD' }, children: [] }
     ])
     renderRoute(editor, { pagesApi })
@@ -374,12 +373,10 @@ describe('a block of the page that the editor does not offer', () => {
     ).toEqual([
       ['Video', 'Welcome video', 'https://media.example.com/intro.mp4'],
       ['File', 'Rules.pdf', 'https://media.example.com/rules.pdf'],
-      ['Grist embed', `${GRIST_ORIGIN}/o/docs/budget`],
+      ['Audio', 'https://media.example.com/welcome.mp3'],
       ['mermaid block']
     ])
-    expect(within(content).getByRole('group', { name: 'Grist embed' })).toBe(
-      kept[2]
-    )
+    expect(within(content).getByRole('group', { name: 'Audio' })).toBe(kept[2])
     expect(
       kept.map(block =>
         block.closest('[contenteditable]')?.getAttribute('contenteditable')
@@ -389,7 +386,7 @@ describe('a block of the page that the editor does not offer', () => {
 
   it('is published as stored when the title alone changes', async () => {
     const pagesApi = fakePagesApi()
-    const { page, editor } = aPage(pagesApi, [VIDEO, GRIST_EMBED])
+    const { page, editor } = aPage(pagesApi, [VIDEO, AUDIO])
     renderRoute(editor, { pagesApi })
 
     await within(
@@ -406,7 +403,7 @@ describe('a block of the page that the editor does not offer', () => {
       {
         baseVersion: 1,
         title: 'Onboarding guide',
-        content: [VIDEO, GRIST_EMBED]
+        content: [VIDEO, AUDIO]
       }
     ])
   })
@@ -415,7 +412,7 @@ describe('a block of the page that the editor does not offer', () => {
     const pagesApi = fakePagesApi()
     const { editor } = aPage(pagesApi, [
       VIDEO,
-      GRIST_EMBED,
+      AUDIO,
       paragraph('Bring your badge')
     ])
     renderRoute(editor, { pagesApi })
@@ -431,7 +428,7 @@ describe('a block of the page that the editor does not offer', () => {
     })
     expect(publishedBlocks(pagesApi)).toStrictEqual([
       VIDEO,
-      GRIST_EMBED,
+      AUDIO,
       expect.objectContaining(paragraph('Ask for a laptop')) as Block
     ])
   })
@@ -504,7 +501,7 @@ describe('a block of the page that the editor does not offer', () => {
     const source = aPage(pagesApi, [
       paragraph('Watch the intro'),
       { ...VIDEO, children: [paragraph('Under the video')] },
-      GRIST_EMBED,
+      AUDIO,
       paragraph('Then read the rules')
     ])
     const { unmount } = renderRoute(source.editor, { pagesApi })
