@@ -17,6 +17,10 @@ const newComment = z.object({
   parentId: z.uuid().nullable().optional()
 })
 
+const commentEdit = z.object({ body: commentBody })
+
+const commentParams = z.object({ commentId: z.uuid() })
+
 export function registerComments(
   app: HttpServer,
   deps: { db: Db; requireIdentity: RequireIdentity }
@@ -55,6 +59,27 @@ export function registerComments(
       )
       if (!result.ok) return refuse(reply, result.error)
       return reply.code(201).send(result.value)
+    }
+  )
+
+  app.patch(
+    '/comments/:commentId',
+    { preHandler: deps.requireIdentity },
+    async (request, reply) => {
+      const identity = request.identity
+      if (!identity) return reply.code(401).send()
+      const params = commentParams.safeParse(request.params)
+      if (!params.success) return refuse(reply, 'not_found')
+      const body = commentEdit.safeParse(request.body)
+      if (!body.success) {
+        return reply.code(400).send({ error: 'invalid_request' })
+      }
+      const result = await store.editComment(
+        identity,
+        params.data.commentId,
+        body.data.body
+      )
+      return result.ok ? result.value : refuse(reply, result.error)
     }
   )
 }

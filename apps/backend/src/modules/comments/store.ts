@@ -1,8 +1,11 @@
-import { and, asc, eq, isNull } from 'drizzle-orm'
+import { and, asc, eq, isNull, sql } from 'drizzle-orm'
 import { inTenant, type Db, type Tx } from '../../infra/db.ts'
 import { Refused, writeOrRefuse } from '../../infra/refusals.ts'
 import type { Identity } from '../auth/index.ts'
+import { pages } from '../pages/schema.ts'
 import { follow, pageInReach, pageToChange } from '../pages/store.ts'
+import { checkRole } from '../wikis/access.ts'
+import { bumpWiki } from '../wikis/live.ts'
 import { membersMentioned } from './mentions.ts'
 import { comments } from './schema.ts'
 
@@ -47,6 +50,46 @@ async function checkParentComment(tx: Tx, pageId: string, parentId: string) {
       )
     )
   if (!parent) throw new Refused('invalid_request')
+}
+
+/** The comment, with the page it is written on. */
+function commentWithPage(tx: Tx, commentId: string) {
+  return tx
+    .select({
+      comment: comments,
+      page: {
+        id: pages.id,
+        wikiId: pages.wikiId,
+        organizationId: pages.organizationId,
+        deletedAt: pages.deletedAt
+      }
+    })
+    .from(comments)
+    .innerJoin(pages, eq(pages.id, comments.pageId))
+    .where(eq(comments.id, commentId))
+}
+
+/**
+ * The person's own comment, behind its wiki's row lock, refused in the order
+ * api.md writes: `not_found` out of their reach, `forbidden` to anyone but
+ * its author, then `not_found` once deleted, and `in_trash` on a page in the
+ * trash. It takes the lock as pageToChange does, but reads the comment, which
+ * names its page, and refuses anyone but its author before the lock, where
+ * pageToChange would read the page behind it first.
+ */
+async function commentToChange(tx: Tx, identity: Identity, commentId: string) {
+  const [found] = await commentWithPage(tx, commentId)
+  if (!found) throw new Refused('not_found')
+  await checkRole(tx, identity, found.page.wikiId, 'viewer')
+  if (found.comment.authorId !== identity.userId) {
+    throw new Refused('forbidden')
+  }
+  await bumpWiki(tx, found.page.wikiId)
+  // Read after the lock, which every change to the wiki's pages takes.
+  const [current] = await commentWithPage(tx, commentId)
+  if (!current) throw new Refused('not_found')
+  if (current.page.deletedAt) throw new Refused('in_trash')
+  return current
 }
 
 export interface NewComment {
@@ -100,6 +143,32 @@ export function createCommentStore(db: Db) {
         const mentioned = await membersMentioned(tx, page.wikiId, input.body)
         for (const member of mentioned) await follow(tx, page, member.userId)
         return commentOf(added)
+      })
+    },
+
+    /**
+     * The person's comment with a new body. The members it mentions anew
+     * follow the page, its author too when the edit is the first to mention
+     * them; those it mentioned already, and its author otherwise, chose
+     * whether to follow once it was written.
+     */
+    editComment(identity: Identity, commentId: string, body: string) {
+      return writeOrRefuse(db, identity, async tx => {
+        const { comment, page } = await commentToChange(tx, identity, commentId)
+        const [edited] = await tx
+          .update(comments)
+          .set({ body, editedAt: sql`now()` })
+          .where(eq(comments.id, commentId))
+          .returning()
+        if (!edited) throw new Error('comment update returned nothing')
+        const mentioned = await membersMentioned(
+          tx,
+          page.wikiId,
+          body,
+          comment.body
+        )
+        for (const member of mentioned) await follow(tx, page, member.userId)
+        return commentOf(edited)
       })
     }
   }
