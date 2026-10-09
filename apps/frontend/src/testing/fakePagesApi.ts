@@ -1197,16 +1197,13 @@ function signedIn(world: World, person: Person): FakePagesApi {
         const { page } = pageAccess(pageId)
         const version = page.versions.find(each => each.number === number)
         if (!version) throw refuse('not_found')
-        const content = checkBlocks(version.content)
-        const gristUrl =
-          version.gristUrl === null ? null : checkGristUrl(version.gristUrl)
-        const { wiki } = liveAccess(pageId)
-        addVersion(
-          page,
-          wiki,
-          { title: version.title, content, gristUrl },
-          number
+        const body = checkContent(
+          version.gristUrl === null
+            ? { content: version.content }
+            : { gristUrl: version.gristUrl }
         )
+        const { wiki } = liveAccess(pageId)
+        addVersion(page, wiki, { title: version.title, ...body }, number)
         return pageFor(page)
       })
     ),
