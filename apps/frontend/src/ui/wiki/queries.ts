@@ -393,3 +393,24 @@ export function useVersion(
     queryFn: number === null ? skipToken : () => api.getVersion(pageId, number)
   })
 }
+
+/**
+ * The page shows the version restored as its newest, and the tree its title
+ * once read again, before `onRestored` runs. It runs though the screen that
+ * restored the version is gone, as the person asked for the page as it was.
+ */
+export function useRestoreVersion(
+  wikiId: string,
+  pageId: string,
+  onRestored: () => void
+): UseMutationResult<Page, Error, number> {
+  const api = usePagesApi()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (number: number) => api.restoreVersion(pageId, number),
+    onSuccess: async page => {
+      await cachePageAndInvalidateTree(queryClient, wikiId, page)
+      onRestored()
+    }
+  })
+}

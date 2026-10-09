@@ -215,7 +215,9 @@
     "title": "%{title}, version %{number}",
     "back": "Back to the history",
     "notFound": "This version doesn't exist, or you can't open it.",
-    "loadFailed": "The version could not be loaded."
+    "loadFailed": "The version could not be loaded.",
+    "restore": "Restore this version",
+    "restoreFailed": "The version could not be restored."
   },
   "labels": {
     "title": "Pages labelled %{name}",

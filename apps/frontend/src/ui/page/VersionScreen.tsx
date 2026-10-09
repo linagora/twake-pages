@@ -1,7 +1,12 @@
-import { Icon, Left } from '@linagora/twake-icons'
+import { Icon, Left, Restore } from '@linagora/twake-icons'
 import { Button, Typography } from '@linagora/twake-mui'
 import type { ReactElement } from 'react'
-import { Link as RouterLink, useParams } from 'react-router'
+import {
+  Link as RouterLink,
+  useNavigate,
+  useParams,
+  useResolvedPath
+} from 'react-router'
 
 import { ApiError } from '@/application/pages'
 import { PageHeader } from '@/ds/PageHeader'
@@ -11,8 +16,8 @@ import { useWikiPage } from '@/ui/page/useWikiPage'
 import { VersionByline } from '@/ui/page/VersionByline'
 import { UnavailableScreen } from '@/ui/shell/Problems'
 import { useDocumentTitle } from '@/ui/useDocumentTitle'
-import { historyInItsWiki } from '@/ui/wiki/pathInItsWiki'
-import { useVersion } from '@/ui/wiki/queries'
+import { historyInItsWiki, pathInItsWiki } from '@/ui/wiki/pathInItsWiki'
+import { useRestoreVersion, useVersion, useWiki } from '@/ui/wiki/queries'
 
 /** The backend keeps a version's number in a column of 32-bit integers. */
 const MAX_VERSION_NUMBER = 2 ** 31 - 1
@@ -35,7 +40,9 @@ function versionNumberOf(text: string): number | null {
  */
 export function VersionScreen(): ReactElement {
   const { t } = useI18n()
+  const navigate = useNavigate()
   const { wikiId = '', pageId = '', number = '' } = useParams()
+  const wiki = useWiki(wikiId)
   const { page, missing } = useWikiPage(wikiId, pageId)
   const versionNumber = versionNumberOf(number)
   const version = useVersion(wikiId, pageId, versionNumber)
@@ -53,6 +60,13 @@ export function VersionScreen(): ReactElement {
         })
       : null
   useDocumentTitle(title)
+  // Resolved now, as the person may have left this screen once restored.
+  const { pathname } = useResolvedPath(
+    pathInItsWiki({ id: pageId }, shown?.home === true)
+  )
+  const restore = useRestoreVersion(wikiId, pageId, () => {
+    void navigate(pathname)
+  })
 
   if (!shown) {
     return (
@@ -75,6 +89,15 @@ export function VersionScreen(): ReactElement {
     )
   }
 
+  // Unlike useEditable, a database page, which the editor does not open,
+  // takes a restored version too. A page in the trash takes no new version,
+  // and its current one is shown by the page itself.
+  const restorable =
+    wiki.data !== undefined &&
+    wiki.data.role !== 'viewer' &&
+    shown.deletedAt === null &&
+    shownVersion.number !== shown.version
+
   return (
     <main className="u-p-2">
       <PageHeader
@@ -96,7 +119,25 @@ export function VersionScreen(): ReactElement {
             <VersionByline version={shownVersion} />
           </>
         }
+        actions={
+          restorable && (
+            <Button
+              startIcon={<Icon icon={Restore} />}
+              disabled={restore.isPending}
+              onClick={() => {
+                restore.mutate(shownVersion.number)
+              }}
+            >
+              {t('version.restore')}
+            </Button>
+          )
+        }
       />
+      {restore.isError && (
+        <Typography role="alert" color="error" className="u-mb-1">
+          {t('version.restoreFailed')}
+        </Typography>
+      )}
       <PageContent page={{ kind: shown.kind, content: shownVersion.content }} />
     </main>
   )

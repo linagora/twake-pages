@@ -215,7 +215,9 @@
     "title": "%{title}, version %{number}",
     "back": "Retour à l'historique",
     "notFound": "Cette version n'existe pas, ou vous ne pouvez pas l'ouvrir.",
-    "loadFailed": "La version n'a pas pu être chargée."
+    "loadFailed": "La version n'a pas pu être chargée.",
+    "restore": "Restaurer cette version",
+    "restoreFailed": "La version n'a pas pu être restaurée."
   },
   "labels": {
     "title": "Pages avec l'étiquette %{name}",

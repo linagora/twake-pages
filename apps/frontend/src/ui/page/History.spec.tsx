@@ -1,21 +1,26 @@
-import { act, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError } from '@/application/pages'
+import type { Role } from '@/domain/wiki'
 import { findEmptyState, PAGE_NOT_FOUND } from '@/testing/emptyState'
-import { fakePagesApi, paragraph } from '@/testing/fakePagesApi'
+import { fakePagesApi, GRIST_ORIGIN, paragraph } from '@/testing/fakePagesApi'
 import { renderRoute, WIKI_BASES } from '@/testing/renderWithProviders'
 import { followZone } from '@/ui/settings/zone'
 
 const VERSION_NOT_FOUND = "This version doesn't exist, or you can't open it."
+const RESTORE = 'Restore this version'
 
 /**
  * Onboarding, which Bob renamed Welcome as its version 2, on the evening of
- * March 2, 2100 in Tokyo.
+ * March 2, 2100 in Tokyo, in a wiki where the person has this role.
  */
-async function onboarding() {
+async function onboarding(role: Role = 'admin') {
   const pagesApi = fakePagesApi()
-  const wiki = pagesApi.withWiki({ members: { 'bob@example.com': 'editor' } })
+  const wiki = pagesApi.withWiki({
+    role,
+    members: { 'bob@example.com': 'editor' }
+  })
   const page = pagesApi.withPage(wiki.id, {
     title: 'Onboarding',
     content: [paragraph('Ask for a laptop')]
@@ -323,5 +328,171 @@ describe('a version of a page', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'The version could not be loaded.'
     )
+  })
+})
+
+describe('restoring a version', () => {
+  it.each(WIKI_BASES)(
+    'takes an editor from %s/<wiki>/pages/<page>/history/<number> to the page, at the version restored as its newest',
+    async base => {
+      const { pagesApi, wiki, page } = await onboarding('editor')
+      const { router } = renderRoute(
+        `${base}/${wiki.id}/pages/${page.id}/history/1`,
+        { pagesApi }
+      )
+
+      fireEvent.click(await screen.findByRole('button', { name: RESTORE }))
+
+      expect(
+        await screen.findByRole('heading', { level: 1, name: 'Onboarding' })
+      ).toBeVisible()
+      expect(router.state.location.pathname).toBe(
+        `${base}/${wiki.id}/pages/${page.id}`
+      )
+      expect(screen.getByRole('link', { name: 'Version 3' })).toBeVisible()
+      expect(await screen.findByText('Ask for a laptop')).toBeVisible()
+    }
+  )
+
+  it('takes an editor to the wiki once a version of its home page is restored', async () => {
+    const pagesApi = fakePagesApi()
+    const wiki = pagesApi.withWiki({ name: 'Handbook' })
+    await pagesApi.publish(wiki.homePageId, {
+      baseVersion: 1,
+      title: 'Handbook',
+      content: [paragraph('Start with the onboarding.')]
+    })
+    const { router } = renderRoute(
+      `/wikis/${wiki.id}/pages/${wiki.homePageId}/history/1`,
+      { pagesApi }
+    )
+
+    fireEvent.click(await screen.findByRole('button', { name: RESTORE }))
+
+    expect(await screen.findByRole('link', { name: 'Version 3' })).toBeVisible()
+    expect(router.state.location.pathname).toBe(`/wikis/${wiki.id}`)
+    expect(screen.getByText('This page is empty.')).toBeVisible()
+  })
+
+  it('takes the person to the page once restored, though they left the version before', async () => {
+    const { pagesApi, wiki, page } = await onboarding()
+    const restore = pagesApi.restoreVersion.getMockImplementation()
+    if (!restore) throw new Error('No restore to hold')
+    let answer = (): void => undefined
+    pagesApi.restoreVersion.mockImplementationOnce(async (pageId, number) => {
+      await new Promise<void>(resolve => {
+        answer = resolve
+      })
+      return restore(pageId, number)
+    })
+    const { router } = renderRoute(
+      `/wikis/${wiki.id}/pages/${page.id}/history/1`,
+      { pagesApi }
+    )
+
+    fireEvent.click(await screen.findByRole('button', { name: RESTORE }))
+    fireEvent.click(screen.getByRole('link', { name: 'Back to the history' }))
+    await screen.findByRole('list', { name: 'Versions' })
+    act(() => {
+      answer()
+    })
+
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Onboarding' })
+    ).toBeVisible()
+    expect(router.state.location.pathname).toBe(
+      `/wikis/${wiki.id}/pages/${page.id}`
+    )
+  })
+
+  it('is not offered to a viewer of the wiki', async () => {
+    const { pagesApi, wiki, page } = await onboarding('viewer')
+    renderRoute(`/wikis/${wiki.id}/pages/${page.id}/history/1`, { pagesApi })
+
+    await screen.findByRole('heading', {
+      level: 1,
+      name: 'Onboarding, version 1'
+    })
+    expect(
+      screen.queryByRole('button', { name: RESTORE })
+    ).not.toBeInTheDocument()
+  })
+
+  it('is not offered for a page in the trash', async () => {
+    const { pagesApi, wiki, page } = await onboarding()
+    await pagesApi.deletePage(page.id)
+    renderRoute(`/wikis/${wiki.id}/pages/${page.id}/history/1`, { pagesApi })
+
+    await screen.findByRole('heading', {
+      level: 1,
+      name: 'Onboarding, version 1'
+    })
+    expect(
+      screen.queryByRole('button', { name: RESTORE })
+    ).not.toBeInTheDocument()
+  })
+
+  it('is offered for a version of a database page, which the editor does not open', async () => {
+    const pagesApi = fakePagesApi()
+    const wiki = pagesApi.withWiki()
+    const budget = pagesApi.withPage(wiki.id, {
+      title: 'Budget',
+      kind: 'database'
+    })
+    await pagesApi.publish(budget.id, {
+      baseVersion: 1,
+      title: 'Budget',
+      gristUrl: `${GRIST_ORIGIN}/o/docs/9mz3/Budget`
+    })
+    renderRoute(`/wikis/${wiki.id}/pages/${budget.id}/history/1`, { pagesApi })
+
+    expect(await screen.findByRole('button', { name: RESTORE })).toBeVisible()
+  })
+
+  it('is not offered for the current version, which the page shows', async () => {
+    const { pagesApi, wiki, page } = await onboarding()
+    renderRoute(`/wikis/${wiki.id}/pages/${page.id}/history/2`, { pagesApi })
+
+    await screen.findByRole('heading', {
+      level: 1,
+      name: 'Welcome, version 2'
+    })
+    expect(
+      screen.queryByRole('button', { name: RESTORE })
+    ).not.toBeInTheDocument()
+  })
+
+  it('is offered for the current version once another is published elsewhere', async () => {
+    const { pagesApi, wiki, page } = await onboarding()
+    renderRoute(`/wikis/${wiki.id}/pages/${page.id}/history/2`, { pagesApi })
+    await screen.findByRole('heading', {
+      level: 1,
+      name: 'Welcome, version 2'
+    })
+
+    await act(() =>
+      pagesApi.signedInAs('bob@example.com').publish(page.id, {
+        baseVersion: 2,
+        title: 'Hello',
+        content: [paragraph('Bring a pen')]
+      })
+    )
+
+    expect(await screen.findByRole('button', { name: RESTORE })).toBeVisible()
+  })
+
+  it('says so when the version cannot be restored', async () => {
+    const { pagesApi, wiki, page } = await onboarding()
+    pagesApi.restoreVersion.mockRejectedValue(new ApiError(409, 'in_trash'))
+    renderRoute(`/wikis/${wiki.id}/pages/${page.id}/history/1`, { pagesApi })
+
+    fireEvent.click(await screen.findByRole('button', { name: RESTORE }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'The version could not be restored.'
+    )
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Onboarding, version 1' })
+    ).toBeVisible()
   })
 })
