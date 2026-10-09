@@ -8,13 +8,14 @@ export interface Mail {
   text: string
 }
 
-// Without SMTP_URL, notifications stay in the app.
+// Without SMTP_URL, nothing is emailed: notifications stay in the app, and an
+// invitation waits there for its email to sign in.
 export function createMailer(
   config: Pick<Config, 'SMTP_URL' | 'MAIL_FROM'>,
   logger: Logger
 ): (mail: Mail) => Promise<void> {
   if (!config.SMTP_URL) {
-    logger.info('SMTP_URL is not set, so no notification is emailed')
+    logger.info('SMTP_URL is not set, so no invitation is emailed')
     return () => Promise.resolve()
   }
   const transport = createTransport(config.SMTP_URL)

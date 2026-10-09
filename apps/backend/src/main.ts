@@ -6,6 +6,7 @@ import { createRelay } from './events/outbox.ts'
 import { createMessageHandler } from './events/router.ts'
 import { listenToChanges } from './infra/changes.ts'
 import { assertRowLevelSecurity, createDb, migrateDb } from './infra/db.ts'
+import { createMailer } from './infra/mail.ts'
 import {
   requestSpaceSync,
   startConsumer,
@@ -16,6 +17,7 @@ import { settingsRoutes } from './modules/settings/events.ts'
 import { SETTINGS_CHANNEL } from './modules/settings/routes.ts'
 import { knowsAnySpace, spaceRoutes } from './modules/spaces/events.ts'
 import { accountRoutes } from './modules/wikis/accounts.ts'
+import { emailInvite, INVITE_EMAIL_JOB } from './modules/wikis/inviteEmails.ts'
 import { WIKI_CHANNEL } from './modules/wikis/live.ts'
 import { PURGE_WIKI_JOB, purgeWiki } from './modules/wikis/store.ts'
 import { createScheduler } from './scheduler/scheduler.ts'
@@ -94,10 +96,14 @@ if (spaces && !(await knowsAnySpace(db))) {
     logger.error({ err: error }, 'space sync request failed')
   }
 }
+const send = createMailer(config, logger)
 const stopScheduler = createScheduler({
   db,
   logger,
-  handlers: { [PURGE_WIKI_JOB]: purgeWiki }
+  handlers: {
+    [PURGE_WIKI_JOB]: purgeWiki,
+    [INVITE_EMAIL_JOB]: emailInvite({ appUrl: config.APP_URL, send })
+  }
 }).start(5000)
 const stopRelay = createRelay({
   db,

@@ -166,6 +166,8 @@ The personal wiki is stored with the name `Personal`. Clients show a translated 
 
 An invitation goes to an email of the inviting person's domain only, else `not_same_organization`. Twake Workplace gives an organization one mail domain, and B2C users that of their provider: the domain thus gives an email's tenant without saying whether it has an account.
 
+When `SMTP_URL` is set, a new invitation, or one given another role, is emailed to its address as the admin who shared: in the language of that person's settings, English when they have none or one Pages lacks, with a link to the wiki. Nothing is sent once the invitation is canceled or claimed, or the wiki deleted.
+
 A member who leaves a wiki, removed or by themself, loses their favorites and recent visits of its pages. Their follows and notifications stay, left out of their lists until they are a member again.
 
 `GET /people` suggests, by email, the people of the organization who have signed in to Pages, other than the person asking, whose email or name holds `q`, in any case. `q` is 1 to 200 characters, trimmed. Someone who never signed in is invited by their full email.

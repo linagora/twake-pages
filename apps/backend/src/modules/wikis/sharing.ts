@@ -3,8 +3,10 @@ import { z } from 'zod'
 import { inTenant, type Db, type Tx } from '../../infra/db.ts'
 import type { HttpServer } from '../../infra/http.ts'
 import { refuse, Refused, writeOrRefuse } from '../../infra/refusals.ts'
+import { schedule } from '../../scheduler/scheduler.ts'
 import type { Identity, RequireIdentity } from '../auth/index.ts'
 import { checkRole, roleOn, type Role } from './access.ts'
+import { INVITE_EMAIL_JOB, type InviteEmail } from './inviteEmails.ts'
 import { bumpWiki } from './live.ts'
 import { takeOutOfWiki } from './members.ts'
 import { wikiParams } from './routes.ts'
@@ -80,6 +82,12 @@ function createSharingStore(db: Db) {
             )
           )
         if (member) return
+        const [existing] = await tx
+          .select({ role: wikiInvites.role })
+          .from(wikiInvites)
+          .where(
+            and(eq(wikiInvites.wikiId, wikiId), eq(wikiInvites.email, email))
+          )
         await tx
           .insert(wikiInvites)
           .values({
@@ -93,6 +101,21 @@ function createSharingStore(db: Db) {
             target: [wikiInvites.wikiId, wikiInvites.email],
             set: { role }
           })
+        // An email goes out for a new invitation or a change of role. Its job
+        // reads the invitation when it runs, so it tells the role current then.
+        if (existing?.role === role) return
+        const job: InviteEmail = {
+          wikiId,
+          email,
+          invitedBy: identity.userId,
+          organizationId: wiki.organizationId
+        }
+        await schedule(tx, {
+          kind: INVITE_EMAIL_JOB,
+          key: `${INVITE_EMAIL_JOB}:${wikiId}:${email}`,
+          payload: job,
+          runAt: new Date()
+        })
       })
     },
 
