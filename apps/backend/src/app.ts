@@ -48,7 +48,11 @@ export async function buildApp(deps: {
       registerFavorites(api, { db: deps.db, requireIdentity })
       registerRecent(api, { db: deps.db, requireIdentity })
       registerSearch(api, { db: deps.db, requireIdentity })
-      registerHistory(api, { db: deps.db, requireIdentity })
+      registerHistory(api, {
+        db: deps.db,
+        requireIdentity,
+        gristOrigins: deps.gristOrigins
+      })
       registerLive(api, {
         db: deps.db,
         requireIdentity,

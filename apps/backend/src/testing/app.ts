@@ -8,6 +8,7 @@ import { listenToChanges } from '../infra/changes.ts'
 import { createDb, inTenant, type Db, type Tx } from '../infra/db.ts'
 import type { Identity } from '../modules/auth/index.ts'
 import { anIdentity } from '../modules/auth/testing.ts'
+import type { Blocks } from '../modules/pages/blocks.ts'
 import { pages, pageVersions } from '../modules/pages/schema.ts'
 import type { PageMove } from '../modules/pages/store.ts'
 import { SETTINGS_CHANNEL } from '../modules/settings/routes.ts'
@@ -161,6 +162,7 @@ async function addVersion(
     pageId: string
     number: number
     title: string
+    content?: Blocks | undefined
     gristUrl?: string | null
   }
 ) {
@@ -184,7 +186,7 @@ export async function putInTheTrash(tx: Tx, user: TestUser, pageId: string) {
 /**
  * A page written straight into the wiki, as the pages routes will write it,
  * with its first version, in the trash on its own when `deleted`. Given a
- * Grist address, it is a database page.
+ * Grist address, it is a database page. Its blocks, if given, go unchecked.
  */
 export async function aPageIn(
   db: Db,
@@ -195,6 +197,7 @@ export async function aPageIn(
     position: string
     parentId?: string
     deleted?: true
+    content?: Blocks
     gristUrl?: string
   }
 ): Promise<string> {
@@ -208,6 +211,7 @@ export async function aPageIn(
         parentId: page.parentId ?? null,
         kind: gristUrl === null ? 'document' : 'database',
         title: page.title,
+        content: page.content,
         gristUrl,
         position: page.position,
         createdBy: author.userId,
@@ -219,10 +223,41 @@ export async function aPageIn(
       pageId: written.id,
       number: 1,
       title: page.title,
+      content: page.content,
       gristUrl
     })
     if (page.deleted) await putInTheTrash(tx, author, written.id)
     return written.id
+  })
+}
+
+/**
+ * The next version of a database page, with another Grist address, written
+ * straight into the wiki as publishing will write it: by its number.
+ */
+export async function aGristVersionOf(
+  db: Db,
+  author: TestUser,
+  pageId: string,
+  gristUrl: string
+): Promise<void> {
+  await inTenant(db, author, async tx => {
+    const [page] = await tx
+      .select({ title: pages.title, version: pages.version })
+      .from(pages)
+      .where(eq(pages.id, pageId))
+    if (!page) throw new Error('no page')
+    const number = page.version + 1
+    await addVersion(tx, author, {
+      pageId,
+      number,
+      title: page.title,
+      gristUrl
+    })
+    await tx
+      .update(pages)
+      .set({ gristUrl, version: number })
+      .where(eq(pages.id, pageId))
   })
 }
 
@@ -629,6 +664,18 @@ export function setLabels(
   names: string[]
 ) {
   return app.as(user).put(`/pages/${pageId}/labels`, { names })
+}
+
+/** `POST /pages/:pageId/versions/:number/restore` by the person. */
+export function restoreVersion(
+  app: Awaited<ReturnType<typeof startApp>>,
+  user: TestUser,
+  pageId: string,
+  number: number | string
+) {
+  return app
+    .as(user)
+    .post(`/pages/${pageId}/versions/${String(number)}/restore`, {})
 }
 
 /** BlockNote's styled text, here with no style. */

@@ -145,3 +145,18 @@ export function checkBlocks(
   if (!blocksAllowed(blocks, gristOrigins)) throw new Refused('invalid_content')
   return { content: blocks, text: plainText(blocks) }
 }
+
+/**
+ * A database page's Grist address as the store keeps it, or
+ * `invalid_grist_url` off the Grist origins of the deployment.
+ */
+export function checkGristUrl(
+  gristUrl: string,
+  gristOrigins: readonly string[]
+): string {
+  const address = addressOf(gristUrl)
+  if (address === null || !gristOrigins.includes(address.origin)) {
+    throw new Refused('invalid_grist_url')
+  }
+  return gristUrl
+}

@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest'
 import { createDb } from '../../infra/db.ts'
 import {
+  aBlock,
+  aGristVersionOf,
   aPage,
   aPageIn,
   aUser,
@@ -8,11 +10,16 @@ import {
   GRIST_ORIGIN,
   joinWiki,
   malformedOrUnknownIds,
+  pageOf,
   paragraph,
   personOf,
   publish,
+  restoreVersion,
   startApp,
+  textsOf,
+  versionOf,
   waysOutOfAWiki,
+  wikiRowsOf,
   type Page,
   type Person,
   type TestUser
@@ -38,6 +45,9 @@ interface VersionSummary {
   createdAt: string
   restoredFrom: number | null
 }
+
+/** A Grist origin the deployment named once, and names no longer. */
+const FORMER_GRIST_ORIGIN = 'https://grist.example.net'
 
 /** What names no version of a page at its version 2. */
 const numbersOfNoVersion: [string, string][] = [
@@ -268,6 +278,254 @@ describe('GET /pages/:pageId/versions/:number', () => {
     'answers not_found for a page with %s',
     async (_case, pageId) => {
       const response = await getVersion(aUser(), pageId, 1)
+
+      expect(response.statusCode).toBe(404)
+      expect(response.json()).toEqual({ error: 'not_found' })
+    }
+  )
+})
+
+describe('POST /pages/:pageId/versions/:number/restore', () => {
+  it('publishes the version’s title and blocks again, as the newest version', async () => {
+    const { alice, bob, wiki, page, first } = await anOnboardingPage()
+
+    const response = await restoreVersion(api, bob, page.id, 1)
+
+    expect(response.statusCode).toBe(201)
+    expect(response.json()).toEqual({
+      id: page.id,
+      wikiId: wiki.id,
+      parentId: null,
+      home: false,
+      kind: 'document',
+      title: 'Onboarding',
+      content: first.content,
+      gristUrl: null,
+      version: 3,
+      createdAt: page.createdAt,
+      createdBy: personOf(alice),
+      updatedAt: expect.any(String) as string,
+      updatedBy: personOf(bob),
+      labels: [],
+      ancestors: [],
+      following: true,
+      favorite: false,
+      deletedAt: null
+    })
+  })
+
+  it('lists the new version as restored from the version', async () => {
+    const { alice, bob, page } = await anOnboardingPage()
+
+    const restored = await restoreVersion(api, bob, page.id, 1)
+
+    const history = await listVersions(alice, page.id)
+    expect(history.json<{ versions: VersionSummary[] }>().versions[0]).toEqual({
+      number: 3,
+      title: 'Onboarding',
+      author: personOf(bob),
+      createdAt: restored.json<Page>().updatedAt,
+      restoredFrom: 1
+    })
+  })
+
+  it('publishes the current version again, as the next one restored from it', async () => {
+    const { alice, page, second } = await anOnboardingPage()
+
+    const response = await restoreVersion(api, alice, page.id, 2)
+
+    expect(response.statusCode).toBe(201)
+    expect(response.json()).toMatchObject({ ...second, version: 3 })
+    const history = await listVersions(alice, page.id)
+    expect(
+      history.json<{ versions: VersionSummary[] }>().versions[0]
+    ).toMatchObject({ number: 3, restoredFrom: 2 })
+  })
+
+  it('gives the page the plain text of the version again', async () => {
+    const { alice, bob, page } = await anOnboardingPage()
+
+    await restoreVersion(api, bob, page.id, 1)
+
+    expect(await textsOf(db, alice, page.id)).toEqual({
+      page: 'Ask for a laptop',
+      versions: ['Ask for a laptop', 'Bring your badge', 'Ask for a laptop']
+    })
+  })
+
+  it('makes the person who restores it follow the page', async () => {
+    const { alice, wiki, page } = await anOnboardingPage()
+    const carol = aUser({ organizationId: alice.organizationId })
+    await joinWiki(db, alice, wiki.id, carol, 'editor')
+    const before = (await pageOf(api, carol, page.id)).following
+
+    await restoreVersion(api, carol, page.id, 1)
+
+    expect([before, (await pageOf(api, carol, page.id)).following]).toEqual([
+      false,
+      true
+    ])
+  })
+
+  it('moves the wiki’s version, so everyone sees the restored version live', async () => {
+    const { alice, bob, wiki, page } = await anOnboardingPage()
+    const before = await versionOf(api, alice, wiki.id)
+
+    await restoreVersion(api, bob, page.id, 1)
+
+    expect(await versionOf(api, alice, wiki.id)).toBeGreaterThan(before)
+  })
+
+  it('restores a database page’s version with its Grist address, and no blocks', async () => {
+    const alice = aUser()
+    const wiki = await aWikiOf(api, alice)
+    const first = `${GRIST_ORIGIN}/o/docs/4kq2/Budget`
+    // Written straight into the wiki, as no route makes a database page or
+    // publishes one yet.
+    const pageId = await aPageIn(db, alice, wiki.id, {
+      title: 'Budget',
+      position: 'a0',
+      gristUrl: first
+    })
+    await aGristVersionOf(
+      db,
+      alice,
+      pageId,
+      `${GRIST_ORIGIN}/o/docs/9mz3/Budget`
+    )
+
+    const response = await restoreVersion(api, alice, pageId, 1)
+
+    expect(response.statusCode).toBe(201)
+    expect(response.json()).toMatchObject({
+      kind: 'database',
+      content: [],
+      gristUrl: first,
+      version: 3
+    })
+  })
+
+  it('answers invalid_content for blocks publishing refuses now, and leaves the wiki as it was', async () => {
+    const alice = aUser()
+    const wiki = await aWikiOf(api, alice)
+    // Written straight into the wiki, as published while the deployment's
+    // Grist origins still named this one.
+    const pageId = await aPageIn(db, alice, wiki.id, {
+      title: 'Budget',
+      position: 'a0',
+      content: [
+        aBlock('gristEmbed', {
+          props: { url: `${FORMER_GRIST_ORIGIN}/o/docs/4kq2/Budget` }
+        })
+      ]
+    })
+    await publish(api, alice, pageId, {
+      baseVersion: 1,
+      title: 'Budget',
+      content: []
+    })
+    const before = await versionOf(api, alice, wiki.id)
+
+    const response = await restoreVersion(api, alice, pageId, 1)
+
+    expect(response.statusCode).toBe(400)
+    expect(response.json()).toEqual({ error: 'invalid_content' })
+    expect(await versionOf(api, alice, wiki.id)).toBe(before)
+  })
+
+  it('answers invalid_grist_url for an address off the deployment’s Grist origins, and leaves the wiki as it was', async () => {
+    const alice = aUser()
+    const wiki = await aWikiOf(api, alice)
+    // Written straight into the wiki, as no route makes a database page or
+    // publishes one yet, while the deployment's Grist origins named this one.
+    const pageId = await aPageIn(db, alice, wiki.id, {
+      title: 'Budget',
+      position: 'a0',
+      gristUrl: `${FORMER_GRIST_ORIGIN}/o/docs/4kq2/Budget`
+    })
+    await aGristVersionOf(
+      db,
+      alice,
+      pageId,
+      `${GRIST_ORIGIN}/o/docs/4kq2/Budget`
+    )
+    const before = await versionOf(api, alice, wiki.id)
+
+    const response = await restoreVersion(api, alice, pageId, 1)
+
+    expect(response.statusCode).toBe(400)
+    expect(response.json()).toEqual({ error: 'invalid_grist_url' })
+    expect(await versionOf(api, alice, wiki.id)).toBe(before)
+  })
+
+  it('answers in_trash for a page in the trash, and leaves the wiki as it was', async () => {
+    const alice = aUser()
+    const wiki = await aWikiOf(api, alice)
+    const pageId = await aPageIn(db, alice, wiki.id, {
+      title: 'Drafts',
+      position: 'a0',
+      deleted: true
+    })
+    const before = await versionOf(api, alice, wiki.id)
+
+    const response = await restoreVersion(api, alice, pageId, 1)
+
+    expect(response.statusCode).toBe(409)
+    expect(response.json()).toEqual({ error: 'in_trash' })
+    expect(await versionOf(api, alice, wiki.id)).toBe(before)
+  })
+
+  it('answers forbidden to a viewer, and leaves the wiki as it was', async () => {
+    const { alice, wiki, page } = await anOnboardingPage()
+    const viewer = aUser({ organizationId: alice.organizationId })
+    await joinWiki(db, alice, wiki.id, viewer, 'viewer')
+    const before = await versionOf(api, alice, wiki.id)
+
+    const response = await restoreVersion(api, viewer, page.id, 1)
+
+    expect(response.statusCode).toBe(403)
+    expect(response.json()).toEqual({ error: 'forbidden' })
+    expect(await versionOf(api, alice, wiki.id)).toBe(before)
+  })
+
+  it.each(waysOutOfAWiki)(
+    'answers not_found for a page of %s, and leaves the wiki as it was',
+    async (_case, someone, takeOut) => {
+      const alice = someone()
+      const carol = aUser({ organizationId: alice.organizationId })
+      const wiki = await aWikiOf(api, carol)
+      await joinWiki(db, carol, wiki.id, alice, 'editor')
+      const pageId = await aPage(api, carol, wiki.id, { title: 'Onboarding' })
+      expect((await restoreVersion(api, alice, pageId, 1)).statusCode).toBe(201)
+      await takeOut(api, db, carol, wiki.id, alice)
+      const before = await wikiRowsOf(db, carol, wiki.id)
+
+      const response = await restoreVersion(api, alice, pageId, 1)
+
+      expect(response.statusCode).toBe(404)
+      expect(response.json()).toEqual({ error: 'not_found' })
+      expect(await wikiRowsOf(db, carol, wiki.id)).toEqual(before)
+    }
+  )
+
+  it.each(numbersOfNoVersion)(
+    'answers not_found for %s, and leaves the wiki as it was',
+    async (_case, number) => {
+      const { alice, wiki, page } = await anOnboardingPage()
+      const before = await versionOf(api, alice, wiki.id)
+
+      const response = await restoreVersion(api, alice, page.id, number)
+
+      expect(response.statusCode).toBe(404)
+      expect(response.json()).toEqual({ error: 'not_found' })
+      expect(await versionOf(api, alice, wiki.id)).toBe(before)
+    }
+  )
+
+  it.each(malformedOrUnknownIds)(
+    'answers not_found for a page with %s',
+    async (_case, pageId) => {
+      const response = await restoreVersion(api, aUser(), pageId, 1)
 
       expect(response.statusCode).toBe(404)
       expect(response.json()).toEqual({ error: 'not_found' })

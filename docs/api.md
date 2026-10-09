@@ -173,7 +173,7 @@ The personal wiki is stored with the name `Personal`. Clients show a translated 
 | `POST /pages/:pageId/versions` | `{ baseVersion, title, content }` or, for a database page, `{ baseVersion, title, gristUrl }` | `201 Page`, the author follows it; `409 { error: 'edit_conflict', current: VersionSummary }` | editor |
 | `GET /pages/:pageId/versions` | | `{ versions: VersionSummary[] }`, newest first | member |
 | `GET /pages/:pageId/versions/:number` | | `Version` | member |
-| `POST /pages/:pageId/versions/:number/restore` | | `201 Page`, a new version with `restoredFrom` | editor |
+| `POST /pages/:pageId/versions/:number/restore` | | `201 Page`, a new version with `restoredFrom`, the person follows it; restoring the current version publishes it again; the version's blocks or Grist address are checked again, as a draft's | editor |
 | `POST /pages/:pageId/move` | `{ parentId, afterId?, beforeId? }` | `{ parentId, position }` | editor |
 | `DELETE /pages/:pageId` | | `204`, the page and its live descendants go to the trash | editor |
 | `PUT /pages/:pageId/labels` | `{ names: string[] }`, at most 50 | `{ labels: string[] }`, creating missing labels in the wiki | editor |

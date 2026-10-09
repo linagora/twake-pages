@@ -14,6 +14,7 @@ import {
   paragraph,
   personalWikiOf,
   publish,
+  restoreVersion,
   startApp,
   type TestUser
 } from '../../testing/app.ts'
@@ -247,6 +248,49 @@ describe('com.twake.pages.page.published.v1', () => {
           },
           version: 2,
           preview: 'Steps\nAsk for a laptop'
+        }
+      }
+    ])
+  })
+
+  it('goes out when an editor restores a version, as for any version after the first', async () => {
+    const alice = aUser()
+    const bob = aUser({ organizationId: alice.organizationId })
+    const wiki = await aWikiOf(api, alice)
+    await joinWiki(db, alice, wiki.id, bob, 'editor')
+    const pageId = await aPage(api, alice, wiki.id, {
+      title: 'Onboarding',
+      content: [paragraph('Ask for a laptop')]
+    })
+    await publish(api, alice, pageId, {
+      baseVersion: 1,
+      title: 'Welcome',
+      content: []
+    })
+
+    await restoreVersion(api, bob, pageId, 1)
+
+    expect(await eventsOf(pageId)).toEqual([
+      expect.objectContaining({ type: 'com.twake.pages.page.created.v1' }),
+      expect.objectContaining({ type: 'com.twake.pages.page.published.v1' }),
+      {
+        specversion: '1.0',
+        id: expect.stringMatching(UUID_V7) as string,
+        source: 'twake://pages',
+        type: 'com.twake.pages.page.published.v1',
+        time: expect.stringMatching(TIME) as string,
+        twakeorg: alice.organizationId,
+        twakeactorid: bob.userId,
+        twakeactor: bob.email,
+        data: {
+          object: {
+            type: 'page',
+            id: pageId,
+            title: 'Onboarding',
+            container: { kind: 'wiki', id: wiki.id }
+          },
+          version: 3,
+          preview: 'Ask for a laptop'
         }
       }
     ])

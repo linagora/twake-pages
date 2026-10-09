@@ -238,6 +238,8 @@ async function writeVersion(
     title: string
     content?: Blocks | undefined
     text?: string | undefined
+    gristUrl?: string | null | undefined
+    restoredFrom?: number | undefined
   }
 ) {
   await tx.insert(pageVersions).values({
@@ -306,7 +308,11 @@ export async function addPage(
  * `not_found` out of their reach, `forbidden` to a viewer, `in_trash` in the
  * trash.
  */
-async function pageToPublish(tx: Tx, identity: Identity, pageId: string) {
+export async function pageToPublish(
+  tx: Tx,
+  identity: Identity,
+  pageId: string
+) {
   const [found] = await tx
     .select({ wikiId: pages.wikiId })
     .from(pages)
@@ -334,20 +340,28 @@ async function pageToPublish(tx: Tx, identity: Identity, pageId: string) {
 
 /**
  * Publishes the page's next version, by the person, who then follows the
- * page, and answers the page as they see it.
+ * page, and answers the page as they see it. A restored version names the
+ * version it was restored from.
  */
-async function publishVersion(
+export async function publishVersion(
   tx: Tx,
   identity: Identity,
   page: Awaited<ReturnType<typeof pageToPublish>>,
-  version: { title: string; content: Blocks; text: string }
+  version: {
+    title: string
+    content: Blocks
+    text: string
+    gristUrl?: string | null
+  },
+  restoredFrom?: number
 ) {
   const number = page.version + 1
   await writeVersion(tx, identity, {
     pageId: page.id,
     organizationId: page.organizationId,
     number,
-    ...version
+    ...version,
+    restoredFrom
   })
   await tx
     .update(pages)
