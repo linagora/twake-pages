@@ -171,4 +171,21 @@ describe('ShareWikiDialog', () => {
       within(bob).getByRole('button', { name: 'Role: Editor' })
     ).toBeVisible()
   })
+
+  it('lets the admin cancel an invitation', async () => {
+    const pagesApi = fakePagesApi()
+    const wiki = pagesApi.withWiki({ name: 'Engineering' })
+    await pagesApi.invite(wiki.id, 'eve@example.com', 'editor')
+    const dialog = await openSharing(pagesApi, wiki.id)
+    const eve = await dialog.findByRole('listitem', { name: 'eve@example.com' })
+
+    fireEvent.click(within(eve).getByRole('button', { name: 'Role: Editor' }))
+    expect(screen.queryByRole('menuitem', { name: 'Viewer' })).toBeNull()
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Cancel invitation' }))
+
+    await waitForElementToBeRemoved(eve)
+    await expect(pagesApi.getMembers(wiki.id)).resolves.toMatchObject({
+      invites: []
+    })
+  })
 })

@@ -224,7 +224,17 @@ export function ShareWikiDialog({
             >
               {/* Unlike Twake Tasks' "Pending": the word the domain gives it. */}
               <Chip size="small" label={t('sharing.invitation')} />
-              <RoleMenu value={invitation.role} />
+              <RoleMenu
+                value={invitation.role}
+                action={{
+                  label: t('sharing.cancelInvitation'),
+                  run: () => {
+                    change.mutate(api =>
+                      api.cancelInvite(wiki.id, invitation.id)
+                    )
+                  }
+                }}
+              />
             </PersonRow>
           ))}
         </List>

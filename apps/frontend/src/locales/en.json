@@ -91,6 +91,7 @@
     "invited": "Invited %{email}.",
     "people": "People with access",
     "invitation": "Invitation",
+    "cancelInvitation": "Cancel invitation",
     "remove": "Remove",
     "close": "Close"
   },
