@@ -9,7 +9,7 @@ import {
   type FakePagesApi
 } from '@/testing/fakePagesApi'
 import { pathToThePage } from '@/testing/pagePath'
-import { renderRoute } from '@/testing/renderWithProviders'
+import { renderRoute, WIKI_BASES } from '@/testing/renderWithProviders'
 
 const BOB = 'bob@example.com'
 const PAGE_NOT_FOUND = "This page doesn't exist, or you can't open it."
@@ -218,7 +218,7 @@ describe('a wiki open in two places', () => {
     ).toBeVisible()
   })
 
-  it.each(['/wikis', '/embed/wikis'])(
+  it.each(WIKI_BASES)(
     'shows in the tree a page added elsewhere, at %s/<wiki>',
     async base => {
       const { pagesApi, bob, wiki } = sharedHandbook()

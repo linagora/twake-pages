@@ -5,7 +5,7 @@ import { ApiError } from '@/application/pages'
 import type { Block } from '@/domain/page'
 import { findEmptyState } from '@/testing/emptyState'
 import { fakePagesApi } from '@/testing/fakePagesApi'
-import { renderRoute } from '@/testing/renderWithProviders'
+import { renderRoute, WIKI_BASES } from '@/testing/renderWithProviders'
 
 const NOT_FOUND = "This page doesn't exist, or you can't open it."
 
@@ -193,7 +193,7 @@ describe('a page', () => {
     ).toBeVisible()
   })
 
-  it.each(['/wikis', '/embed/wikis'])(
+  it.each(WIKI_BASES)(
     'leads from %s/<wiki>/pages/<page> to the pages above it, from the home page down',
     async base => {
       const { pagesApi, wiki, engineering, releases, checklist } = handbook()
@@ -222,7 +222,7 @@ describe('a page', () => {
     expect(linksIn(path)).toEqual([['Personal', `/wikis/${wiki.id}`]])
   })
 
-  it.each(['/wikis', '/embed/wikis'])(
+  it.each(WIKI_BASES)(
     'is not found at %s/<wiki>/pages/<page> once deleted for good',
     async base => {
       const { pagesApi, wiki, checklist } = handbook()
@@ -272,7 +272,7 @@ describe('a page', () => {
 })
 
 describe('the Edit action of a page', () => {
-  it.each(['/wikis', '/embed/wikis'])(
+  it.each(WIKI_BASES)(
     'leads an editor of the wiki at %s/<wiki>/pages/<page> to the editor',
     async base => {
       const pagesApi = fakePagesApi()

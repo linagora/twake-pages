@@ -58,6 +58,9 @@ export function renderWithProviders(
   )
 }
 
+/** Where the routes of a wiki start: in the app, and in the frame of TwakeSpace. */
+export const WIKI_BASES = ['/wikis', '/embed/wikis'] as const
+
 export function renderRoute(
   path: string,
   options: Options = {}

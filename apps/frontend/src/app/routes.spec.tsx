@@ -2,7 +2,7 @@ import { screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
 import { fakePagesApi } from '@/testing/fakePagesApi'
-import { renderRoute } from '@/testing/renderWithProviders'
+import { renderRoute, WIKI_BASES } from '@/testing/renderWithProviders'
 
 // Below a wiki; :page stands for one of its pages.
 const wikiScreens: [path: string, heading: string][] = [
@@ -16,7 +16,7 @@ const wikiScreens: [path: string, heading: string][] = [
 ]
 
 /** Renders a path below a wiki of the person, and answers the wiki's own. */
-function renderInWiki(base: '/wikis' | '/embed/wikis', path: string) {
+function renderInWiki(base: (typeof WIKI_BASES)[number], path: string) {
   const pagesApi = fakePagesApi()
   const wiki = pagesApi.withWiki({ name: 'Handbook' })
   const page = pagesApi.withPage(wiki.id, { title: 'Release checklist' })
@@ -67,7 +67,7 @@ describe('the routes', () => {
     }
   )
 
-  it.each(['/wikis', '/embed/wikis'] as const)(
+  it.each(WIKI_BASES)(
     'lead from %s/<wiki> to the home page, the search and the trash of the wiki',
     async base => {
       const wikiPath = renderInWiki(base, '/pages/:page')

@@ -11,7 +11,7 @@ import { describe, expect, it } from 'vitest'
 import { ApiError } from '@/application/pages'
 import { fakePagesApi } from '@/testing/fakePagesApi'
 import { typeIn } from '@/testing/forms'
-import { renderRoute } from '@/testing/renderWithProviders'
+import { renderRoute, WIKI_BASES } from '@/testing/renderWithProviders'
 
 const OPTIONS = 'Wiki options'
 const WIKI_NOT_FOUND = "This wiki doesn't exist, or you can't open it."
@@ -308,7 +308,7 @@ describe('the home page as a favorite', () => {
 })
 
 describe('the Edit action of the home page', () => {
-  it.each(['/wikis', '/embed/wikis'])(
+  it.each(WIKI_BASES)(
     'leads an editor of the wiki at %s/<wiki> to the editor of its home page',
     async base => {
       const pagesApi = fakePagesApi()

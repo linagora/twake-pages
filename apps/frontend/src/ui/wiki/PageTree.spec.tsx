@@ -5,7 +5,7 @@ import { ApiError } from '@/application/pages'
 import type { Role } from '@/domain/wiki'
 import { findEmptyState } from '@/testing/emptyState'
 import { fakePagesApi } from '@/testing/fakePagesApi'
-import { renderRoute } from '@/testing/renderWithProviders'
+import { renderRoute, WIKI_BASES } from '@/testing/renderWithProviders'
 
 /**
  * Onboarding, with First day and First week under it, then Engineering, with
@@ -141,17 +141,14 @@ describe('the tree of a wiki', () => {
     expect(item('Release checklist')).toHaveAttribute('aria-current', 'page')
   })
 
-  it.each(['/wikis', '/embed/wikis'])(
-    'leads from %s/<wiki> to each page',
-    async base => {
-      const { pagesApi, wiki, engineering } = handbook()
-      renderRoute(`${base}/${wiki.id}`, { pagesApi })
+  it.each(WIKI_BASES)('leads from %s/<wiki> to each page', async base => {
+    const { pagesApi, wiki, engineering } = handbook()
+    renderRoute(`${base}/${wiki.id}`, { pagesApi })
 
-      expect(
-        await screen.findByRole('treeitem', { name: 'Engineering' })
-      ).toHaveAttribute('href', `${base}/${wiki.id}/pages/${engineering.id}`)
-    }
-  )
+    expect(
+      await screen.findByRole('treeitem', { name: 'Engineering' })
+    ).toHaveAttribute('href', `${base}/${wiki.id}/pages/${engineering.id}`)
+  })
 
   it('says when the wiki has no pages but its home page', async () => {
     const pagesApi = fakePagesApi()

@@ -5,7 +5,7 @@ import { ApiError } from '@/application/pages'
 import type { Role } from '@/domain/wiki'
 import { fakePagesApi } from '@/testing/fakePagesApi'
 import { chooseIn, typeIn } from '@/testing/forms'
-import { renderRoute } from '@/testing/renderWithProviders'
+import { renderRoute, WIKI_BASES } from '@/testing/renderWithProviders'
 import type { SupportedLanguage } from '@/ui/i18n/languages'
 
 /** Opens the dialog of a new page from the home page of the wiki. */
@@ -49,7 +49,7 @@ async function engineering({
 }
 
 describe('a new page', () => {
-  it.each(['/wikis', '/embed/wikis'])(
+  it.each(WIKI_BASES)(
     'opens once created at the top of the tree, from the home page at %s/<wiki>',
     async base => {
       const { pagesApi, wiki, router } = await engineering({ base })
@@ -195,7 +195,7 @@ describe('the template of a new page', () => {
 })
 
 describe('a child page', () => {
-  it.each(['/wikis', '/embed/wikis'])(
+  it.each(WIKI_BASES)(
     'opens once created under its parent, from the menu of the parent at %s/<wiki>',
     async base => {
       const { pagesApi, wiki, parent, router } = await engineering({
@@ -267,7 +267,7 @@ describe('a child page', () => {
     ).not.toBeInTheDocument()
   })
 
-  it.each(['/wikis', '/embed/wikis'])(
+  it.each(WIKI_BASES)(
     'opens once created under its parent, from the tree at %s/<wiki>',
     async base => {
       const { pagesApi, wiki, parent, router } = await engineering({
