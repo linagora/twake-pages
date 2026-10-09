@@ -4,12 +4,15 @@ import { outbox } from '../../events/schema.ts'
 import { createDb } from '../../infra/db.ts'
 import {
   aB2cUser,
+  aCommentOn,
   aPage,
   aSpaceWiki,
   aUser,
   aWikiOf,
   createPage,
+  deleteComment,
   deletePage,
+  editComment,
   joinWiki,
   movePage,
   paragraph,
@@ -415,5 +418,136 @@ describe('com.twake.pages.page.restored.v1', () => {
 
     const [, , restored] = await eventsOf(onboarding)
     expect(restored?.data).toHaveProperty('descendants', 0)
+  })
+})
+
+describe('com.twake.pages.page.commented.v1', () => {
+  it('goes out through the outbox when a viewer comments on a page', async () => {
+    const alice = aUser()
+    const bob = aUser({ organizationId: alice.organizationId })
+    const wiki = await aWikiOf(api, alice)
+    await joinWiki(db, alice, wiki.id, bob, 'viewer')
+    const pageId = await aPage(api, alice, wiki.id, { title: 'Onboarding' })
+
+    const written = await aCommentOn(api, bob, pageId, { body: 'Looks good.' })
+
+    expect(await eventsOf(pageId)).toEqual([
+      expect.objectContaining({ type: 'com.twake.pages.page.created.v1' }),
+      {
+        specversion: '1.0',
+        id: expect.stringMatching(UUID_V7) as string,
+        source: 'twake://pages',
+        type: 'com.twake.pages.page.commented.v1',
+        time: expect.stringMatching(TIME) as string,
+        twakeorg: alice.organizationId,
+        twakeactorid: bob.userId,
+        twakeactor: bob.email,
+        data: {
+          object: {
+            type: 'page',
+            id: pageId,
+            title: 'Onboarding',
+            container: { kind: 'wiki', id: wiki.id }
+          },
+          commentId: written.id,
+          preview: 'Looks good.'
+        }
+      }
+    ])
+  })
+
+  it('leaves twakeorg out in B2C', async () => {
+    const alice = aB2cUser()
+    const wiki = await aWikiOf(api, alice)
+
+    await aCommentOn(api, alice, wiki.homePageId, { body: 'Plan' })
+
+    const [event] = await eventsOf(wiki.homePageId)
+    expect(event).toHaveProperty('type', 'com.twake.pages.page.commented.v1')
+    expect(event).not.toHaveProperty('twakeorg')
+    expect(event).toHaveProperty('twakeactorid', alice.userId)
+  })
+
+  it('goes out for a reply, as for a comment', async () => {
+    const alice = aUser()
+    const wiki = await aWikiOf(api, alice)
+    const written = await aCommentOn(api, alice, wiki.homePageId, {
+      body: 'Plan'
+    })
+
+    const reply = await aCommentOn(api, alice, wiki.homePageId, {
+      body: 'Agreed',
+      parentId: written.id
+    })
+
+    const [, replied] = await eventsOf(wiki.homePageId)
+    expect(replied).toHaveProperty('type', 'com.twake.pages.page.commented.v1')
+    expect(replied?.data).toEqual(
+      expect.objectContaining({ commentId: reply.id, preview: 'Agreed' })
+    )
+  })
+
+  // As Twake Tasks names the recipients of its events: by the email of their
+  // membership, the person who acted among them.
+  it('names the members a comment mentions as its recipients, by the email of their membership, its author among them', async () => {
+    const alice = aUser()
+    const carol = aUser({ organizationId: alice.organizationId })
+    const wiki = await aWikiOf(api, alice)
+    await joinWiki(db, alice, wiki.id, carol, 'viewer')
+
+    await aCommentOn(api, alice, wiki.homePageId, {
+      body: `@${carol.email.toUpperCase()} and @${alice.email}, ask @ghost@example.com`
+    })
+
+    const [event] = await eventsOf(wiki.homePageId)
+    expect(event?.data).toHaveProperty('recipients', [
+      { uuid: carol.userId, email: carol.email, reason: 'mentioned' },
+      { uuid: alice.userId, email: alice.email, reason: 'mentioned' }
+    ])
+  })
+
+  // As Twake Tasks leaves out the recipients of an event that has none.
+  it('leaves recipients out when the comment mentions no member', async () => {
+    const alice = aUser()
+    const wiki = await aWikiOf(api, alice)
+
+    await aCommentOn(api, alice, wiki.homePageId, {
+      body: 'Ask @ghost@example.com'
+    })
+
+    const [event] = await eventsOf(wiki.homePageId)
+    expect(event?.data).not.toHaveProperty('recipients')
+  })
+
+  // Cut between characters, as the text of a page, so an emoji at the end
+  // stays whole.
+  it('previews the first 280 characters of the comment', async () => {
+    const alice = aUser()
+    const wiki = await aWikiOf(api, alice)
+    const start = `${'a'.repeat(279)}😀`
+
+    await aCommentOn(api, alice, wiki.homePageId, { body: `${start}b` })
+
+    const [event] = await eventsOf(wiki.homePageId)
+    expect(event?.data).toHaveProperty('preview', start)
+  })
+
+  it('goes out for no edit and no deletion of a comment', async () => {
+    const alice = aUser()
+    const carol = aUser({ organizationId: alice.organizationId })
+    const wiki = await aWikiOf(api, alice)
+    await joinWiki(db, alice, wiki.id, carol, 'viewer')
+    const written = await aCommentOn(api, alice, wiki.homePageId, {
+      body: 'Plan'
+    })
+
+    await editComment(api, alice, written.id, {
+      body: `Plan, @${carol.email}?`
+    })
+    await deleteComment(api, alice, written.id)
+
+    expect(await eventsOf(wiki.homePageId)).toEqual([
+      expect.objectContaining({ type: 'com.twake.pages.page.commented.v1' })
+    ])
   })
 })

@@ -2,6 +2,7 @@ import { and, asc, eq, isNull, sql } from 'drizzle-orm'
 import { inTenant, type Db, type Tx } from '../../infra/db.ts'
 import { Refused, writeOrRefuse } from '../../infra/refusals.ts'
 import type { Identity } from '../auth/index.ts'
+import { previewOf, queuePageEvent } from '../pages/events.ts'
 import { pages } from '../pages/schema.ts'
 import { follow, pageInReach, pageToChange } from '../pages/store.ts'
 import { checkRole } from '../wikis/access.ts'
@@ -126,7 +127,7 @@ export function createCommentStore(db: Db) {
 
     /**
      * A comment by the person, who then follows the page, as do the members
-     * it mentions.
+     * it mentions, and its event, queued with them as its recipients.
      */
     addComment(identity: Identity, pageId: string, input: NewComment) {
       return writeOrRefuse(db, identity, async tx => {
@@ -149,6 +150,19 @@ export function createCommentStore(db: Db) {
         await follow(tx, page, identity.userId)
         const mentioned = await membersMentioned(tx, page.wikiId, input.body)
         for (const member of mentioned) await follow(tx, page, member.userId)
+        // As Twake Tasks names the recipients of an assignment: by the email
+        // of their membership, the person who acted among them, the key left
+        // out when there are none.
+        const recipients = mentioned.map(member => ({
+          uuid: member.userId,
+          email: member.email,
+          reason: 'mentioned'
+        }))
+        await queuePageEvent(tx, identity, 'commented', page, {
+          commentId: added.id,
+          preview: previewOf(added.body),
+          ...(recipients.length > 0 ? { recipients } : {})
+        })
         return commentOf(added)
       })
     },

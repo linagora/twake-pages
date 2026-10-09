@@ -312,5 +312,5 @@ Published on the `activity` exchange through the outbox, as `com.twake.pages.pag
 
 - `created` (with `data.preview`), `moved` (`data.from` and `data.to` parent ids, null at the top), `deleted` and `restored` (`data.descendants`). `moved` goes out when a page changes parent, not when it changes place among the same siblings, as Twake Tasks tells only of a task moved to another section.
 - `published` for every version after the first, with `data.version` and `data.preview`.
-- `commented` with `data.commentId`, `data.preview` (the comment), and `data.recipients` for the people mentioned: `{ uuid, email, reason: 'mentioned' }`.
+- `commented` for every comment, a reply too, with `data.commentId`, `data.preview` (the first 280 characters of the comment, as `published` previews its text) and `data.recipients` for the members it mentions: `{ uuid, email, reason: 'mentioned' }`, by the email of their membership, its author among them when they mention themselves, as Twake Tasks names the assignee of an assignment. The key is left out when the comment mentions no member. Editing or deleting a comment queues no event.
 - The space integration publishes `com.twake.pages.space.provisioned.v1` with `data: { space_id, resource: { kind: 'wiki', id } }`.
