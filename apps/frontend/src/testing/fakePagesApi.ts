@@ -647,10 +647,7 @@ function signedIn(world: World, person: Person): FakePagesApi {
       .flatMap(stored => {
         const page = world.pages.get(stored.pageId)
         const wiki = page && wikiOf(page.wikiId)
-        const seen =
-          stored.userId === person.id &&
-          wiki?.members.has(person.id) &&
-          (stored.commentId === null || world.comments.has(stored.commentId))
+        const seen = stored.userId === person.id && wiki?.members.has(person.id)
         return page && wiki && seen ? [{ stored, page, wiki }] : []
       })
       .reverse()
@@ -1437,6 +1434,11 @@ function signedIn(world: World, person: Person): FakePagesApi {
             world.comments.delete(each.id)
           }
         }
+        // As the database deletes them, through their key to the comment.
+        world.notifications = world.notifications.filter(
+          stored =>
+            stored.commentId === null || world.comments.has(stored.commentId)
+        )
         bump(wiki)
       })
     ),
