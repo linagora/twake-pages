@@ -36,7 +36,8 @@ export function WikiHomeScreen(): ReactElement {
                 <Typography variant="h3" component="h1" noWrap>
                   {name}
                 </Typography>
-                {wiki.data.description && (
+                {/* Saved as typed: a description of blanks only says none. */}
+                {wiki.data.description.trim() !== '' && (
                   <Typography variant="body2" color="textSecondary">
                     {wiki.data.description}
                   </Typography>

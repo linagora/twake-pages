@@ -94,16 +94,17 @@ describe('a new wiki', () => {
 
     const dialog = await openNewWiki()
     typeIn(dialog, 'Name', ' Engineering ')
-    typeIn(dialog, 'Description', 'How we build')
+    typeIn(dialog, 'Description', ' How we build\n')
     fireEvent.click(within(dialog).getByRole('button', { name: 'Create' }))
 
     expect(
       await screen.findByRole('heading', { level: 1, name: 'Engineering' })
     ).toBeVisible()
     expect(screen.getByText('How we build')).toBeVisible()
+    // The name trimmed, the description as typed.
     expect(pagesApi.createWiki).toHaveBeenCalledWith({
       name: 'Engineering',
-      description: 'How we build'
+      description: ' How we build\n'
     })
     expect(router.state.location.pathname).toMatch(/^\/wikis\/[^/]+$/)
   })

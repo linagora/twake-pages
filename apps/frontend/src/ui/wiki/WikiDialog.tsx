@@ -64,8 +64,10 @@ export function WikiDialog({
       <form
         onSubmit={event => {
           event.preventDefault()
+          // The description goes as typed, as the API keeps it and as Twake
+          // Tasks saves its descriptions.
           change.mutate(
-            { name: name.trim(), description: description.trim() },
+            { name: name.trim(), description },
             { onSuccess: onSaved }
           )
         }}

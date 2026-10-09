@@ -41,6 +41,23 @@ describe('WikiHomeScreen', () => {
     })
   })
 
+  it('shows no description made of blanks only', async () => {
+    const pagesApi = fakePagesApi()
+    const wiki = await pagesApi.createWiki({
+      name: 'Handbook',
+      description: ' \n '
+    })
+    renderRoute(`/wikis/${wiki.id}`, { pagesApi })
+
+    const version = await screen.findByText('Version 1')
+
+    // Right under the name of the wiki, with no empty line between.
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Handbook' })
+        .nextElementSibling
+    ).toBe(version)
+  })
+
   it('shows the personal wiki under its label, in the language of the person', async () => {
     const pagesApi = fakePagesApi()
     const personal = pagesApi.withWiki({ kind: 'personal' })
