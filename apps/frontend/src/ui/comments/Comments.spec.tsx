@@ -4,11 +4,18 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '@/application/pages'
 import type { Role } from '@/domain/wiki'
 import { fakePagesApi, type FakePagesApi } from '@/testing/fakePagesApi'
+import { fakeSession, fakeUser } from '@/testing/fakeSession'
 import { typeIn } from '@/testing/forms'
 import { renderRoute } from '@/testing/renderWithProviders'
 import { followZone } from '@/ui/settings/zone'
 
 const BOB = 'bob@example.com'
+
+/** Alice, signed in with her email written in capitals. */
+const aliceInCapitals = () =>
+  fakeSession(() =>
+    Promise.resolve({ ...fakeUser(), email: 'ALICE@EXAMPLE.COM' })
+  )
 
 /** Onboarding, in a wiki where Bob Durand is an editor. */
 function onboarding(role: Role = 'admin') {
@@ -423,5 +430,164 @@ describe('a reply', () => {
     expect(
       screen.queryByRole('textbox', { name: 'Comment' })
     ).not.toBeInTheDocument()
+  })
+})
+
+describe('an edit', () => {
+  it("is offered on the person's own comments only, replies among them, though they are an admin", async () => {
+    const { pagesApi, wiki, page, bob } = onboarding()
+    const question = await bob.addComment(page.id, { body: 'Which laptop?' })
+    await pagesApi.addComment(page.id, {
+      body: 'The one on the desk.',
+      parentId: question.id
+    })
+    renderRoute(`/wikis/${wiki.id}/pages/${page.id}`, { pagesApi })
+
+    const asked = await findCommentBy('Bob Durand')
+    const answer = await findCommentBy('Alice Martin')
+
+    expect(within(answer).getByRole('button', { name: 'Edit' })).toBeVisible()
+    expect(
+      within(asked).queryByRole('button', { name: 'Edit' })
+    ).not.toBeInTheDocument()
+  })
+
+  it("tells the person's own comments by their email, whatever its case", async () => {
+    const { pagesApi, wiki, page } = onboarding()
+    await pagesApi.addComment(page.id, { body: 'Which laptop?' })
+    renderRoute(`/wikis/${wiki.id}/pages/${page.id}`, {
+      pagesApi,
+      session: aliceInCapitals()
+    })
+
+    const comment = await findCommentBy('Alice Martin')
+
+    expect(within(comment).getByRole('button', { name: 'Edit' })).toBeVisible()
+  })
+
+  it('is saved trimmed, and shows the comment edited', async () => {
+    const { pagesApi, wiki, page } = onboarding()
+    const mine = await pagesApi.addComment(page.id, { body: 'Which laptop?' })
+    silenceStream(pagesApi)
+    renderRoute(`/wikis/${wiki.id}/pages/${page.id}`, { pagesApi })
+    const comment = await findCommentBy('Alice Martin')
+
+    fireEvent.click(within(comment).getByRole('button', { name: 'Edit' }))
+    const field = within(comment).getByRole('textbox', {
+      name: 'Edit comment'
+    })
+    expect(field).toHaveValue('Which laptop?')
+    expect(field).toHaveFocus()
+    typeIn(comment, 'Edit comment', ' Which laptop, please? ')
+    fireEvent.click(within(comment).getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => {
+      expect(field).not.toBeInTheDocument()
+    })
+    expect(comment).toHaveTextContent('Which laptop, please?')
+    expect(comment).toHaveTextContent('edited')
+    expect(pagesApi.editComment).toHaveBeenCalledWith(
+      mine.id,
+      'Which laptop, please?'
+    )
+  })
+
+  it('opens with the caret at the end of the text', async () => {
+    const { pagesApi, wiki, page } = onboarding()
+    await pagesApi.addComment(page.id, { body: 'Which laptop?' })
+    renderRoute(`/wikis/${wiki.id}/pages/${page.id}`, { pagesApi })
+    const comment = await findCommentBy('Alice Martin')
+
+    fireEvent.click(within(comment).getByRole('button', { name: 'Edit' }))
+
+    const field = within(comment).getByRole('textbox', {
+      name: 'Edit comment'
+    })
+    expect(field).toHaveFocus()
+    expect(field).toHaveProperty('selectionStart', 'Which laptop?'.length)
+    expect(field).toHaveProperty('selectionEnd', 'Which laptop?'.length)
+  })
+
+  it('is not saved blank', async () => {
+    const { pagesApi, wiki, page } = onboarding()
+    await pagesApi.addComment(page.id, { body: 'Which laptop?' })
+    renderRoute(`/wikis/${wiki.id}/pages/${page.id}`, { pagesApi })
+    const comment = await findCommentBy('Alice Martin')
+
+    fireEvent.click(within(comment).getByRole('button', { name: 'Edit' }))
+    typeIn(comment, 'Edit comment', ' \n ')
+
+    expect(within(comment).getByRole('button', { name: 'Save' })).toBeDisabled()
+  })
+
+  it('is dropped by Cancel, unsaved', async () => {
+    const { pagesApi, wiki, page } = onboarding()
+    await pagesApi.addComment(page.id, { body: 'Which laptop?' })
+    renderRoute(`/wikis/${wiki.id}/pages/${page.id}`, { pagesApi })
+    const comment = await findCommentBy('Alice Martin')
+
+    fireEvent.click(within(comment).getByRole('button', { name: 'Edit' }))
+    typeIn(comment, 'Edit comment', 'Which laptop, please?')
+    fireEvent.click(within(comment).getByRole('button', { name: 'Cancel' }))
+    await aMoment()
+
+    expect(
+      within(comment).queryByRole('textbox', { name: 'Edit comment' })
+    ).not.toBeInTheDocument()
+    expect(comment).toHaveTextContent('Which laptop?')
+    expect(pagesApi.editComment).not.toHaveBeenCalled()
+  })
+
+  it('says so when it cannot be saved, and keeps the text', async () => {
+    const { pagesApi, wiki, page } = onboarding()
+    const mine = await pagesApi.addComment(page.id, { body: 'Which laptop?' })
+    silenceStream(pagesApi)
+    renderRoute(`/wikis/${wiki.id}/pages/${page.id}`, { pagesApi })
+    const comment = await findCommentBy('Alice Martin')
+    fireEvent.click(within(comment).getByRole('button', { name: 'Edit' }))
+    // Deleted elsewhere, which the open page does not hear of.
+    await pagesApi.deleteComment(mine.id)
+
+    typeIn(comment, 'Edit comment', 'Which laptop, please?')
+    fireEvent.click(within(comment).getByRole('button', { name: 'Save' }))
+
+    expect(await within(comment).findByRole('alert')).toHaveTextContent(
+      'The comment could not be saved.'
+    )
+    expect(
+      within(comment).getByRole('textbox', { name: 'Edit comment' })
+    ).toHaveValue('Which laptop, please?')
+  })
+
+  it('is not offered on a page in the trash', async () => {
+    const { pagesApi, wiki, page, bob } = onboarding()
+    await pagesApi.addComment(page.id, { body: 'Which laptop?' })
+    await bob.deletePage(page.id)
+    renderRoute(`/wikis/${wiki.id}/pages/${page.id}`, { pagesApi })
+
+    const comment = await findCommentBy('Alice Martin')
+
+    expect(comment).toHaveTextContent('Which laptop?')
+    expect(
+      within(comment).queryByRole('button', { name: 'Edit' })
+    ).not.toBeInTheDocument()
+  })
+
+  it('is closed when the page goes to the trash elsewhere', async () => {
+    const { pagesApi, wiki, page, bob } = onboarding()
+    await pagesApi.addComment(page.id, { body: 'Which laptop?' })
+    renderRoute(`/wikis/${wiki.id}/pages/${page.id}`, { pagesApi })
+    const comment = await findCommentBy('Alice Martin')
+    fireEvent.click(within(comment).getByRole('button', { name: 'Edit' }))
+    const field = within(comment).getByRole('textbox', {
+      name: 'Edit comment'
+    })
+
+    await act(() => bob.deletePage(page.id))
+
+    await waitFor(() => {
+      expect(field).not.toBeInTheDocument()
+    })
+    expect(comment).toHaveTextContent('Which laptop?')
   })
 })

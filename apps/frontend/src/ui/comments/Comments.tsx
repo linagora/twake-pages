@@ -1,4 +1,4 @@
-import { Icon, Reply } from '@linagora/twake-icons'
+import { Icon, Pen, Reply } from '@linagora/twake-icons'
 import { Button, Typography } from '@linagora/twake-mui'
 import { useId, useState, type ReactElement, type ReactNode } from 'react'
 
@@ -7,10 +7,15 @@ import { PlainText } from '@/ds/PlainText'
 import { Feed, FeedItem } from '@/ds/SidePanel'
 import type { Comment } from '@/domain/comment'
 import type { Page } from '@/domain/page'
-import { displayName } from '@/domain/person'
-import { NewCommentForm, ReplyForm } from '@/ui/comments/CommentForm'
+import { displayName, sameEmail } from '@/domain/person'
+import {
+  EditCommentForm,
+  NewCommentForm,
+  ReplyForm
+} from '@/ui/comments/CommentForm'
 import { useI18n } from '@/ui/i18n/useI18n'
 import { PersonAvatar } from '@/ui/people/PersonAvatar'
+import { useSession } from '@/ui/session/SessionGate'
 import { localTime } from '@/ui/settings/zone'
 import { useComments } from '@/ui/wiki/queries'
 
@@ -66,6 +71,7 @@ function CommentFeed({ page }: { page: Page }): ReactElement {
           return (
             <CommentItem
               key={comment.id}
+              page={page}
               comment={comment}
               onReply={
                 writable
@@ -81,6 +87,7 @@ function CommentFeed({ page }: { page: Page }): ReactElement {
                     {replies.map(reply => (
                       <CommentItem
                         key={reply.id}
+                        page={page}
                         comment={reply}
                         onReply={null}
                       />
@@ -98,19 +105,29 @@ function CommentFeed({ page }: { page: Page }): ReactElement {
   )
 }
 
-/** A comment under its author's name and the time it was written. */
+/**
+ * A comment under its author's name and the time it was written. Its author,
+ * told by their email as the session has no id, edits it in place, but not
+ * on a page in the trash.
+ */
 function CommentItem({
+  page,
   comment,
   onReply,
   children
 }: {
+  page: Page
   comment: Comment
   /** Opens a reply to the comment, or null when it takes none. */
   onReply: (() => void) | null
   children?: ReactNode
 }): ReactElement {
   const { t, lang } = useI18n()
+  const { user } = useSession()
+  const [editing, setEditing] = useState(false)
   const author = displayName(comment.author)
+  const editable =
+    page.deletedAt === null && sameEmail(comment.author.email, user.email)
 
   return (
     <FeedItem
@@ -130,18 +147,44 @@ function CommentItem({
             {comment.editedAt !== null && ` · ${t('comments.edited')}`}
           </Typography>
         </Typography>
-        <PlainText>{comment.body}</PlainText>
-        {onReply && (
-          <div className="u-mt-half">
-            <Button
-              variant="text"
-              size="small"
-              startIcon={<Icon icon={Reply} />}
-              onClick={onReply}
-            >
-              {t('comments.reply')}
-            </Button>
-          </div>
+        {editable && editing ? (
+          <EditCommentForm
+            page={page}
+            comment={comment}
+            onClose={() => {
+              setEditing(false)
+            }}
+          />
+        ) : (
+          <>
+            <PlainText>{comment.body}</PlainText>
+            {(onReply !== null || editable) && (
+              <div className="u-mt-half">
+                {onReply && (
+                  <Button
+                    variant="text"
+                    size="small"
+                    startIcon={<Icon icon={Reply} />}
+                    onClick={onReply}
+                  >
+                    {t('comments.reply')}
+                  </Button>
+                )}
+                {editable && (
+                  <Button
+                    variant="text"
+                    size="small"
+                    startIcon={<Icon icon={Pen} />}
+                    onClick={() => {
+                      setEditing(true)
+                    }}
+                  >
+                    {t('comments.edit')}
+                  </Button>
+                )}
+              </div>
+            )}
+          </>
         )}
       </article>
       {children}

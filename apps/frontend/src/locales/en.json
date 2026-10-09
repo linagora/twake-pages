@@ -294,7 +294,12 @@
     "replyTo": "Reply to %{name}",
     "replyLabel": "Reply",
     "replyPlaceholder": "Write a reply…",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "edit": "Edit",
+    "editLabel": "Edit comment",
+    "save": "Save",
+    "saveHint": "Ctrl+Enter to save",
+    "saveFailed": "The comment could not be saved."
   },
   "labels": {
     "title": "Pages labelled %{name}",

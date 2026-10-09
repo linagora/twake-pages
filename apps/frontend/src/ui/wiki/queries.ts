@@ -652,6 +652,29 @@ export function useAddComment(
 }
 
 /**
+ * Reads again what an edit changes alone, rather than the whole wiki: once
+ * the comment is changed, the comments are read again. Unlike writing one,
+ * an edit leaves whether its author follows the page as it was, unless it is
+ * the first to mention them: as the backend makes them follow it then, the
+ * page shows it once the stream reloads it, the edit moving the wiki's
+ * version. A refused edit changes nothing.
+ */
+export function useEditComment(
+  page: Page,
+  commentId: string
+): UseMutationResult<Comment, Error, string> {
+  const api = usePagesApi()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (body: string) => api.editComment(commentId, body),
+    onSuccess: () =>
+      queryClient.invalidateQueries({
+        queryKey: commentsKey(page.wikiId, page.id)
+      })
+  })
+}
+
+/**
  * Unlike Twake Tasks, which reads whether the person follows a task through
  * a route of its own, the page tells it, and changes in place.
  */

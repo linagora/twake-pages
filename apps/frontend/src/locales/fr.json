@@ -294,7 +294,12 @@
     "replyTo": "Réponse à %{name}",
     "replyLabel": "Réponse",
     "replyPlaceholder": "Écrire une réponse…",
-    "cancel": "Annuler"
+    "cancel": "Annuler",
+    "edit": "Modifier",
+    "editLabel": "Modifier le commentaire",
+    "save": "Enregistrer",
+    "saveHint": "Ctrl+Entrée pour enregistrer",
+    "saveFailed": "Le commentaire n'a pas pu être enregistré."
   },
   "labels": {
     "title": "Pages avec l'étiquette %{name}",

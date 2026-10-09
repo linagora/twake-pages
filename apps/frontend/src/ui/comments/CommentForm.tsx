@@ -7,13 +7,13 @@ import type { Page } from '@/domain/page'
 import { displayName } from '@/domain/person'
 import { focusOnMount } from '@/ui/focusOnMount'
 import { useI18n, type TranslationKey } from '@/ui/i18n/useI18n'
-import { useAddComment } from '@/ui/wiki/queries'
+import { useAddComment, useEditComment } from '@/ui/wiki/queries'
 
 // What the backend takes of a comment, once trimmed.
 const MAX_COMMENT = 10_000
 
-// A reply's field is named apart from the new comment's, which the page
-// shows with it.
+// The fields of a reply and of an edit are named apart from the new
+// comment's, which the page shows with them.
 const FORM_WORDS = {
   comment: {
     label: 'comments.comment',
@@ -28,6 +28,13 @@ const FORM_WORDS = {
     hint: 'comments.sendHint',
     submit: 'comments.send',
     failed: 'comments.sendFailed'
+  },
+  edit: {
+    label: 'comments.editLabel',
+    placeholder: 'comments.placeholder',
+    hint: 'comments.saveHint',
+    submit: 'comments.save',
+    failed: 'comments.saveFailed'
   }
 } as const satisfies Record<string, Record<string, TranslationKey>>
 
@@ -57,6 +64,26 @@ export function ReplyForm({
   )
 }
 
+export function EditCommentForm({
+  page,
+  comment,
+  onClose
+}: {
+  page: Page
+  comment: Comment
+  onClose: () => void
+}): ReactElement {
+  const edit = useEditComment(page, comment.id)
+  return (
+    <CommentForm
+      kind="edit"
+      change={edit}
+      initial={comment.body}
+      onClose={onClose}
+    />
+  )
+}
+
 /**
  * The text of a comment, in plain text as the backend keeps it, where Twake
  * Tasks writes Markdown in TipTap. Ctrl+Enter sends it, as in Twake Tasks. A
@@ -67,6 +94,7 @@ function CommentForm({
   kind,
   change,
   name,
+  initial = '',
   onClose
 }: {
   kind: keyof typeof FORM_WORDS
@@ -74,12 +102,13 @@ function CommentForm({
   change: UseMutationResult<Comment, Error, string>
   /** The form's name, beside the others the page shows. */
   name?: string
+  initial?: string
   /** Closes a form opened from a comment. */
   onClose?: () => void
 }): ReactElement {
   const { t } = useI18n()
   const words = FORM_WORDS[kind]
-  const [body, setBody] = useState('')
+  const [body, setBody] = useState(initial)
   const text = body.trim()
   const sendable =
     !change.isPending && text !== '' && text.length <= MAX_COMMENT
