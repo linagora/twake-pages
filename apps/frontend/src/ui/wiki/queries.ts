@@ -9,6 +9,7 @@ import {
 import { useEffect } from 'react'
 
 import type {
+  Label,
   Move,
   NewPage,
   NewVersion,
@@ -36,6 +37,7 @@ const pageKey = (wikiId: string, pageId: string) =>
   [...pagesKey(wikiId), pageId] as const
 const wikiSearchKey = (wikiId: string, text: string) =>
   [...wikiKey(wikiId), 'search', text] as const
+const labelsKey = (wikiId: string) => [...wikiKey(wikiId), 'labels'] as const
 
 /**
  * A page carries no version of its wiki, so it keeps the one known as its
@@ -297,6 +299,39 @@ export function usePublish(
         version: read?.version
       }))
       return queryClient.invalidateQueries({ queryKey: treeKey(wikiId) })
+    }
+  })
+}
+
+export function useWikiLabels(wikiId: string): UseQueryResult<Label[]> {
+  const api = usePagesApi()
+  return useQuery({
+    queryKey: labelsKey(wikiId),
+    queryFn: () => api.listLabels(wikiId)
+  })
+}
+
+/**
+ * The page shows the labels it carries in place, as it shows a favorite, and
+ * what is shown of the wiki's labels is read again once the change went
+ * through. Twake Tasks reads its whole board again instead, even after a
+ * refused change: here reading the page again would count as a visit.
+ */
+export function useSetLabels(
+  page: Page
+): UseMutationResult<string[], Error, string[]> {
+  const api = usePagesApi()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (names: string[]) => api.setLabels(page.id, names),
+    onSuccess: labels => {
+      queryClient.setQueryData<ReadPage>(
+        pageKey(page.wikiId, page.id),
+        read => read && { ...read, page: { ...read.page, labels } }
+      )
+      return queryClient.invalidateQueries({
+        queryKey: labelsKey(page.wikiId)
+      })
     }
   })
 }

@@ -205,7 +205,11 @@
   },
   "labels": {
     "title": "Pages avec l'étiquette %{name}",
-    "ofPage": "Étiquettes de la page"
+    "ofPage": "Étiquettes de la page",
+    "none": "Aucune étiquette",
+    "edit": "Modifier les étiquettes",
+    "picker": "Étiquettes de %{title}",
+    "search": "Rechercher une étiquette"
   },
   "search": {
     "title": "Recherche",

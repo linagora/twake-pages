@@ -205,7 +205,11 @@
   },
   "labels": {
     "title": "Pages labelled %{name}",
-    "ofPage": "Page labels"
+    "ofPage": "Page labels",
+    "none": "No labels",
+    "edit": "Edit labels",
+    "picker": "Labels of %{title}",
+    "search": "Search labels"
   },
   "search": {
     "title": "Search",
