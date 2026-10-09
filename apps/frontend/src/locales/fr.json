@@ -211,6 +211,12 @@
     "published": "Publiée par %{author} le %{time}",
     "restoredFrom": "Restaurée depuis la version %{number}"
   },
+  "version": {
+    "title": "%{title}, version %{number}",
+    "back": "Retour à l'historique",
+    "notFound": "Cette version n'existe pas, ou vous ne pouvez pas l'ouvrir.",
+    "loadFailed": "La version n'a pas pu être chargée."
+  },
   "labels": {
     "title": "Pages avec l'étiquette %{name}",
     "ofPage": "Étiquettes de la page",

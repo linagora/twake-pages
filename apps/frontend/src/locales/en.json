@@ -211,6 +211,12 @@
     "published": "Published by %{author} on %{time}",
     "restoredFrom": "Restored from version %{number}"
   },
+  "version": {
+    "title": "%{title}, version %{number}",
+    "back": "Back to the history",
+    "notFound": "This version doesn't exist, or you can't open it.",
+    "loadFailed": "The version could not be loaded."
+  },
   "labels": {
     "title": "Pages labelled %{name}",
     "ofPage": "Page labels",

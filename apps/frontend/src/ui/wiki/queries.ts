@@ -1,4 +1,5 @@
 import {
+  skipToken,
   useMutation,
   useQuery,
   useQueryClient,
@@ -19,7 +20,7 @@ import type {
   Tree,
   WikiChanges
 } from '@/application/pages'
-import type { Page, PageRef, VersionSummary } from '@/domain/page'
+import type { Page, PageRef, Version, VersionSummary } from '@/domain/page'
 import type { SearchResult } from '@/domain/search'
 import type { Wiki, WikiSummary } from '@/domain/wiki'
 import { usePagesApi } from '@/ui/PagesApiProvider'
@@ -44,6 +45,8 @@ const labelsKey = (wikiId: string) => [...wikiKey(wikiId), 'labels'] as const
 // for a read page, with its version of the wiki.
 const historyKey = (wikiId: string, pageId: string) =>
   [...wikiKey(wikiId), 'history', pageId] as const
+const versionKey = (wikiId: string, pageId: string, number: number | null) =>
+  [...historyKey(wikiId, pageId), number] as const
 
 /**
  * A page carries no version of its wiki, so it keeps the one known as its
@@ -372,5 +375,21 @@ export function useHistory(
   return useQuery({
     queryKey: historyKey(wikiId, pageId),
     queryFn: () => api.listVersions(pageId)
+  })
+}
+
+/**
+ * A version of a page, with its title and content as it was published. A
+ * null `number` names no version, and none is asked for.
+ */
+export function useVersion(
+  wikiId: string,
+  pageId: string,
+  number: number | null
+): UseQueryResult<Version> {
+  const api = usePagesApi()
+  return useQuery({
+    queryKey: versionKey(wikiId, pageId, number),
+    queryFn: number === null ? skipToken : () => api.getVersion(pageId, number)
   })
 }

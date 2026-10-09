@@ -37,8 +37,9 @@ export function NotFoundScreen(): ReactElement {
 }
 
 /**
- * In place of a wiki or a page that cannot be shown: `missing`, failed to
- * load, or still loading.
+ * In place of a wiki, a page or a version that cannot be shown: `missing`,
+ * failed to load, or still loading. A query never sent, as for a version's
+ * malformed number, stays pending: missing, it shows no placeholders.
  */
 export function UnavailableScreen({
   query,
@@ -67,7 +68,7 @@ export function UnavailableScreen({
       {query.isError && !missing && (
         <Typography role="alert">{loadFailed}</Typography>
       )}
-      {query.isPending && <ListSkeleton label={t('app.loading')} />}
+      {query.isPending && !missing && <ListSkeleton label={t('app.loading')} />}
     </main>
   )
 }

@@ -1,5 +1,5 @@
 import { Icon, Left } from '@linagora/twake-icons'
-import { Button, Typography } from '@linagora/twake-mui'
+import { Button, Link, Typography } from '@linagora/twake-mui'
 import type { ReactElement } from 'react'
 import { Link as RouterLink, useParams } from 'react-router'
 
@@ -97,7 +97,14 @@ function Versions({
           }
         >
           <Typography variant="body2">
-            {`${t('page.version', { number: version.number })} · ${version.title}`}
+            <Link
+              component={RouterLink}
+              to={String(version.number)}
+              underline="hover"
+            >
+              {t('page.version', { number: version.number })}
+            </Link>
+            {` · ${version.title}`}
           </Typography>
           <VersionByline version={version} />
         </FeedItem>

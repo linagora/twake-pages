@@ -10,6 +10,7 @@ const wikiScreens: [path: string, heading: string][] = [
   ['/pages/:page', 'Release checklist'],
   ['/pages/:page/edit', 'Edit page'],
   ['/pages/:page/history', 'History of Release checklist'],
+  ['/pages/:page/history/1', 'Release checklist, version 1'],
   ['/labels/howto', 'Pages labelled howto'],
   ['/search?q=release', 'Search this wiki'],
   ['/trash', 'Trash']
