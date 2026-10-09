@@ -171,6 +171,7 @@ const pageRef: PageRef = {
 const recentPage = { ...pageRef, visitedAt: '2026-10-08T07:55:00.000Z' }
 const searchResult: SearchResult = {
   page: pageRef,
+  markedTitle: 'Onboarding',
   excerpt: 'Read the release notes',
   updatedAt: '2026-10-08T07:40:00.000Z'
 }

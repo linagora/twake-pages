@@ -208,7 +208,11 @@
   },
   "search": {
     "title": "Search",
-    "inWiki": "Search this wiki"
+    "inWiki": "Search this wiki",
+    "results": "Results for “%{text}”",
+    "empty": "No pages match",
+    "emptyHint": "Try another word, or check the spelling.",
+    "failed": "The pages could not be searched."
   },
   "trash": {
     "title": "Trash"

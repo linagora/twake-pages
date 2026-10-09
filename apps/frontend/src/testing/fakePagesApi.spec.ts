@@ -1499,6 +1499,18 @@ describe('fakePagesApi', () => {
       ])
     })
 
+    it('marks the words found in the title, the markers it holds itself as blanks', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki()
+      api.withPage(wiki.id, {
+        title: `Key facts: keys, not ${found('badges')}`
+      })
+
+      await expect(api.search('key')).resolves.toMatchObject([
+        { markedTitle: `${found('Key')} facts: ${found('keys')}, not  badges ` }
+      ])
+    })
+
     it('reads the text of table cells and captions, as the backend keeps it', async () => {
       const api = fakePagesApi()
       const wiki = api.withWiki()

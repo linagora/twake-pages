@@ -2,6 +2,8 @@ import type { PageRef } from '@/domain/page'
 
 export interface SearchResult {
   page: PageRef
+  /** The page's title, each word found between U+E000 and U+E001. */
+  markedTitle: string
   /** Plain text around the words found, each between U+E000 and U+E001. */
   excerpt: string
   updatedAt: string

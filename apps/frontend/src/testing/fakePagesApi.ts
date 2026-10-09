@@ -282,22 +282,28 @@ function queryOf(query: string) {
   }
 }
 
-const WORDS_BEFORE = 5
-const WORDS_AFTER = 8
-
 /**
- * The backend's excerpt: the words of the text between blanks, five before
- * the first word found and eight after, with an ellipsis where the text goes
- * on, and none when the text holds none of the words found. The markers the
- * text holds itself show as blanks.
+ * The value as the backend marks a title or a text: each word found between
+ * the markers, and the markers the value holds itself as blanks.
  */
-function excerptOf(text: string, finds: (word: string) => boolean) {
-  const words = text
+const markedOf = (value: string, finds: (word: string) => boolean) =>
+  value
     .replaceAll(FOUND_START, ' ')
     .replaceAll(FOUND_END, ' ')
     .replace(WORD, word =>
       finds(word.toLowerCase()) ? `${FOUND_START}${word}${FOUND_END}` : word
     )
+
+const WORDS_BEFORE = 5
+const WORDS_AFTER = 8
+
+/**
+ * The backend's excerpt: the words of the marked text between blanks, five
+ * before the first word found and eight after, with an ellipsis where the
+ * text goes on, and none when the text holds none of the words found.
+ */
+function excerptOf(text: string, finds: (word: string) => boolean) {
+  const words = markedOf(text, finds)
     .split(/\s+/u)
     .filter(word => word !== '')
   const first = words.findIndex(word => word.includes(FOUND_START))
@@ -1382,6 +1388,7 @@ function signedIn(world: World, person: Person): FakePagesApi {
               {
                 result: {
                   page: refOf(seen),
+                  markedTitle: markedOf(title, finds),
                   excerpt: excerptOf(text, finds),
                   updatedAt: createdAt
                 },

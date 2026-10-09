@@ -18,12 +18,16 @@ import type {
   WikiChanges
 } from '@/application/pages'
 import type { Page, PageRef } from '@/domain/page'
+import type { SearchResult } from '@/domain/search'
 import type { Wiki, WikiSummary } from '@/domain/wiki'
 import { usePagesApi } from '@/ui/PagesApiProvider'
 
 export const wikisKey = ['wikis']
 const favoritesKey = ['favorites']
 const recentKey = ['recent']
+// The search of every wiki follows no wiki's stream, so it sits below no
+// wiki's key.
+const searchKey = (text: string) => ['search', text] as const
 // What is shown of a wiki sits below its key, to reload it all at once.
 const wikiKey = (wikiId: string) => ['wikis', wikiId] as const
 const treeKey = (wikiId: string) => [...wikiKey(wikiId), 'tree'] as const
@@ -54,6 +58,19 @@ export function useFavorites(): UseQueryResult<PageRef[]> {
 export function useRecent(): UseQueryResult<RecentPage[]> {
   const api = usePagesApi()
   return useQuery({ queryKey: recentKey, queryFn: api.recent })
+}
+
+/**
+ * The pages found for `text` in every wiki of the person, the best first. A
+ * blank text searches nothing, as in Twake Tasks.
+ */
+export function useSearch(text: string): UseQueryResult<SearchResult[]> {
+  const api = usePagesApi()
+  return useQuery({
+    queryKey: searchKey(text),
+    queryFn: () => api.search(text),
+    enabled: text.trim() !== ''
+  })
 }
 
 export function useWiki(wikiId: string): UseQueryResult<Wiki> {

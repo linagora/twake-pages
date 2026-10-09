@@ -208,7 +208,11 @@
   },
   "search": {
     "title": "Recherche",
-    "inWiki": "Rechercher dans ce wiki"
+    "inWiki": "Rechercher dans ce wiki",
+    "results": "Résultats pour « %{text} »",
+    "empty": "Aucune page ne correspond",
+    "emptyHint": "Essayez un autre mot, ou vérifiez l'orthographe.",
+    "failed": "La recherche n'a pas pu aboutir."
   },
   "trash": {
     "title": "Corbeille"
