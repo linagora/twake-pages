@@ -194,6 +194,19 @@ const byEmail = (a: { email: string }, b: { email: string }) =>
 
 const byName = (a: string, b: string) => a.localeCompare(b)
 
+// Near enough zod's email of the backend, which takes it as typed, untrimmed.
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/u
+
+function checkEmail(value: string) {
+  if (value.length > 254 || !EMAIL.test(value)) {
+    throw refuse('invalid_request')
+  }
+  return value.toLowerCase()
+}
+
+const domainOf = (email: string) =>
+  email.slice(email.lastIndexOf('@') + 1).toLowerCase()
+
 // As the backend takes them: a letter keeps the marks written with it, and a
 // digit is a decimal one.
 const LABEL = /^[\p{L}\p{M}\p{Nd}_-]{1,50}$/u
@@ -981,32 +994,33 @@ function signedIn(world: World, person: Person): FakePagesApi {
     ),
     invite: vi.fn<PagesApi['invite']>((wikiId, email, role) =>
       answer(() => {
+        const address = checkEmail(email)
         const wiki = sharedWiki(wikiId)
-        const address = email.trim().toLowerCase()
-        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(address)) {
-          throw refuse('invalid_request')
+        if (domainOf(address) !== domainOf(person.email)) {
+          throw refuse('not_same_organization')
         }
         const members = [...wiki.members.values()]
-        if (members.some(member => member.person.email === address)) return
-        const invite = wiki.invites.find(each => each.email === address)
-        if (invite) invite.role = role
-        else {
-          wiki.invites.push({
-            id: nextId(),
-            email: address,
-            role,
-            createdAt: now()
-          })
+        if (!members.some(member => member.person.email === address)) {
+          const invite = wiki.invites.find(each => each.email === address)
+          if (invite) invite.role = role
+          else {
+            wiki.invites.push({
+              id: nextId(),
+              email: address,
+              role,
+              createdAt: now()
+            })
+          }
         }
+        // The email of a member changes nothing, yet the version moves, as
+        // the backend's does.
         bump(wiki)
       })
     ),
     cancelInvite: vi.fn<PagesApi['cancelInvite']>((wikiId, inviteId) =>
       answer(() => {
-        const { wiki } = access(wikiId, 'admin')
-        const kept = wiki.invites.filter(invite => invite.id !== inviteId)
-        if (kept.length === wiki.invites.length) return
-        wiki.invites = kept
+        const wiki = sharedWiki(wikiId)
+        wiki.invites = wiki.invites.filter(invite => invite.id !== inviteId)
         bump(wiki)
       })
     ),
@@ -1027,18 +1041,39 @@ function signedIn(world: World, person: Person): FakePagesApi {
         if (isManaged(wiki)) throw refuse('managed')
         keepAnAdmin(wiki, userId)
         if (!wiki.members.delete(userId)) throw refuse('not_found')
+        // Their favorites and visits of its pages go with them, as the
+        // backend's do.
+        for (const page of pagesOf(wikiId)) {
+          page.favoredBy.delete(userId)
+          page.visitedBy.delete(userId)
+        }
         bump(wiki)
       })
     ),
     searchPeople: vi.fn<PagesApi['searchPeople']>(query =>
       answer(() => {
-        const term = query.trim().toLowerCase()
-        if (term === '') return []
+        const trimmed = query.trim()
+        if (trimmed === '' || trimmed.length > 200) {
+          throw refuse('invalid_request')
+        }
+        const term = trimmed.toLowerCase()
+        // Those a personal wiki tells signed in, as the backend finds them.
+        const signedIn = new Set(
+          [...world.wikis.values()]
+            .filter(wiki => wiki.kind === 'personal')
+            .map(wiki => wiki.createdBy)
+        )
+        // The backend finds them in the person's organization, which has one
+        // mail domain: the fake has no organizations, but domains.
+        const domain = domainOf(person.email)
         return [...world.people.values()]
           .filter(
             each =>
-              each.email.includes(term) ||
-              (each.name?.toLowerCase().includes(term) ?? false)
+              each.id !== person.id &&
+              signedIn.has(each.id) &&
+              domainOf(each.email) === domain &&
+              (each.email.includes(term) ||
+                (each.name?.toLowerCase().includes(term) ?? false))
           )
           .sort(byEmail)
           .slice(0, 10)

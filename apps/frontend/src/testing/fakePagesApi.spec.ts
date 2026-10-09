@@ -267,6 +267,19 @@ describe('fakePagesApi', () => {
       })
     })
 
+    it('moves the version of the wiki as an invitation becomes a membership, as the backend does', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki()
+      await api.invite(wiki.id, 'carol@example.com', 'editor')
+      const invited = await api.getWiki(wiki.id)
+
+      await api.signedInAs('carol@example.com').listWikis()
+
+      await expect(api.getWiki(wiki.id)).resolves.toMatchObject({
+        version: invited.version + 1
+      })
+    })
+
     it('never leaves a shared wiki without an admin', async () => {
       const api = fakePagesApi()
       const wiki = api.withWiki({ members: { 'bob@example.com': 'editor' } })
@@ -302,19 +315,81 @@ describe('fakePagesApi', () => {
       const api = fakePagesApi()
       const spaceWiki = api.withWiki({ kind: 'space' })
       const personal = api.withWiki({ kind: 'personal' })
+      const managed = new ApiError(409, 'managed')
 
       await expect(
         api.invite(spaceWiki.id, 'bob@example.com', 'viewer')
-      ).rejects.toEqual(new ApiError(409, 'managed'))
+      ).rejects.toEqual(managed)
+      await expect(
+        api.cancelInvite(spaceWiki.id, spaceWiki.homePageId)
+      ).rejects.toEqual(managed)
       await expect(api.getMembers(personal.id)).resolves.toMatchObject({
         managed: true
       })
     })
 
-    it('finds people of the organization by name or email', async () => {
+    it('refuses what is no email before it looks at the wiki, as the backend checks the body first', async () => {
       const api = fakePagesApi()
-      api.signedInAs('bob@example.com', 'Bob Stone')
-      api.signedInAs('carol@example.com', 'Carol Diaz')
+      const wiki = api.withWiki()
+      const personal = api.withWiki({ kind: 'personal' })
+      const invalid = new ApiError(400, 'invalid_request')
+
+      await expect(
+        api.invite(personal.id, 'not an email', 'viewer')
+      ).rejects.toEqual(invalid)
+      await expect(
+        api.invite(wiki.id, ' bob@example.com', 'viewer')
+      ).rejects.toEqual(invalid)
+    })
+
+    it('invites an email of the domain of the person only', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki()
+
+      await expect(
+        api.invite(wiki.id, 'bob@elsewhere.com', 'viewer')
+      ).rejects.toEqual(new ApiError(400, 'not_same_organization'))
+      await expect(api.getMembers(wiki.id)).resolves.toMatchObject({
+        invites: []
+      })
+    })
+
+    it('moves the version of the wiki on each sharing change it takes, one that changes nothing too', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki({ members: { 'bob@example.com': 'viewer' } })
+
+      await api.invite(wiki.id, 'bob@example.com', 'editor')
+      await api.cancelInvite(wiki.id, wiki.homePageId)
+
+      await expect(api.getWiki(wiki.id)).resolves.toMatchObject({
+        version: wiki.version + 2
+      })
+    })
+
+    it("forgets the favorites and recent visits of the wiki's pages of a member who leaves", async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki({ members: { 'bob@example.com': 'editor' } })
+      const page = api.withPage(wiki.id, { title: 'Onboarding' })
+      const bob = api.signedInAs('bob@example.com')
+      await bob.getPage(page.id)
+      await bob.setFavorite(page.id, true)
+
+      await api.removeMember(wiki.id, bob.person.id)
+
+      await api.invite(wiki.id, 'bob@example.com', 'editor')
+      await bob.listWikis()
+      await expect(bob.favorites()).resolves.toEqual([])
+      await expect(bob.recent()).resolves.toEqual([])
+    })
+
+    it('finds the people of the organization who signed in by name or email, the person asking aside', async () => {
+      const api = fakePagesApi()
+      await api.listWikis()
+      await api.signedInAs('bob@example.com', 'Bob Stone').listWikis()
+      await api.signedInAs('carol@example.com', 'Carol Diaz').listWikis()
+      // Of another organization, which has another mail domain.
+      await api.signedInAs('erin@elsewhere.com', 'Erin Stone').listWikis()
+      api.withWiki({ members: { 'dan@example.com': 'viewer' } })
 
       await expect(api.searchPeople('STO')).resolves.toEqual([
         { email: 'bob@example.com', name: 'Bob Stone' }
@@ -322,6 +397,18 @@ describe('fakePagesApi', () => {
       await expect(api.searchPeople('carol@')).resolves.toEqual([
         { email: 'carol@example.com', name: 'Carol Diaz' }
       ])
+      await expect(api.searchPeople('example')).resolves.toEqual([
+        { email: 'bob@example.com', name: 'Bob Stone' },
+        { email: 'carol@example.com', name: 'Carol Diaz' }
+      ])
+    })
+
+    it('refuses to find people for a blank query or one over 200 characters', async () => {
+      const api = fakePagesApi()
+      const invalid = new ApiError(400, 'invalid_request')
+
+      await expect(api.searchPeople(' ')).rejects.toEqual(invalid)
+      await expect(api.searchPeople('a'.repeat(201))).rejects.toEqual(invalid)
     })
   })
 
