@@ -24,6 +24,15 @@ const typesOf = (blocks: Block[]): unknown[] =>
     ...(Array.isArray(block.children) ? typesOf(block.children as Block[]) : [])
   ])
 
+/** The blocks of the first version published. */
+function publishedBlocks(pagesApi: FakePagesApi): Block[] {
+  const version = pagesApi.publish.mock.calls[0]?.[1]
+  if (!version || !('content' in version)) {
+    throw new Error('No blocks published')
+  }
+  return version.content
+}
+
 describe('the editor of a page', () => {
   it('publishes the title and the blocks written, then shows the page at its new version', async () => {
     const pagesApi = fakePagesApi()
@@ -224,8 +233,10 @@ describe('the editor of a page', () => {
       await waitFor(() => {
         expect(pagesApi.publish).toHaveBeenCalledOnce()
       })
-      const [, draft] = pagesApi.publish.mock.calls[0] ?? []
-      const published = draft && 'content' in draft ? draft.content : []
+      const published = publishedBlocks(pagesApi)
+      expect(published).toContainEqual(
+        expect.objectContaining(paragraph('Watch the intro'))
+      )
       expect(
         typesOf(published).filter(type =>
           ['video', 'audio', 'file'].includes(String(type))
