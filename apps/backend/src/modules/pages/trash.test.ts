@@ -65,6 +65,10 @@ const trashOf = async (user: TestUser, wikiId: string) =>
 const deleteForGood = (user: TestUser, wikiId: string, pageId: string) =>
   api.as(user).delete(`/wikis/${wikiId}/trash/${pageId}`)
 
+/** `DELETE /wikis/:wikiId/trash` by the person. */
+const emptyTrash = (user: TestUser, wikiId: string) =>
+  api.as(user).delete(`/wikis/${wikiId}/trash`)
+
 /** The job planned to purge the deleted branch, by its root, or none. */
 const purgeJobOfBranch = (rootId: string) =>
   jobOf(db, `${PURGE_PAGE_JOB}:${rootId}`)
@@ -1079,6 +1083,194 @@ describe('DELETE /wikis/:wikiId/trash/:pageId', () => {
     // Moved by the restore, never by the refused purge.
     expect(await versionOf(api, alice, wiki.id)).toBe(before + 1)
     expect(await titlesUnder(api, alice, wiki.id, null)).toEqual(['Onboarding'])
+  })
+})
+
+describe('DELETE /wikis/:wikiId/trash', () => {
+  it.each(someoneOfEachTenant)(
+    'deletes every branch for good, %s',
+    async (_case, someone) => {
+      const alice = someone()
+      const wiki = await aWikiOf(api, alice)
+      const onboarding = await aPage(api, alice, wiki.id, {
+        title: 'Onboarding'
+      })
+      const laptop = await aPage(api, alice, wiki.id, {
+        title: 'Laptop setup',
+        parentId: onboarding
+      })
+      const releases = await aPage(api, alice, wiki.id, { title: 'Releases' })
+      await deletePage(api, alice, laptop)
+      await deletePage(api, alice, onboarding)
+      await deletePage(api, alice, releases)
+
+      const response = await emptyTrash(alice, wiki.id)
+
+      expect(response.statusCode).toBe(204)
+      expect(response.body).toBe('')
+      const pageIds = [onboarding, laptop, releases]
+      const responses = await Promise.all(
+        pageIds.map(pageId => api.as(alice).get(`/pages/${pageId}`))
+      )
+      expect(responses.map(({ statusCode }) => statusCode)).toEqual([
+        404, 404, 404
+      ])
+      expect(await trashOf(alice, wiki.id)).toEqual([])
+    }
+  )
+
+  it('leaves the live pages, and the trash of another wiki', async () => {
+    const alice = aUser()
+    const wiki = await aWikiOf(api, alice)
+    const other = await aWikiOf(api, alice, 'Other')
+    const onboarding = await aPage(api, alice, wiki.id, { title: 'Onboarding' })
+    await aPage(api, alice, wiki.id, { title: 'Releases' })
+    const elsewhere = await aPage(api, alice, other.id, { title: 'Elsewhere' })
+    await deletePage(api, alice, onboarding)
+    await deletePage(api, alice, elsewhere)
+
+    await emptyTrash(alice, wiki.id)
+
+    expect(await titlesUnder(api, alice, wiki.id, null)).toEqual(['Releases'])
+    expect((await trashOf(alice, other.id)).map(({ id }) => id)).toEqual([
+      elsewhere
+    ])
+  })
+
+  it('deletes the labels only the trash carried', async () => {
+    const alice = aUser()
+    const wiki = await aWikiOf(api, alice)
+    const onboarding = await aPage(api, alice, wiki.id, { title: 'Onboarding' })
+    const holidays = await aPage(api, alice, wiki.id, { title: 'Holidays' })
+    await setLabels(api, alice, onboarding, ['howto', 'draft'])
+    await setLabels(api, alice, holidays, ['howto'])
+    await deletePage(api, alice, onboarding)
+
+    await emptyTrash(alice, wiki.id)
+
+    expect(await labelNamesIn(db, alice, wiki.id)).toEqual(['howto'])
+  })
+
+  it('moves the wiki’s version, so every open trash shows it empty', async () => {
+    const alice = aUser()
+    const wiki = await aWikiOf(api, alice)
+    const onboarding = await aPage(api, alice, wiki.id, { title: 'Onboarding' })
+    await deletePage(api, alice, onboarding)
+    const before = await versionOf(api, alice, wiki.id)
+
+    await emptyTrash(alice, wiki.id)
+
+    expect(await versionOf(api, alice, wiki.id)).toBe(before + 1)
+  })
+
+  it('drops the purges of its branches, and of no other wiki’s', async () => {
+    const alice = aUser()
+    const wiki = await aWikiOf(api, alice)
+    const other = await aWikiOf(api, alice, 'Other')
+    const onboarding = await aPage(api, alice, wiki.id, { title: 'Onboarding' })
+    const releases = await aPage(api, alice, wiki.id, { title: 'Releases' })
+    const elsewhere = await aPage(api, alice, other.id, { title: 'Elsewhere' })
+    await deletePage(api, alice, onboarding)
+    await deletePage(api, alice, releases)
+    await deletePage(api, alice, elsewhere)
+
+    await emptyTrash(alice, wiki.id)
+
+    expect(await purgeJobOfBranch(onboarding)).toBeUndefined()
+    expect(await purgeJobOfBranch(releases)).toBeUndefined()
+    expect(await purgeJobOfBranch(elsewhere)).toBeDefined()
+  })
+
+  it('answers forbidden to an editor of the wiki', async () => {
+    const alice = aUser()
+    const bob = aUser({ organizationId: alice.organizationId })
+    const wiki = await aWikiOf(api, alice)
+    await joinWiki(db, alice, wiki.id, bob, 'editor')
+    const onboarding = await aPage(api, alice, wiki.id, { title: 'Onboarding' })
+    await deletePage(api, alice, onboarding)
+    const before = await versionOf(api, alice, wiki.id)
+
+    const response = await emptyTrash(bob, wiki.id)
+
+    expect(response.statusCode).toBe(403)
+    expect(response.json()).toEqual({ error: 'forbidden' })
+    expect(await versionOf(api, alice, wiki.id)).toBe(before)
+    expect((await trashOf(alice, wiki.id)).map(({ id }) => id)).toEqual([
+      onboarding
+    ])
+    expect(await purgeJobOfBranch(onboarding)).toBeDefined()
+  })
+
+  it('answers not_found to someone who is no member', async () => {
+    const alice = aUser()
+    const outsider = aUser({ organizationId: alice.organizationId })
+    const wiki = await aWikiOf(api, alice)
+    const onboarding = await aPage(api, alice, wiki.id, { title: 'Onboarding' })
+    await deletePage(api, alice, onboarding)
+    const before = await versionOf(api, alice, wiki.id)
+
+    const response = await emptyTrash(outsider, wiki.id)
+
+    expect(response.statusCode).toBe(404)
+    expect(response.json()).toEqual({ error: 'not_found' })
+    expect(await versionOf(api, alice, wiki.id)).toBe(before)
+  })
+
+  // No route shows a deleted wiki's version, so it is read from its row.
+  it.each(waysOutOfAWiki)(
+    'answers not_found for %s',
+    async (_case, someone, takeOut) => {
+      const alice = someone()
+      const carol = aUser({ organizationId: alice.organizationId })
+      const wiki = await aWikiOf(api, carol)
+      await joinWiki(db, carol, wiki.id, alice, 'admin')
+      const onboarding = await aPage(api, carol, wiki.id, {
+        title: 'Onboarding'
+      })
+      await deletePage(api, carol, onboarding)
+      await takeOut(api, carol, wiki.id, alice)
+      const before = await wikiRowsOf(db, carol, wiki.id)
+
+      const response = await emptyTrash(alice, wiki.id)
+
+      expect(response.statusCode).toBe(404)
+      expect(response.json()).toEqual({ error: 'not_found' })
+      expect(await wikiRowsOf(db, carol, wiki.id)).toEqual(before)
+    }
+  )
+
+  it.each(malformedOrUnknownIds)(
+    'answers not_found for a wiki with %s',
+    async (_case, wikiId) => {
+      const response = await emptyTrash(aUser(), wikiId)
+
+      expect(response.statusCode).toBe(404)
+      expect(response.json()).toEqual({ error: 'not_found' })
+    }
+  )
+
+  // Each request waits for the wiki's row lock, which the change holds, then
+  // reads the trash as the request before it left it.
+  it('answers not_found to a restore behind the emptying of the trash', async () => {
+    const alice = aUser()
+    const bob = aUser({ organizationId: alice.organizationId })
+    const wiki = await aWikiOf(api, alice)
+    await joinWiki(db, alice, wiki.id, bob, 'editor')
+    const onboarding = await aPage(api, alice, wiki.id, { title: 'Onboarding' })
+    await deletePage(api, alice, onboarding)
+    const before = await versionOf(api, alice, wiki.id)
+
+    const [emptied, restored] = await behindAChange(db, alice, wiki.id, [
+      () => emptyTrash(alice, wiki.id),
+      () => restorePage(api, bob, onboarding)
+    ])
+
+    expect(emptied?.statusCode).toBe(204)
+    expect(restored?.statusCode).toBe(404)
+    expect(restored?.json()).toEqual({ error: 'not_found' })
+    // Moved by the emptying, never by the refused restore.
+    expect(await versionOf(api, alice, wiki.id)).toBe(before + 1)
+    expect(await titlesUnder(api, alice, wiki.id, null)).toEqual([])
   })
 })
 

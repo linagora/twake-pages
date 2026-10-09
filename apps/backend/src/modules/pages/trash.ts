@@ -10,6 +10,7 @@ import {
   unschedule,
   type Handler
 } from '../../scheduler/scheduler.ts'
+import { jobs } from '../../scheduler/schema.ts'
 import type { Identity, RequireIdentity } from '../auth/index.ts'
 import { checkRole, roleOn } from '../wikis/access.ts'
 import { bumpWiki } from '../wikis/live.ts'
@@ -252,6 +253,33 @@ function createTrashStore(db: Db) {
       })
     },
 
+    /** Every branch of the wiki's trash goes for good. */
+    emptyTrash(identity: Identity, wikiId: string) {
+      return writeOrRefuse(db, identity, async tx => {
+        await checkRole(tx, identity, wikiId, 'admin')
+        // Dropped before the wiki's row lock is taken, as in restorePage.
+        await tx
+          .delete(jobs)
+          .where(
+            and(
+              eq(jobs.kind, PURGE_PAGE_JOB),
+              sql`${jobs.payload}->>'wikiId' = ${wikiId}`
+            )
+          )
+        await bumpWiki(tx, wikiId)
+        const roots = await tx
+          .select({ id: pages.id })
+          .from(pages)
+          .where(and(eq(pages.wikiId, wikiId), eq(pages.trashRootId, pages.id)))
+        await purgeBranches(
+          tx,
+          wikiId,
+          roots.map(({ id }) => id)
+        )
+        return null
+      })
+    },
+
     /**
      * The wiki's deleted branches, newest first, each by its root, or null
      * for a wiki out of the person's reach.
@@ -340,6 +368,20 @@ export function registerTrash(
       if (!params.success) return refuse(reply, 'not_found')
       const { wikiId, pageId } = params.data
       const result = await store.deleteForGood(identity, wikiId, pageId)
+      if (!result.ok) return refuse(reply, result.error)
+      return reply.code(204).send()
+    }
+  )
+
+  app.delete(
+    '/wikis/:wikiId/trash',
+    { preHandler: deps.requireIdentity },
+    async (request, reply) => {
+      const identity = request.identity
+      if (!identity) return reply.code(401).send()
+      const params = wikiParams.safeParse(request.params)
+      if (!params.success) return refuse(reply, 'not_found')
+      const result = await store.emptyTrash(identity, params.data.wikiId)
       if (!result.ok) return refuse(reply, result.error)
       return reply.code(204).send()
     }
