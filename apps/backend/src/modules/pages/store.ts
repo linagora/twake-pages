@@ -251,6 +251,18 @@ async function writeVersion(
   })
 }
 
+/** Makes the person follow the page, unless they already do. */
+async function follow(
+  tx: Tx,
+  page: { id: string; organizationId: string | null },
+  userId: string
+) {
+  await tx
+    .insert(pageFollowers)
+    .values({ pageId: page.id, organizationId: page.organizationId, userId })
+    .onConflictDoNothing()
+}
+
 /**
  * Writes a page in its wiki's tenant, with its version 1 by its author: a
  * document, empty unless given checked blocks, or a database page at a
@@ -298,13 +310,7 @@ export async function addPage(
     text: page.text,
     gristUrl: page.gristUrl
   })
-  if (follower !== null) {
-    await tx.insert(pageFollowers).values({
-      pageId: added.id,
-      organizationId: added.organizationId,
-      userId: follower
-    })
-  }
+  if (follower !== null) await follow(tx, added, follower)
   return added
 }
 
@@ -398,14 +404,7 @@ export async function publishVersion(
       updatedAt: sql`now()`
     })
     .where(eq(pages.id, page.id))
-  await tx
-    .insert(pageFollowers)
-    .values({
-      pageId: page.id,
-      organizationId: page.organizationId,
-      userId: identity.userId
-    })
-    .onConflictDoNothing()
+  await follow(tx, page, identity.userId)
   await queuePageEvent(
     tx,
     identity,
