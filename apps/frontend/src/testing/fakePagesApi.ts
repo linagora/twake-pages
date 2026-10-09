@@ -192,11 +192,19 @@ const byEmail = (a: { email: string }, b: { email: string }) =>
 
 const byName = (a: string, b: string) => a.localeCompare(b)
 
-const LABEL = /^[\p{L}\p{N}_-]{1,50}$/u
+// As the backend takes them: a letter keeps the marks written with it, and a
+// digit is a decimal one.
+const LABEL = /^[\p{L}\p{M}\p{Nd}_-]{1,50}$/u
+
+/** The label name the text makes, as the backend reads it, or null for none. */
+function labelNameOf(text: string) {
+  const name = text.trim().toLowerCase().normalize('NFC')
+  return LABEL.test(name) ? name : null
+}
 
 function checkLabel(value: string) {
-  const name = value.trim().toLowerCase()
-  if (!LABEL.test(name)) throw refuse('invalid_label')
+  const name = labelNameOf(value)
+  if (name === null) throw refuse('invalid_label')
   return name
 }
 
@@ -1236,8 +1244,9 @@ function signedIn(world: World, person: Person): FakePagesApi {
     pagesWithLabel: vi.fn<PagesApi['pagesWithLabel']>((wikiId, name) =>
       answer(() => {
         access(wikiId)
+        const label = labelNameOf(name)
         return livePagesOf(wikiId)
-          .filter(page => page.labels.includes(name))
+          .filter(page => label !== null && page.labels.includes(label))
           .map(page => {
             const { title, createdAt } = currentOf(page)
             return { id: page.id, title, updatedAt: createdAt }

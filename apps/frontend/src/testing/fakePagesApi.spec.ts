@@ -967,7 +967,7 @@ describe('fakePagesApi', () => {
   })
 
   describe('labels', () => {
-    it('labels a page with trimmed, lowercased names, sorted', async () => {
+    it('labels a page with names trimmed, lowercased and composed, sorted', async () => {
       const api = fakePagesApi()
       const wiki = api.withWiki()
       const page = api.withPage(wiki.id)
@@ -976,26 +976,33 @@ describe('fakePagesApi', () => {
         ' Laptop ',
         'HowTo',
         'howto',
-        'équipe_2'
+        '\u00e9quipe_2',
+        'e\u0301quipe_2',
+        'हिंदी',
+        '\u0130stanbul'
       ])
 
-      expect(labels).toEqual(['équipe_2', 'howto', 'laptop'])
+      expect(labels).toEqual([
+        '\u00e9quipe_2',
+        'howto',
+        'i\u0307stanbul',
+        'laptop',
+        'हिंदी'
+      ])
       await expect(api.getPage(page.id)).resolves.toMatchObject({ labels })
     })
 
-    it('refuses names other than 1 to 50 letters, digits, - and _', async () => {
+    it('refuses names other than 1 to 50 letters with their marks, decimal digits, - and _', async () => {
       const api = fakePagesApi()
       const wiki = api.withWiki()
       const page = api.withPage(wiki.id)
       const invalidLabel = new ApiError(400, 'invalid_label')
 
-      await expect(api.setLabels(page.id, ['how to'])).rejects.toEqual(
-        invalidLabel
-      )
-      await expect(api.setLabels(page.id, [' '])).rejects.toEqual(invalidLabel)
-      await expect(api.setLabels(page.id, ['a'.repeat(51)])).rejects.toEqual(
-        invalidLabel
-      )
+      for (const name of ['how to', ' ', 'a'.repeat(51), '½', 'x²']) {
+        await expect(api.setLabels(page.id, [name])).rejects.toEqual(
+          invalidLabel
+        )
+      }
     })
 
     it('takes at most 50 names, and checks their count before the page', async () => {
@@ -1036,6 +1043,18 @@ describe('fakePagesApi', () => {
       ])
       const pages = await api.pagesWithLabel(wiki.id, 'howto')
       expect(pages.map(page => page.title)).toEqual(['Badge', 'Setup'])
+    })
+
+    it('reads the name of a label as it reads the names it labels a page with', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki()
+      const setup = api.withPage(wiki.id, { title: 'Setup' })
+      await api.setLabels(setup.id, ['howto', '\u00e9quipe'])
+
+      for (const name of [' HowTo ', 'e\u0301quipe']) {
+        const pages = await api.pagesWithLabel(wiki.id, name)
+        expect(pages.map(page => page.title)).toEqual(['Setup'])
+      }
     })
 
     it('answers no pages for a name no live page carries, unknown ones too', async () => {
