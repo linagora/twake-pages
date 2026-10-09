@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto'
 import { desc, eq } from 'drizzle-orm'
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest'
 import { createDb, inTenant } from '../../infra/db.ts'
@@ -12,6 +11,7 @@ import {
   GRIST_ORIGIN,
   INVALID_PARENTS,
   joinWiki,
+  malformedOrUnknownIds,
   neighbourPagesIn,
   pageOf,
   pagesIn,
@@ -304,15 +304,15 @@ describe('GET /pages/:pageId', () => {
     expect(response.json()).toEqual({ error: 'not_found' })
   })
 
-  it.each([
-    ['a malformed id', 'not-an-id'],
-    ['an unknown id', randomUUID()]
-  ])('answers not_found for %s', async (_case, pageId) => {
-    const response = await api.as(aUser()).get(`/pages/${pageId}`)
+  it.each(malformedOrUnknownIds)(
+    'answers not_found for %s',
+    async (_case, pageId) => {
+      const response = await api.as(aUser()).get(`/pages/${pageId}`)
 
-    expect(response.statusCode).toBe(404)
-    expect(response.json()).toEqual({ error: 'not_found' })
-  })
+      expect(response.statusCode).toBe(404)
+      expect(response.json()).toEqual({ error: 'not_found' })
+    }
+  )
 
   it('keeps the person’s 100 most recent visits', async () => {
     const alice = aUser()
@@ -565,17 +565,17 @@ describe('POST /wikis/:wikiId/pages', () => {
     expect(response.json()).toEqual({ error: 'not_found' })
   })
 
-  it.each([
-    ['a malformed id', 'not-an-id'],
-    ['an unknown id', randomUUID()]
-  ])('answers not_found for a wiki with %s', async (_case, wikiId) => {
-    const response = await createPage(api, aUser(), wikiId, {
-      title: 'Onboarding'
-    })
+  it.each(malformedOrUnknownIds)(
+    'answers not_found for a wiki with %s',
+    async (_case, wikiId) => {
+      const response = await createPage(api, aUser(), wikiId, {
+        title: 'Onboarding'
+      })
 
-    expect(response.statusCode).toBe(404)
-    expect(response.json()).toEqual({ error: 'not_found' })
-  })
+      expect(response.statusCode).toBe(404)
+      expect(response.json()).toEqual({ error: 'not_found' })
+    }
+  )
 
   it.each([
     ['no title', { kind: 'document', parentId: null }],

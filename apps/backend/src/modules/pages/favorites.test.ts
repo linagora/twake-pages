@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest'
 import { createDb } from '../../infra/db.ts'
 import {
@@ -7,6 +6,7 @@ import {
   aWikiOf,
   createPage,
   joinWiki,
+  malformedOrUnknownIds,
   personalWikiOf,
   startApp,
   waysOutOfAWiki,
@@ -124,15 +124,15 @@ describe('PUT and DELETE /pages/:pageId/favorite', () => {
     }
   )
 
-  it.each([
-    ['a malformed id', 'not-an-id'],
-    ['an unknown id', randomUUID()]
-  ])('answers not_found for a page with %s', async (_case, pageId) => {
-    const response = await mark(aUser(), pageId)
+  it.each(malformedOrUnknownIds)(
+    'answers not_found for a page with %s',
+    async (_case, pageId) => {
+      const response = await mark(aUser(), pageId)
 
-    expect(response.statusCode).toBe(404)
-    expect(response.json()).toEqual({ error: 'not_found' })
-  })
+      expect(response.statusCode).toBe(404)
+      expect(response.json()).toEqual({ error: 'not_found' })
+    }
+  )
 })
 
 describe('GET /favorites', () => {

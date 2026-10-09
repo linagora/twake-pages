@@ -100,6 +100,21 @@ export const waysOutOfAWiki: [string, () => TestUser, TakeOut][] = [
   ]
 ]
 
+/**
+ * Someone in an organization, and someone in B2C, whose rows the database
+ * keeps apart by wiki membership instead.
+ */
+export const someoneOfEachTenant: [string, () => TestUser][] = [
+  ['in an organization', aUser],
+  ['in B2C', aB2cUser]
+]
+
+/** Ids that name no page and no wiki: a malformed one, and an unknown one. */
+export const malformedOrUnknownIds: [string, string][] = [
+  ['a malformed id', 'not-an-id'],
+  ['an unknown id', randomUUID()]
+]
+
 /** A space's wiki, whose name and members come from the space integration. */
 export async function aSpaceWiki(
   db: Db,

@@ -1,17 +1,17 @@
-import { randomUUID } from 'node:crypto'
 import { eq, sql as raw } from 'drizzle-orm'
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest'
 import { createDb, inTenant } from '../../infra/db.ts'
 import {
-  aB2cUser,
   aPage,
   aPageIn,
   aUser,
   aWikiOf,
   INVALID_PARENTS,
   joinWiki,
+  malformedOrUnknownIds,
   movePage,
   neighbourPagesIn,
+  someoneOfEachTenant,
   STALE_NEIGHBOURS,
   startApp,
   titlesUnder,
@@ -95,10 +95,7 @@ async function behindAChange(
 }
 
 describe('POST /pages/:pageId/move', () => {
-  it.each([
-    ['in an organization', aUser],
-    ['in B2C', aB2cUser]
-  ])(
+  it.each(someoneOfEachTenant)(
     'moves a page with its child pages under another page, %s',
     async (_case, someone) => {
       const alice = someone()
@@ -410,15 +407,15 @@ describe('POST /pages/:pageId/move', () => {
     expect(response.json()).toEqual({ error: 'not_found' })
   })
 
-  it.each([
-    ['a malformed id', 'not-an-id'],
-    ['an unknown id', randomUUID()]
-  ])('answers not_found for a page with %s', async (_case, pageId) => {
-    const response = await movePage(api, aUser(), pageId, { parentId: null })
+  it.each(malformedOrUnknownIds)(
+    'answers not_found for a page with %s',
+    async (_case, pageId) => {
+      const response = await movePage(api, aUser(), pageId, { parentId: null })
 
-    expect(response.statusCode).toBe(404)
-    expect(response.json()).toEqual({ error: 'not_found' })
-  })
+      expect(response.statusCode).toBe(404)
+      expect(response.json()).toEqual({ error: 'not_found' })
+    }
+  )
 
   it.each([
     ['no parent', {}],

@@ -7,6 +7,7 @@ import {
   aUser,
   aWikiOf,
   joinWiki,
+  malformedOrUnknownIds,
   pageOf,
   pagesIn,
   paragraph,
@@ -408,23 +409,28 @@ describe('search', () => {
     expect(results.map(result => result.page.title)).toEqual(['Onboarding'])
   })
 
-  it.each<[string, (alice: TestUser) => Promise<string>]>([
-    [
-      'a wiki the person is no member of',
-      async alice =>
-        (await aWikiOf(api, aUser({ organizationId: alice.organizationId }))).id
-    ],
-    ['an unknown wiki', () => Promise.resolve(randomUUID())],
-    ['a malformed id', () => Promise.resolve('handbook')]
-  ])('answers not_found for %s', async (_case, wikiOf) => {
+  it('answers not_found for a wiki the person is no member of', async () => {
     const alice = aUser()
-    const wikiId = await wikiOf(alice)
+    const wiki = await aWikiOf(
+      api,
+      aUser({ organizationId: alice.organizationId })
+    )
 
-    const response = await search(alice, { q: 'badge', wikiId })
+    const response = await search(alice, { q: 'badge', wikiId: wiki.id })
 
     expect(response.statusCode).toBe(404)
     expect(response.json()).toEqual({ error: 'not_found' })
   })
+
+  it.each(malformedOrUnknownIds)(
+    'answers not_found for a wiki with %s',
+    async (_case, wikiId) => {
+      const response = await search(aUser(), { q: 'badge', wikiId })
+
+      expect(response.statusCode).toBe(404)
+      expect(response.json()).toEqual({ error: 'not_found' })
+    }
+  )
 
   it.each(waysOutOfAWiki)(
     'answers not_found for %s, named by wikiId',

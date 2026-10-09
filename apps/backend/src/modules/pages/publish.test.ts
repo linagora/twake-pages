@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest'
 import { createDb } from '../../infra/db.ts'
 import {
@@ -10,6 +9,7 @@ import {
   createPage,
   GRIST_ORIGIN,
   joinWiki,
+  malformedOrUnknownIds,
   pageOf,
   paragraph,
   personOf,
@@ -258,19 +258,19 @@ describe('POST /pages/:pageId/versions', () => {
     expect(await versionOf(api, alice, wiki.id)).toBe(before)
   })
 
-  it.each([
-    ['a malformed id', 'not-an-id'],
-    ['an unknown id', randomUUID()]
-  ])('answers not_found for a page with %s', async (_case, pageId) => {
-    const response = await publish(api, aUser(), pageId, {
-      baseVersion: 1,
-      title: 'Onboarding',
-      content: []
-    })
+  it.each(malformedOrUnknownIds)(
+    'answers not_found for a page with %s',
+    async (_case, pageId) => {
+      const response = await publish(api, aUser(), pageId, {
+        baseVersion: 1,
+        title: 'Onboarding',
+        content: []
+      })
 
-    expect(response.statusCode).toBe(404)
-    expect(response.json()).toEqual({ error: 'not_found' })
-  })
+      expect(response.statusCode).toBe(404)
+      expect(response.json()).toEqual({ error: 'not_found' })
+    }
+  )
 
   it.each([
     [
