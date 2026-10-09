@@ -24,6 +24,12 @@ async function findComments(): Promise<HTMLElement[]> {
   return within(list).getAllByRole('article')
 }
 
+/** The one comment shown of this author. */
+async function findCommentBy(author: string): Promise<HTMLElement> {
+  const list = await screen.findByRole('list', { name: 'Comments' })
+  return within(list).getByRole('article', { name: author })
+}
+
 /** The comments of the open page, their field among them. */
 const findCommentSection = () =>
   screen.findByRole('region', { name: 'Comments' })
@@ -286,6 +292,136 @@ describe('a new comment', () => {
     ).not.toBeInTheDocument()
     expect(
       screen.queryByRole('button', { name: 'Send' })
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Reply' })
+    ).not.toBeInTheDocument()
+  })
+})
+
+describe('a reply', () => {
+  it('answers a comment, and shows under it', async () => {
+    const { pagesApi, wiki, page, bob } = onboarding('viewer')
+    const question = await bob.addComment(page.id, { body: 'Which laptop?' })
+    await pagesApi.addComment(page.id, { body: 'Welcome, Bob.' })
+    silenceStream(pagesApi)
+    renderRoute(`/wikis/${wiki.id}/pages/${page.id}`, { pagesApi })
+    const asked = await findCommentBy('Bob Durand')
+
+    fireEvent.click(within(asked).getByRole('button', { name: 'Reply' }))
+    const form = screen.getByRole('form', { name: 'Reply to Bob Durand' })
+    expect(within(form).getByRole('textbox', { name: 'Reply' })).toHaveFocus()
+    typeIn(form, 'Reply', ' The one on the desk. ')
+    fireEvent.click(within(form).getByRole('button', { name: 'Send' }))
+
+    const replies = await screen.findByRole('list', { name: 'Replies' })
+    expect(
+      within(replies).getByRole('article', { name: 'Alice Martin' })
+    ).toHaveTextContent('The one on the desk.')
+    expect((await findComments()).map(comment => comment.textContent)).toEqual([
+      expect.stringContaining('Which laptop?'),
+      expect.stringContaining('The one on the desk.'),
+      expect.stringContaining('Welcome, Bob.')
+    ])
+    expect(pagesApi.addComment).toHaveBeenCalledWith(page.id, {
+      body: 'The one on the desk.',
+      parentId: question.id
+    })
+    await waitFor(() => {
+      expect(form).not.toBeInTheDocument()
+    })
+  })
+
+  it('answers a comment, never a reply', async () => {
+    const { pagesApi, wiki, page, bob } = onboarding()
+    const question = await bob.addComment(page.id, { body: 'Which laptop?' })
+    await pagesApi.addComment(page.id, {
+      body: 'The one on the desk.',
+      parentId: question.id
+    })
+    renderRoute(`/wikis/${wiki.id}/pages/${page.id}`, { pagesApi })
+
+    const asked = await findCommentBy('Bob Durand')
+    const answer = await findCommentBy('Alice Martin')
+
+    expect(within(asked).getByRole('button', { name: 'Reply' })).toBeVisible()
+    expect(
+      within(answer).queryByRole('button', { name: 'Reply' })
+    ).not.toBeInTheDocument()
+  })
+
+  it('is written to one comment at a time', async () => {
+    const { pagesApi, wiki, page, bob } = onboarding()
+    await bob.addComment(page.id, { body: 'Which laptop?' })
+    await pagesApi.addComment(page.id, { body: 'Which badge?' })
+    renderRoute(`/wikis/${wiki.id}/pages/${page.id}`, { pagesApi })
+    const laptop = await findCommentBy('Bob Durand')
+    const badge = await findCommentBy('Alice Martin')
+
+    fireEvent.click(within(laptop).getByRole('button', { name: 'Reply' }))
+    fireEvent.click(within(badge).getByRole('button', { name: 'Reply' }))
+
+    expect(
+      screen.getByRole('form', { name: 'Reply to Alice Martin' })
+    ).toBeVisible()
+    expect(
+      screen.queryByRole('form', { name: 'Reply to Bob Durand' })
+    ).not.toBeInTheDocument()
+    expect(screen.getAllByRole('textbox', { name: 'Reply' })).toHaveLength(1)
+  })
+
+  it('is dropped by Cancel, unsent', async () => {
+    const { pagesApi, wiki, page, bob } = onboarding()
+    await bob.addComment(page.id, { body: 'Which laptop?' })
+    renderRoute(`/wikis/${wiki.id}/pages/${page.id}`, { pagesApi })
+    const asked = await findCommentBy('Bob Durand')
+
+    fireEvent.click(within(asked).getByRole('button', { name: 'Reply' }))
+    const form = screen.getByRole('form', { name: 'Reply to Bob Durand' })
+    typeIn(form, 'Reply', 'The one on the desk.')
+    fireEvent.click(within(form).getByRole('button', { name: 'Cancel' }))
+    await aMoment()
+
+    expect(form).not.toBeInTheDocument()
+    expect(pagesApi.addComment).not.toHaveBeenCalled()
+  })
+
+  it('says so when the comment it answers was deleted elsewhere, and keeps the text', async () => {
+    const { pagesApi, wiki, page, bob } = onboarding()
+    const question = await bob.addComment(page.id, { body: 'Which laptop?' })
+    silenceStream(pagesApi)
+    renderRoute(`/wikis/${wiki.id}/pages/${page.id}`, { pagesApi })
+    const asked = await findCommentBy('Bob Durand')
+    fireEvent.click(within(asked).getByRole('button', { name: 'Reply' }))
+    await bob.deleteComment(question.id)
+
+    const form = screen.getByRole('form', { name: 'Reply to Bob Durand' })
+    typeIn(form, 'Reply', 'The one on the desk.')
+    fireEvent.click(within(form).getByRole('button', { name: 'Send' }))
+
+    expect(await within(form).findByRole('alert')).toHaveTextContent(
+      'The comment could not be sent.'
+    )
+    expect(within(form).getByRole('textbox', { name: 'Reply' })).toHaveValue(
+      'The one on the desk.'
+    )
+  })
+
+  it('is closed when the page goes to the trash elsewhere', async () => {
+    const { pagesApi, wiki, page, bob } = onboarding()
+    await bob.addComment(page.id, { body: 'Which laptop?' })
+    renderRoute(`/wikis/${wiki.id}/pages/${page.id}`, { pagesApi })
+    const asked = await findCommentBy('Bob Durand')
+    fireEvent.click(within(asked).getByRole('button', { name: 'Reply' }))
+    const form = screen.getByRole('form', { name: 'Reply to Bob Durand' })
+
+    await act(() => bob.deletePage(page.id))
+
+    await waitFor(() => {
+      expect(form).not.toBeInTheDocument()
+    })
+    expect(
+      screen.queryByRole('textbox', { name: 'Comment' })
     ).not.toBeInTheDocument()
   })
 })

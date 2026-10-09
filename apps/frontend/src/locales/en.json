@@ -289,7 +289,12 @@
     "placeholder": "Write a comment…",
     "send": "Send",
     "sendHint": "Ctrl+Enter to send",
-    "sendFailed": "The comment could not be sent."
+    "sendFailed": "The comment could not be sent.",
+    "reply": "Reply",
+    "replyTo": "Reply to %{name}",
+    "replyLabel": "Reply",
+    "replyPlaceholder": "Write a reply…",
+    "cancel": "Cancel"
   },
   "labels": {
     "title": "Pages labelled %{name}",

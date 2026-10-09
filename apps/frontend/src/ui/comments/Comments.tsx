@@ -1,5 +1,6 @@
-import { Typography } from '@linagora/twake-mui'
-import { useId, type ReactElement, type ReactNode } from 'react'
+import { Icon, Reply } from '@linagora/twake-icons'
+import { Button, Typography } from '@linagora/twake-mui'
+import { useId, useState, type ReactElement, type ReactNode } from 'react'
 
 import { ListSkeleton } from '@/ds/EmptyState'
 import { PlainText } from '@/ds/PlainText'
@@ -39,17 +40,23 @@ export function Comments({ page }: { page: Page }): ReactElement {
 
 /**
  * Oldest first, as the backend lists them, each reply under the comment it
- * answers, where Twake Tasks has no replies.
+ * answers, where Twake Tasks has no replies. A reply answers a comment, never
+ * a reply, and is written to one comment at a time.
  */
 function CommentFeed({ page }: { page: Page }): ReactElement {
   const { t } = useI18n()
   const comments = useComments(page.wikiId, page.id)
+  const [replyingTo, setReplyingTo] = useState<string | null>(null)
 
   if (comments.isError) {
     return <Typography role="alert">{t('comments.loadFailed')}</Typography>
   }
   if (!comments.data) return <ListSkeleton label={t('app.loading')} rows={2} />
   const all = comments.data
+  const writable = page.deletedAt === null
+  const closeReply = () => {
+    setReplyingTo(null)
+  }
   return (
     <Feed label={t('comments.title')}>
       {all
@@ -57,15 +64,35 @@ function CommentFeed({ page }: { page: Page }): ReactElement {
         .map(comment => {
           const replies = all.filter(reply => reply.parentId === comment.id)
           return (
-            <CommentItem key={comment.id} comment={comment}>
+            <CommentItem
+              key={comment.id}
+              comment={comment}
+              onReply={
+                writable
+                  ? () => {
+                      setReplyingTo(comment.id)
+                    }
+                  : null
+              }
+            >
               {replies.length > 0 && (
                 <div className="u-mt-1">
                   <Feed label={t('comments.replies')}>
                     {replies.map(reply => (
-                      <CommentItem key={reply.id} comment={reply} />
+                      <CommentItem
+                        key={reply.id}
+                        comment={reply}
+                        onReply={null}
+                      />
                     ))}
                   </Feed>
                 </div>
+              )}
+              {writable && replyingTo === comment.id && (
+                <CommentForm
+                  page={page}
+                  reply={{ to: comment, onClose: closeReply }}
+                />
               )}
             </CommentItem>
           )
@@ -77,9 +104,12 @@ function CommentFeed({ page }: { page: Page }): ReactElement {
 /** A comment under its author's name and the time it was written. */
 function CommentItem({
   comment,
+  onReply,
   children
 }: {
   comment: Comment
+  /** Opens a reply to the comment, or null when it takes none. */
+  onReply: (() => void) | null
   children?: ReactNode
 }): ReactElement {
   const { t, lang } = useI18n()
@@ -104,6 +134,18 @@ function CommentItem({
           </Typography>
         </Typography>
         <PlainText>{comment.body}</PlainText>
+        {onReply && (
+          <div className="u-mt-half">
+            <Button
+              variant="text"
+              size="small"
+              startIcon={<Icon icon={Reply} />}
+              onClick={onReply}
+            >
+              {t('comments.reply')}
+            </Button>
+          </div>
+        )}
       </article>
       {children}
     </FeedItem>

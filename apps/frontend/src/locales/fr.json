@@ -289,7 +289,12 @@
     "placeholder": "Écrire un commentaire…",
     "send": "Envoyer",
     "sendHint": "Ctrl+Entrée pour envoyer",
-    "sendFailed": "Le commentaire n'a pas pu être envoyé."
+    "sendFailed": "Le commentaire n'a pas pu être envoyé.",
+    "reply": "Répondre",
+    "replyTo": "Réponse à %{name}",
+    "replyLabel": "Réponse",
+    "replyPlaceholder": "Écrire une réponse…",
+    "cancel": "Annuler"
   },
   "labels": {
     "title": "Pages avec l'étiquette %{name}",

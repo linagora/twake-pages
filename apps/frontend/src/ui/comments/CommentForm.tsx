@@ -1,7 +1,10 @@
 import { Button, TextField, Typography } from '@linagora/twake-mui'
 import { useState, type ReactElement } from 'react'
 
+import type { Comment } from '@/domain/comment'
 import type { Page } from '@/domain/page'
+import { displayName } from '@/domain/person'
+import { focusOnMount } from '@/ui/focusOnMount'
 import { useI18n } from '@/ui/i18n/useI18n'
 import { useAddComment } from '@/ui/wiki/queries'
 
@@ -9,10 +12,19 @@ import { useAddComment } from '@/ui/wiki/queries'
 const MAX_COMMENT = 10_000
 
 /**
- * A new comment, in plain text as the backend keeps it, where Twake Tasks
- * writes Markdown in TipTap. Ctrl+Enter sends it, as in Twake Tasks.
+ * A new comment or a reply, in plain text as the backend keeps it, where
+ * Twake Tasks writes Markdown in TipTap. Ctrl+Enter sends it, as in Twake
+ * Tasks. The form of a reply takes the focus as it opens, and closes once
+ * the reply is sent.
  */
-export function CommentForm({ page }: { page: Page }): ReactElement {
+export function CommentForm({
+  page,
+  reply
+}: {
+  page: Page
+  /** The comment a reply answers, and what closes its form. */
+  reply?: { to: Comment; onClose: () => void }
+}): ReactElement {
   const { t } = useI18n()
   const add = useAddComment(page)
   const [body, setBody] = useState('')
@@ -20,27 +32,31 @@ export function CommentForm({ page }: { page: Page }): ReactElement {
   const sendable = !add.isPending && text !== '' && text.length <= MAX_COMMENT
   const send = () => {
     if (!sendable) return
-    add.mutate(
-      { body: text },
-      {
-        onSuccess: () => {
-          setBody('')
-        }
+    add.mutate(reply ? { body: text, parentId: reply.to.id } : { body: text }, {
+      onSuccess: () => {
+        setBody('')
+        reply?.onClose()
       }
-    )
+    })
   }
 
   return (
     <form
       className="u-mt-1"
+      aria-label={
+        reply && t('comments.replyTo', { name: displayName(reply.to.author) })
+      }
       onSubmit={event => {
         event.preventDefault()
         send()
       }}
     >
       <TextField
-        label={t('comments.comment')}
-        placeholder={t('comments.placeholder')}
+        label={t(reply ? 'comments.replyLabel' : 'comments.comment')}
+        placeholder={t(
+          reply ? 'comments.replyPlaceholder' : 'comments.placeholder'
+        )}
+        inputRef={reply && focusOnMount}
         value={body}
         onChange={event => {
           setBody(event.target.value)
@@ -64,6 +80,11 @@ export function CommentForm({ page }: { page: Page }): ReactElement {
         >
           {t('comments.sendHint')}
         </Typography>
+        {reply && (
+          <Button variant="text" size="small" onClick={reply.onClose}>
+            {t('comments.cancel')}
+          </Button>
+        )}
         <Button type="submit" size="small" disabled={!sendable}>
           {t('comments.send')}
         </Button>
