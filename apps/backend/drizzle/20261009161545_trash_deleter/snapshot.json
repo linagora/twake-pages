@@ -1,0 +1,3683 @@
+{
+  "version": "8",
+  "dialect": "postgres",
+  "id": "04244104-003b-4d11-ae6c-0be325a4e8ec",
+  "prevIds": [
+    "8ca471c4-1c52-4fb7-b6a2-271bcdb3dcc9"
+  ],
+  "ddl": [
+    {
+      "values": [
+        "document",
+        "database"
+      ],
+      "name": "page_kind",
+      "entityType": "enums",
+      "schema": "public"
+    },
+    {
+      "values": [
+        "light",
+        "dark",
+        "auto"
+      ],
+      "name": "theme",
+      "entityType": "enums",
+      "schema": "public"
+    },
+    {
+      "values": [
+        "viewer",
+        "editor",
+        "admin"
+      ],
+      "name": "member_role",
+      "entityType": "enums",
+      "schema": "public"
+    },
+    {
+      "values": [
+        "personal",
+        "shared",
+        "space"
+      ],
+      "name": "wiki_kind",
+      "entityType": "enums",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "outbox",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "processed_events",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "oidc_revoked_sessions",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": true,
+      "name": "comments",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": true,
+      "name": "notifications",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": true,
+      "name": "page_followers",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": true,
+      "name": "labels",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": true,
+      "name": "page_favorites",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": true,
+      "name": "page_labels",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": true,
+      "name": "page_versions",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": true,
+      "name": "page_visits",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": true,
+      "name": "pages",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "user_settings",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": true,
+      "name": "spaces",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": true,
+      "name": "invite_emails",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": true,
+      "name": "wiki_invites",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": true,
+      "name": "wiki_members",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": true,
+      "name": "wikis",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "jobs",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "type": "bigint",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": {
+        "type": "always",
+        "name": "outbox_id_seq",
+        "increment": "1",
+        "startWith": "1",
+        "minValue": "1",
+        "maxValue": "9223372036854775807",
+        "cache": 1,
+        "cycle": false
+      },
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "outbox"
+    },
+    {
+      "type": "jsonb",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "event",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "outbox"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "outbox"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "sent_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "outbox"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "consumer",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "processed_events"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "source",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "processed_events"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "processed_events"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "processed_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "processed_events"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "sid",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "oidc_revoked_sessions"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "revoked_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "oidc_revoked_sessions"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "expires_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "oidc_revoked_sessions"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "uuidv7()",
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "comments"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "page_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "comments"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "parent_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "comments"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "org_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "comments"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "author_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "comments"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "author_email",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "comments"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "author_name",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "comments"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "body",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "comments"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "comments"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "edited_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "comments"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": {
+        "as": "coalesce(org_id, '')",
+        "type": "stored"
+      },
+      "identity": null,
+      "name": "tenant",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "comments"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "uuidv7()",
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "notifications"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "page_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "notifications"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "wiki_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "notifications"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "org_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "notifications"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "user_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "notifications"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "reason",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "notifications"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "actor_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "notifications"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "actor_email",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "notifications"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "actor_name",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "notifications"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "version",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "notifications"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "comment_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "notifications"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "notifications"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "read_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "notifications"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": {
+        "as": "coalesce(org_id, '')",
+        "type": "stored"
+      },
+      "identity": null,
+      "name": "tenant",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "notifications"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "page_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "page_followers"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "org_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "page_followers"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "user_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "page_followers"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": {
+        "as": "coalesce(org_id, '')",
+        "type": "stored"
+      },
+      "identity": null,
+      "name": "tenant",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "page_followers"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "uuidv7()",
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "labels"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "wiki_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "labels"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "org_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "labels"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "name",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "labels"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": {
+        "as": "coalesce(org_id, '')",
+        "type": "stored"
+      },
+      "identity": null,
+      "name": "tenant",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "labels"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "page_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "page_favorites"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "org_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "page_favorites"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "user_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "page_favorites"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "page_favorites"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": {
+        "as": "coalesce(org_id, '')",
+        "type": "stored"
+      },
+      "identity": null,
+      "name": "tenant",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "page_favorites"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "page_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "page_labels"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "label_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "page_labels"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "org_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "page_labels"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": {
+        "as": "coalesce(org_id, '')",
+        "type": "stored"
+      },
+      "identity": null,
+      "name": "tenant",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "page_labels"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "uuidv7()",
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "page_versions"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "page_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "page_versions"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "org_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "page_versions"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "number",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "page_versions"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "title",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "page_versions"
+    },
+    {
+      "type": "jsonb",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "'[]'",
+      "generated": null,
+      "identity": null,
+      "name": "content",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "page_versions"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "grist_url",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "page_versions"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "''",
+      "generated": null,
+      "identity": null,
+      "name": "text",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "page_versions"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "author_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "page_versions"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "author_email",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "page_versions"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "author_name",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "page_versions"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "page_versions"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "restored_from",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "page_versions"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": {
+        "as": "coalesce(org_id, '')",
+        "type": "stored"
+      },
+      "identity": null,
+      "name": "tenant",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "page_versions"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "page_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "page_visits"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "org_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "page_visits"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "user_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "page_visits"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "visited_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "page_visits"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": {
+        "as": "coalesce(org_id, '')",
+        "type": "stored"
+      },
+      "identity": null,
+      "name": "tenant",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "page_visits"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "uuidv7()",
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "pages"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "wiki_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "pages"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "org_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "pages"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "parent_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "pages"
+    },
+    {
+      "type": "boolean",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "false",
+      "generated": null,
+      "identity": null,
+      "name": "home",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "pages"
+    },
+    {
+      "type": "page_kind",
+      "typeSchema": "public",
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "kind",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "pages"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "title",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "pages"
+    },
+    {
+      "type": "jsonb",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "'[]'",
+      "generated": null,
+      "identity": null,
+      "name": "content",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "pages"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "grist_url",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "pages"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "''",
+      "generated": null,
+      "identity": null,
+      "name": "text",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "pages"
+    },
+    {
+      "type": "tsvector",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": {
+        "as": "setweight(to_tsvector('simple', \"title\"), 'A') || setweight(to_tsvector('simple', left(\"text\", 100000)), 'B')",
+        "type": "stored"
+      },
+      "identity": null,
+      "name": "search",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "pages"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "1",
+      "generated": null,
+      "identity": null,
+      "name": "version",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "pages"
+    },
+    {
+      "type": "text COLLATE \"C\"",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "position",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "pages"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "created_by",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "pages"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "pages"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "updated_by",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "pages"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "updated_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "pages"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "deleted_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "pages"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "deleted_by",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "pages"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "deleted_by_email",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "pages"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "deleted_by_name",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "pages"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "trash_root_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "pages"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": {
+        "as": "coalesce(org_id, '')",
+        "type": "stored"
+      },
+      "identity": null,
+      "name": "tenant",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "pages"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "email",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "user_settings"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "version",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "user_settings"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "language",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "user_settings"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "timezone",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "user_settings"
+    },
+    {
+      "type": "theme",
+      "typeSchema": "public",
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "theme",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "user_settings"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "avatar",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "user_settings"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "name",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "user_settings"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "spaces"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "org_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "spaces"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "wiki_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "spaces"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "last_event_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "spaces"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "uuidv7()",
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "invite_emails"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "wiki_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "invite_emails"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "org_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "invite_emails"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "email",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "invite_emails"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "invited_by",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "invite_emails"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "sent_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "invite_emails"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": {
+        "as": "coalesce(org_id, '')",
+        "type": "stored"
+      },
+      "identity": null,
+      "name": "tenant",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "invite_emails"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "uuidv7()",
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "wiki_invites"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "wiki_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "wiki_invites"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "org_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "wiki_invites"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "email",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "wiki_invites"
+    },
+    {
+      "type": "member_role",
+      "typeSchema": "public",
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "role",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "wiki_invites"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "invited_by",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "wiki_invites"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "wiki_invites"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": {
+        "as": "coalesce(org_id, '')",
+        "type": "stored"
+      },
+      "identity": null,
+      "name": "tenant",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "wiki_invites"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "wiki_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "wiki_members"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "org_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "wiki_members"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "user_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "wiki_members"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "email",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "wiki_members"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "name",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "wiki_members"
+    },
+    {
+      "type": "member_role",
+      "typeSchema": "public",
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "role",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "wiki_members"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "joined_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "wiki_members"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": {
+        "as": "coalesce(org_id, '')",
+        "type": "stored"
+      },
+      "identity": null,
+      "name": "tenant",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "wiki_members"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "uuidv7()",
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "wikis"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "org_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "wikis"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "name",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "wikis"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "''",
+      "generated": null,
+      "identity": null,
+      "name": "description",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "wikis"
+    },
+    {
+      "type": "wiki_kind",
+      "typeSchema": "public",
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "kind",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "wikis"
+    },
+    {
+      "type": "bigint",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "0",
+      "generated": null,
+      "identity": null,
+      "name": "version",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "wikis"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "created_by",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "wikis"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "wikis"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "deleted_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "wikis"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": {
+        "as": "coalesce(org_id, '')",
+        "type": "stored"
+      },
+      "identity": null,
+      "name": "tenant",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "wikis"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "uuidv7()",
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "jobs"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "kind",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "jobs"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "key",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "jobs"
+    },
+    {
+      "type": "jsonb",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "payload",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "jobs"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "run_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "jobs"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "0",
+      "generated": null,
+      "identity": null,
+      "name": "attempts",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "jobs"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "last_error",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "jobs"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "jobs"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        {
+          "value": "sent_at",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "outbox_sent_at_id_index",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "outbox"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        {
+          "value": "expires_at",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "oidc_revoked_sessions_expires_at_index",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "oidc_revoked_sessions"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        {
+          "value": "page_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "created_at",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "comments_page_id_created_at_index",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "comments"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        {
+          "value": "user_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "created_at",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "notifications_user_id_created_at_index",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "notifications"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        {
+          "value": "user_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "wiki_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": "\"read_at\" is null",
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "notifications_user_id_wiki_id_index",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "notifications"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "wiki_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": true,
+      "where": "\"home\"",
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "pages_one_home_per_wiki",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "pages"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        {
+          "value": "wiki_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "parent_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "pages_wiki_id_parent_id_index",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "pages"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        {
+          "value": "search",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "gin",
+      "concurrently": false,
+      "name": "pages_search_index",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "pages"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        {
+          "value": "wiki_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "email",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "sent_at",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "invite_emails_wiki_id_email_sent_at_index",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "invite_emails"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        {
+          "value": "invited_by",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "sent_at",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "invite_emails_invited_by_sent_at_index",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "invite_emails"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        {
+          "value": "email",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "wiki_invites_email_index",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "wiki_invites"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        {
+          "value": "user_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "wiki_members_user_id_index",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "wiki_members"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "coalesce(\"org_id\", '')",
+          "isExpression": true,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "created_by",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": true,
+      "where": "\"kind\" = 'personal'",
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "wikis_one_personal_per_user",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "wikis"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        {
+          "value": "run_at",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "jobs_run_at_index",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "jobs"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "page_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "pages",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "comments_page_id_pages_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "comments"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "page_id",
+        "parent_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "comments",
+      "columnsTo": [
+        "page_id",
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "comments_page_id_parent_id_comments_page_id_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "comments"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "tenant",
+        "page_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "pages",
+      "columnsTo": [
+        "tenant",
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "name": "comments_tenant_page_id_pages_tenant_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "comments"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "page_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "pages",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "notifications_page_id_pages_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "notifications"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "wiki_id",
+        "page_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "pages",
+      "columnsTo": [
+        "wiki_id",
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "notifications_wiki_id_page_id_pages_wiki_id_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "notifications"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "page_id",
+        "comment_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "comments",
+      "columnsTo": [
+        "page_id",
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "notifications_page_id_comment_id_comments_page_id_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "notifications"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "tenant",
+        "page_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "pages",
+      "columnsTo": [
+        "tenant",
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "name": "notifications_tenant_page_id_pages_tenant_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "notifications"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "page_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "pages",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "page_followers_page_id_pages_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "page_followers"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "tenant",
+        "page_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "pages",
+      "columnsTo": [
+        "tenant",
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "name": "page_followers_tenant_page_id_pages_tenant_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "page_followers"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "wiki_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "wikis",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "labels_wiki_id_wikis_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "labels"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "tenant",
+        "wiki_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "wikis",
+      "columnsTo": [
+        "tenant",
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "name": "labels_tenant_wiki_id_wikis_tenant_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "labels"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "page_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "pages",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "page_favorites_page_id_pages_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "page_favorites"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "tenant",
+        "page_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "pages",
+      "columnsTo": [
+        "tenant",
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "name": "page_favorites_tenant_page_id_pages_tenant_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "page_favorites"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "page_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "pages",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "page_labels_page_id_pages_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "page_labels"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "label_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "labels",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "page_labels_label_id_labels_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "page_labels"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "tenant",
+        "page_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "pages",
+      "columnsTo": [
+        "tenant",
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "name": "page_labels_tenant_page_id_pages_tenant_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "page_labels"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "tenant",
+        "label_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "labels",
+      "columnsTo": [
+        "tenant",
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "name": "page_labels_tenant_label_id_labels_tenant_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "page_labels"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "page_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "pages",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "page_versions_page_id_pages_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "page_versions"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "tenant",
+        "page_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "pages",
+      "columnsTo": [
+        "tenant",
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "name": "page_versions_tenant_page_id_pages_tenant_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "page_versions"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "page_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "pages",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "page_visits_page_id_pages_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "page_visits"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "tenant",
+        "page_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "pages",
+      "columnsTo": [
+        "tenant",
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "name": "page_visits_tenant_page_id_pages_tenant_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "page_visits"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "wiki_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "wikis",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "pages_wiki_id_wikis_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "pages"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "wiki_id",
+        "parent_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "pages",
+      "columnsTo": [
+        "wiki_id",
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "name": "pages_wiki_id_parent_id_pages_wiki_id_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "pages"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "tenant",
+        "wiki_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "wikis",
+      "columnsTo": [
+        "tenant",
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "name": "pages_tenant_wiki_id_wikis_tenant_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "pages"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "org_id",
+        "wiki_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "wikis",
+      "columnsTo": [
+        "tenant",
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "spaces_org_id_wiki_id_wikis_tenant_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "spaces"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "wiki_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "wikis",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "invite_emails_wiki_id_wikis_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "invite_emails"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "tenant",
+        "wiki_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "wikis",
+      "columnsTo": [
+        "tenant",
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "name": "invite_emails_tenant_wiki_id_wikis_tenant_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "invite_emails"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "wiki_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "wikis",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "wiki_invites_wiki_id_wikis_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "wiki_invites"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "tenant",
+        "wiki_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "wikis",
+      "columnsTo": [
+        "tenant",
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "name": "wiki_invites_tenant_wiki_id_wikis_tenant_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "wiki_invites"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "wiki_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "wikis",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "wiki_members_wiki_id_wikis_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "wiki_members"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "tenant",
+        "wiki_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "wikis",
+      "columnsTo": [
+        "tenant",
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "NO ACTION",
+      "name": "wiki_members_tenant_wiki_id_wikis_tenant_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "wiki_members"
+    },
+    {
+      "columns": [
+        "consumer",
+        "source",
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "processed_events_pkey",
+      "entityType": "pks",
+      "schema": "public",
+      "table": "processed_events"
+    },
+    {
+      "columns": [
+        "page_id",
+        "user_id"
+      ],
+      "nameExplicit": false,
+      "name": "page_followers_pkey",
+      "entityType": "pks",
+      "schema": "public",
+      "table": "page_followers"
+    },
+    {
+      "columns": [
+        "user_id",
+        "page_id"
+      ],
+      "nameExplicit": false,
+      "name": "page_favorites_pkey",
+      "entityType": "pks",
+      "schema": "public",
+      "table": "page_favorites"
+    },
+    {
+      "columns": [
+        "page_id",
+        "label_id"
+      ],
+      "nameExplicit": false,
+      "name": "page_labels_pkey",
+      "entityType": "pks",
+      "schema": "public",
+      "table": "page_labels"
+    },
+    {
+      "columns": [
+        "user_id",
+        "page_id"
+      ],
+      "nameExplicit": false,
+      "name": "page_visits_pkey",
+      "entityType": "pks",
+      "schema": "public",
+      "table": "page_visits"
+    },
+    {
+      "columns": [
+        "wiki_id",
+        "user_id"
+      ],
+      "nameExplicit": false,
+      "name": "wiki_members_pkey",
+      "entityType": "pks",
+      "schema": "public",
+      "table": "wiki_members"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "outbox_pkey",
+      "schema": "public",
+      "table": "outbox",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "sid"
+      ],
+      "nameExplicit": false,
+      "name": "oidc_revoked_sessions_pkey",
+      "schema": "public",
+      "table": "oidc_revoked_sessions",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "comments_pkey",
+      "schema": "public",
+      "table": "comments",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "notifications_pkey",
+      "schema": "public",
+      "table": "notifications",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "labels_pkey",
+      "schema": "public",
+      "table": "labels",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "page_versions_pkey",
+      "schema": "public",
+      "table": "page_versions",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "pages_pkey",
+      "schema": "public",
+      "table": "pages",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "email"
+      ],
+      "nameExplicit": false,
+      "name": "user_settings_pkey",
+      "schema": "public",
+      "table": "user_settings",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "spaces_pkey",
+      "schema": "public",
+      "table": "spaces",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "invite_emails_pkey",
+      "schema": "public",
+      "table": "invite_emails",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "wiki_invites_pkey",
+      "schema": "public",
+      "table": "wiki_invites",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "wikis_pkey",
+      "schema": "public",
+      "table": "wikis",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "jobs_pkey",
+      "schema": "public",
+      "table": "jobs",
+      "entityType": "pks"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "page_id",
+        "id"
+      ],
+      "nullsNotDistinct": false,
+      "name": "comments_page_id_id_unique",
+      "entityType": "uniques",
+      "schema": "public",
+      "table": "comments"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "tenant",
+        "id"
+      ],
+      "nullsNotDistinct": false,
+      "name": "labels_tenant_id_unique",
+      "entityType": "uniques",
+      "schema": "public",
+      "table": "labels"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "wiki_id",
+        "name"
+      ],
+      "nullsNotDistinct": false,
+      "name": "labels_wiki_id_name_unique",
+      "entityType": "uniques",
+      "schema": "public",
+      "table": "labels"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "page_id",
+        "number"
+      ],
+      "nullsNotDistinct": false,
+      "name": "page_versions_page_id_number_unique",
+      "entityType": "uniques",
+      "schema": "public",
+      "table": "page_versions"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "tenant",
+        "id"
+      ],
+      "nullsNotDistinct": false,
+      "name": "pages_tenant_id_unique",
+      "entityType": "uniques",
+      "schema": "public",
+      "table": "pages"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "wiki_id",
+        "id"
+      ],
+      "nullsNotDistinct": false,
+      "name": "pages_wiki_id_id_unique",
+      "entityType": "uniques",
+      "schema": "public",
+      "table": "pages"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "wiki_id"
+      ],
+      "nullsNotDistinct": false,
+      "name": "spaces_wiki_id_unique",
+      "entityType": "uniques",
+      "schema": "public",
+      "table": "spaces"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "wiki_id",
+        "email"
+      ],
+      "nullsNotDistinct": false,
+      "name": "wiki_invites_wiki_id_email_unique",
+      "entityType": "uniques",
+      "schema": "public",
+      "table": "wiki_invites"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "tenant",
+        "id"
+      ],
+      "nullsNotDistinct": false,
+      "name": "wikis_tenant_id_unique",
+      "entityType": "uniques",
+      "schema": "public",
+      "table": "wikis"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "key"
+      ],
+      "nullsNotDistinct": false,
+      "name": "jobs_key_key",
+      "schema": "public",
+      "table": "jobs",
+      "entityType": "uniques"
+    },
+    {
+      "value": "not \"home\" or (\"parent_id\" is null and \"kind\" = 'document')",
+      "name": "pages_home_document",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "pages"
+    },
+    {
+      "value": "\"home\" = (\"position\" is null)",
+      "name": "pages_home_outside_tree",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "pages"
+    },
+    {
+      "value": "(\"kind\" = 'database') = (\"grist_url\" is not null)",
+      "name": "pages_database_grist_url",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "pages"
+    },
+    {
+      "value": "(\"deleted_at\" is null) = (\"trash_root_id\" is null)",
+      "name": "pages_trash_root",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "pages"
+    },
+    {
+      "value": "(\"deleted_at\" is null) = (\"deleted_by\" is null) and (\"deleted_at\" is null) = (\"deleted_by_email\" is null)",
+      "name": "pages_deleter",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "pages"
+    },
+    {
+      "value": "not (\"home\" and \"deleted_at\" is not null)",
+      "name": "pages_home_not_deleted",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "pages"
+    },
+    {
+      "value": "\"email\" = lower(\"email\")",
+      "name": "wiki_invites_email_lower",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "wiki_invites"
+    },
+    {
+      "as": "PERMISSIVE",
+      "for": "ALL",
+      "roles": [
+        "public"
+      ],
+      "using": "\"comments\".\"org_id\" is not distinct from nullif(current_setting('app.org_id', true), '') and (\"comments\".\"org_id\" is not null or exists (select 1 from \"pages\" where \"pages\".\"id\" = \"comments\".\"page_id\"))",
+      "withCheck": "\"comments\".\"org_id\" is not distinct from nullif(current_setting('app.org_id', true), '') and (\"comments\".\"org_id\" is not null or exists (select 1 from \"pages\" where \"pages\".\"id\" = \"comments\".\"page_id\"))",
+      "name": "tenant",
+      "entityType": "policies",
+      "schema": "public",
+      "table": "comments"
+    },
+    {
+      "as": "PERMISSIVE",
+      "for": "ALL",
+      "roles": [
+        "public"
+      ],
+      "using": "\"notifications\".\"org_id\" is not distinct from nullif(current_setting('app.org_id', true), '') and (\"notifications\".\"org_id\" is not null or exists (select 1 from \"pages\" where \"pages\".\"id\" = \"notifications\".\"page_id\") or \"notifications\".\"user_id\" = nullif(current_setting('app.leaving_user', true), '')::uuid)",
+      "withCheck": "\"notifications\".\"org_id\" is not distinct from nullif(current_setting('app.org_id', true), '') and (\"notifications\".\"org_id\" is not null or exists (select 1 from \"pages\" where \"pages\".\"id\" = \"notifications\".\"page_id\"))",
+      "name": "tenant",
+      "entityType": "policies",
+      "schema": "public",
+      "table": "notifications"
+    },
+    {
+      "as": "RESTRICTIVE",
+      "for": "SELECT",
+      "roles": [
+        "public"
+      ],
+      "using": "\"notifications\".\"user_id\" = nullif(current_setting('app.user_id', true), '')::uuid",
+      "withCheck": null,
+      "name": "own_select",
+      "entityType": "policies",
+      "schema": "public",
+      "table": "notifications"
+    },
+    {
+      "as": "RESTRICTIVE",
+      "for": "UPDATE",
+      "roles": [
+        "public"
+      ],
+      "using": "\"notifications\".\"user_id\" = nullif(current_setting('app.user_id', true), '')::uuid",
+      "withCheck": null,
+      "name": "own_update",
+      "entityType": "policies",
+      "schema": "public",
+      "table": "notifications"
+    },
+    {
+      "as": "RESTRICTIVE",
+      "for": "DELETE",
+      "roles": [
+        "public"
+      ],
+      "using": "\"notifications\".\"user_id\" = nullif(current_setting('app.user_id', true), '')::uuid",
+      "withCheck": null,
+      "name": "own_delete",
+      "entityType": "policies",
+      "schema": "public",
+      "table": "notifications"
+    },
+    {
+      "as": "PERMISSIVE",
+      "for": "ALL",
+      "roles": [
+        "public"
+      ],
+      "using": "\"page_followers\".\"org_id\" is not distinct from nullif(current_setting('app.org_id', true), '') and (\"page_followers\".\"org_id\" is not null or exists (select 1 from \"pages\" where \"pages\".\"id\" = \"page_followers\".\"page_id\") or \"page_followers\".\"user_id\" = nullif(current_setting('app.leaving_user', true), '')::uuid)",
+      "withCheck": "\"page_followers\".\"org_id\" is not distinct from nullif(current_setting('app.org_id', true), '') and (\"page_followers\".\"org_id\" is not null or exists (select 1 from \"pages\" where \"pages\".\"id\" = \"page_followers\".\"page_id\"))",
+      "name": "tenant",
+      "entityType": "policies",
+      "schema": "public",
+      "table": "page_followers"
+    },
+    {
+      "as": "PERMISSIVE",
+      "for": "ALL",
+      "roles": [
+        "public"
+      ],
+      "using": "\"labels\".\"org_id\" is not distinct from nullif(current_setting('app.org_id', true), '') and (\"labels\".\"org_id\" is not null or exists (select 1 from \"wikis\" where \"wikis\".\"id\" = \"labels\".\"wiki_id\"))",
+      "withCheck": "\"labels\".\"org_id\" is not distinct from nullif(current_setting('app.org_id', true), '') and (\"labels\".\"org_id\" is not null or exists (select 1 from \"wikis\" where \"wikis\".\"id\" = \"labels\".\"wiki_id\"))",
+      "name": "tenant",
+      "entityType": "policies",
+      "schema": "public",
+      "table": "labels"
+    },
+    {
+      "as": "PERMISSIVE",
+      "for": "ALL",
+      "roles": [
+        "public"
+      ],
+      "using": "\"page_favorites\".\"org_id\" is not distinct from nullif(current_setting('app.org_id', true), '') and (\"page_favorites\".\"org_id\" is not null or exists (select 1 from \"pages\" where \"pages\".\"id\" = \"page_favorites\".\"page_id\"))",
+      "withCheck": "\"page_favorites\".\"org_id\" is not distinct from nullif(current_setting('app.org_id', true), '') and (\"page_favorites\".\"org_id\" is not null or exists (select 1 from \"pages\" where \"pages\".\"id\" = \"page_favorites\".\"page_id\"))",
+      "name": "tenant",
+      "entityType": "policies",
+      "schema": "public",
+      "table": "page_favorites"
+    },
+    {
+      "as": "RESTRICTIVE",
+      "for": "ALL",
+      "roles": [
+        "public"
+      ],
+      "using": "\"page_favorites\".\"user_id\" = nullif(current_setting('app.user_id', true), '')::uuid or \"page_favorites\".\"user_id\" = nullif(current_setting('app.leaving_user', true), '')::uuid",
+      "withCheck": "\"page_favorites\".\"user_id\" = nullif(current_setting('app.user_id', true), '')::uuid",
+      "name": "own",
+      "entityType": "policies",
+      "schema": "public",
+      "table": "page_favorites"
+    },
+    {
+      "as": "PERMISSIVE",
+      "for": "ALL",
+      "roles": [
+        "public"
+      ],
+      "using": "\"page_labels\".\"org_id\" is not distinct from nullif(current_setting('app.org_id', true), '') and (\"page_labels\".\"org_id\" is not null or exists (select 1 from \"pages\" where \"pages\".\"id\" = \"page_labels\".\"page_id\"))",
+      "withCheck": "\"page_labels\".\"org_id\" is not distinct from nullif(current_setting('app.org_id', true), '') and (\"page_labels\".\"org_id\" is not null or exists (select 1 from \"pages\" where \"pages\".\"id\" = \"page_labels\".\"page_id\"))",
+      "name": "tenant",
+      "entityType": "policies",
+      "schema": "public",
+      "table": "page_labels"
+    },
+    {
+      "as": "PERMISSIVE",
+      "for": "ALL",
+      "roles": [
+        "public"
+      ],
+      "using": "\"page_versions\".\"org_id\" is not distinct from nullif(current_setting('app.org_id', true), '') and (\"page_versions\".\"org_id\" is not null or exists (select 1 from \"pages\" where \"pages\".\"id\" = \"page_versions\".\"page_id\"))",
+      "withCheck": "\"page_versions\".\"org_id\" is not distinct from nullif(current_setting('app.org_id', true), '') and (\"page_versions\".\"org_id\" is not null or exists (select 1 from \"pages\" where \"pages\".\"id\" = \"page_versions\".\"page_id\"))",
+      "name": "tenant",
+      "entityType": "policies",
+      "schema": "public",
+      "table": "page_versions"
+    },
+    {
+      "as": "PERMISSIVE",
+      "for": "ALL",
+      "roles": [
+        "public"
+      ],
+      "using": "\"page_visits\".\"org_id\" is not distinct from nullif(current_setting('app.org_id', true), '') and (\"page_visits\".\"org_id\" is not null or current_setting('app.visits_lookup', true) = 'on' or exists (select 1 from \"pages\" where \"pages\".\"id\" = \"page_visits\".\"page_id\"))",
+      "withCheck": "\"page_visits\".\"org_id\" is not distinct from nullif(current_setting('app.org_id', true), '') and (\"page_visits\".\"org_id\" is not null or exists (select 1 from \"pages\" where \"pages\".\"id\" = \"page_visits\".\"page_id\"))",
+      "name": "tenant",
+      "entityType": "policies",
+      "schema": "public",
+      "table": "page_visits"
+    },
+    {
+      "as": "RESTRICTIVE",
+      "for": "ALL",
+      "roles": [
+        "public"
+      ],
+      "using": "\"page_visits\".\"user_id\" = nullif(current_setting('app.user_id', true), '')::uuid or \"page_visits\".\"user_id\" = nullif(current_setting('app.leaving_user', true), '')::uuid",
+      "withCheck": "\"page_visits\".\"user_id\" = nullif(current_setting('app.user_id', true), '')::uuid",
+      "name": "own",
+      "entityType": "policies",
+      "schema": "public",
+      "table": "page_visits"
+    },
+    {
+      "as": "PERMISSIVE",
+      "for": "ALL",
+      "roles": [
+        "public"
+      ],
+      "using": "\"pages\".\"org_id\" is not distinct from nullif(current_setting('app.org_id', true), '') and (\"pages\".\"org_id\" is not null or exists (select 1 from \"wikis\" where \"wikis\".\"id\" = \"pages\".\"wiki_id\"))",
+      "withCheck": "\"pages\".\"org_id\" is not distinct from nullif(current_setting('app.org_id', true), '') and (\"pages\".\"org_id\" is not null or exists (select 1 from \"wikis\" where \"wikis\".\"id\" = \"pages\".\"wiki_id\"))",
+      "name": "tenant",
+      "entityType": "policies",
+      "schema": "public",
+      "table": "pages"
+    },
+    {
+      "as": "PERMISSIVE",
+      "for": "ALL",
+      "roles": [
+        "public"
+      ],
+      "using": "\"spaces\".\"org_id\" is not distinct from nullif(current_setting('app.org_id', true), '')",
+      "withCheck": "\"spaces\".\"org_id\" is not distinct from nullif(current_setting('app.org_id', true), '')",
+      "name": "tenant",
+      "entityType": "policies",
+      "schema": "public",
+      "table": "spaces"
+    },
+    {
+      "as": "PERMISSIVE",
+      "for": "SELECT",
+      "roles": [
+        "public"
+      ],
+      "using": "current_setting('app.space_lookup', true) = 'on'",
+      "withCheck": null,
+      "name": "space_lookup",
+      "entityType": "policies",
+      "schema": "public",
+      "table": "spaces"
+    },
+    {
+      "as": "PERMISSIVE",
+      "for": "ALL",
+      "roles": [
+        "public"
+      ],
+      "using": "\"invite_emails\".\"org_id\" is not distinct from nullif(current_setting('app.org_id', true), '') and (\"invite_emails\".\"org_id\" is not null or exists (select 1 from \"wikis\" where \"wikis\".\"id\" = \"invite_emails\".\"wiki_id\") or \"invite_emails\".\"invited_by\" = nullif(current_setting('app.leaving_user', true), '')::uuid or \"invite_emails\".\"email\" in (select lower(\"wiki_members\".\"email\") from \"wiki_members\" where \"wiki_members\".\"user_id\" = nullif(current_setting('app.leaving_user', true), '')::uuid))",
+      "withCheck": "\"invite_emails\".\"org_id\" is not distinct from nullif(current_setting('app.org_id', true), '') and (\"invite_emails\".\"org_id\" is not null or exists (select 1 from \"wikis\" where \"wikis\".\"id\" = \"invite_emails\".\"wiki_id\"))",
+      "name": "tenant",
+      "entityType": "policies",
+      "schema": "public",
+      "table": "invite_emails"
+    },
+    {
+      "as": "PERMISSIVE",
+      "for": "ALL",
+      "roles": [
+        "public"
+      ],
+      "using": "\"wiki_invites\".\"org_id\" is not distinct from nullif(current_setting('app.org_id', true), '') and (\"wiki_invites\".\"org_id\" is not null or exists (select 1 from \"wikis\" where \"wikis\".\"id\" = \"wiki_invites\".\"wiki_id\") or \"wiki_invites\".\"email\" = lower(current_setting('app.user_email', true)))",
+      "withCheck": "\"wiki_invites\".\"org_id\" is not distinct from nullif(current_setting('app.org_id', true), '') and (\"wiki_invites\".\"org_id\" is not null or exists (select 1 from \"wikis\" where \"wikis\".\"id\" = \"wiki_invites\".\"wiki_id\"))",
+      "name": "tenant",
+      "entityType": "policies",
+      "schema": "public",
+      "table": "wiki_invites"
+    },
+    {
+      "as": "PERMISSIVE",
+      "for": "ALL",
+      "roles": [
+        "public"
+      ],
+      "using": "\"wiki_members\".\"org_id\" is not distinct from nullif(current_setting('app.org_id', true), '') and (\"wiki_members\".\"org_id\" is not null or current_setting('app.membership_lookup', true) = 'on' or exists (select 1 from \"wikis\" where \"wikis\".\"id\" = \"wiki_members\".\"wiki_id\"))",
+      "withCheck": "\"wiki_members\".\"org_id\" is not distinct from nullif(current_setting('app.org_id', true), '') and (\"wiki_members\".\"org_id\" is not null or current_setting('app.membership_lookup', true) = 'on' or exists (select 1 from \"wikis\" where \"wikis\".\"id\" = \"wiki_members\".\"wiki_id\"))",
+      "name": "tenant",
+      "entityType": "policies",
+      "schema": "public",
+      "table": "wiki_members"
+    },
+    {
+      "as": "PERMISSIVE",
+      "for": "ALL",
+      "roles": [
+        "public"
+      ],
+      "using": "\"wikis\".\"org_id\" is not distinct from nullif(current_setting('app.org_id', true), '') and (\"wikis\".\"org_id\" is not null or \"wikis\".\"created_by\" = nullif(current_setting('app.user_id', true), '')::uuid or \"wikis\".\"id\" = any((select app_member_wiki_ids())::uuid[]) or \"wikis\".\"id\" = any((select nullif(current_setting('app.claimed_wikis', true), ''))::uuid[]))",
+      "withCheck": "\"wikis\".\"org_id\" is not distinct from nullif(current_setting('app.org_id', true), '') and (\"wikis\".\"org_id\" is not null or \"wikis\".\"created_by\" = nullif(current_setting('app.user_id', true), '')::uuid or \"wikis\".\"id\" = any((select app_member_wiki_ids())::uuid[]))",
+      "name": "tenant",
+      "entityType": "policies",
+      "schema": "public",
+      "table": "wikis"
+    }
+  ],
+  "renames": []
+}

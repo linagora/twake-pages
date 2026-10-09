@@ -73,6 +73,10 @@ export const pages = pgTable.withRLS(
     updatedAt: timestamptz('updated_at').notNull().defaultNow(),
     deletedAt: timestamptz('deleted_at'),
     deletedBy: uuid('deleted_by'),
+    // Kept as a version keeps its author's, so that the trash names whoever
+    // deleted the page after they leave the wiki.
+    deletedByEmail: text('deleted_by_email'),
+    deletedByName: text('deleted_by_name'),
     // The root of the branch the page went to the trash with, itself for the root.
     trashRootId: uuid('trash_root_id'),
     tenant: tenant()
@@ -108,6 +112,10 @@ export const pages = pgTable.withRLS(
     check(
       'pages_trash_root',
       sql`(${table.deletedAt} is null) = (${table.trashRootId} is null)`
+    ),
+    check(
+      'pages_deleter',
+      sql`(${table.deletedAt} is null) = (${table.deletedBy} is null) and (${table.deletedAt} is null) = (${table.deletedByEmail} is null)`
     ),
     check(
       'pages_home_not_deleted',

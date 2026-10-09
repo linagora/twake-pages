@@ -23,6 +23,7 @@ async function putInTrash(tx: Tx, identity: Identity, pageId: string) {
     )
     update ${pages}
     set deleted_at = now(), deleted_by = ${identity.userId},
+      deleted_by_email = ${identity.email}, deleted_by_name = ${identity.name},
       trash_root_id = ${pageId}
     where id in (select id from branch)
     returning id`)

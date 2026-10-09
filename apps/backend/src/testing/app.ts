@@ -222,7 +222,13 @@ async function addVersion(
 export async function putInTheTrash(tx: Tx, user: TestUser, pageId: string) {
   await tx
     .update(pages)
-    .set({ deletedAt: new Date(), deletedBy: user.userId, trashRootId: pageId })
+    .set({
+      deletedAt: new Date(),
+      deletedBy: user.userId,
+      deletedByEmail: user.email,
+      deletedByName: user.name ?? null,
+      trashRootId: pageId
+    })
     .where(eq(pages.id, pageId))
 }
 
