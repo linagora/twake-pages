@@ -743,7 +743,8 @@ function signedIn(world: World, person: Person): FakePagesApi {
       ancestors: ancestorsOf(page),
       following: page.followers.has(person.id),
       favorite: page.favoredBy.has(person.id),
-      deletedAt: page.deletion?.at ?? null
+      deletedAt: page.deletion?.at ?? null,
+      trashRootId: page.deletion?.rootId ?? null
     }
   }
 

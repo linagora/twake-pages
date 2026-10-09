@@ -931,6 +931,28 @@ describe('fakePagesApi', () => {
       expect(deleted.deletedAt).not.toBeNull()
     })
 
+    it('names the root of the branch a page in the trash went with', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki()
+      const onboarding = api.withPage(wiki.id, { title: 'Onboarding' })
+      const laptop = api.withPage(wiki.id, {
+        title: 'Laptop',
+        parentId: onboarding.id
+      })
+      const faq = api.withPage(wiki.id, { title: 'FAQ' })
+
+      await api.deletePage(onboarding.id)
+
+      const pages = await Promise.all(
+        [onboarding, laptop, faq].map(page => api.getPage(page.id))
+      )
+      expect(pages.map(page => page.trashRootId)).toEqual([
+        onboarding.id,
+        onboarding.id,
+        null
+      ])
+    })
+
     it('lists the deleted branches newest first, each with its own pages', async () => {
       const api = fakePagesApi()
       const wiki = api.withWiki()

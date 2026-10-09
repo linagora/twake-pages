@@ -122,7 +122,8 @@ const page: Page = {
   ancestors: [],
   following: true,
   favorite: false,
-  deletedAt: null
+  deletedAt: null,
+  trashRootId: null
 }
 const versionSummary: VersionSummary = {
   number: 2,

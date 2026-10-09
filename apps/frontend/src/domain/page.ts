@@ -42,6 +42,8 @@ export interface Page {
   following: boolean
   favorite: boolean
   deletedAt: string | null
+  /** In the trash: the root of the branch it went with, itself for the root. */
+  trashRootId: string | null
 }
 
 /**
