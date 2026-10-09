@@ -3,10 +3,10 @@ import { inTenant, type Db } from '../../infra/db.ts'
 import type { HttpServer } from '../../infra/http.ts'
 import { refuse } from '../../infra/refusals.ts'
 import type { Identity, RequireIdentity } from '../auth/index.ts'
-import { roleOn } from '../wikis/access.ts'
 import { pageRefOf, reachablePages } from './refs.ts'
 import { pageParams } from './routes.ts'
-import { pageFavorites, pages } from './schema.ts'
+import { pageFavorites } from './schema.ts'
+import { pageInReach } from './store.ts'
 
 function createFavoriteStore(db: Db) {
   return {
@@ -17,14 +17,8 @@ function createFavoriteStore(db: Db) {
      */
     setFavorite(identity: Identity, pageId: string, favorite: boolean) {
       return inTenant(db, identity, async tx => {
-        const [page] = await tx
-          .select({
-            wikiId: pages.wikiId,
-            organizationId: pages.organizationId
-          })
-          .from(pages)
-          .where(eq(pages.id, pageId))
-        if (!page || !(await roleOn(tx, identity, page.wikiId))) return false
+        const page = await pageInReach(tx, identity, pageId)
+        if (!page) return false
         if (favorite) {
           await tx
             .insert(pageFavorites)

@@ -108,7 +108,24 @@ async function recordVisit(
   await tx.execute(sql`select app_trim_visits(${KEPT_VISITS})`)
 }
 
-/** A page of a wiki the person is a member of, in the trash or not. */
+/**
+ * The page's wiki and tenant if it is of a wiki the person is a member of, in
+ * the trash or not, or null out of their reach.
+ */
+export async function pageInReach(tx: Tx, identity: Identity, pageId: string) {
+  const [page] = await tx
+    .select({ wikiId: pages.wikiId, organizationId: pages.organizationId })
+    .from(pages)
+    .where(eq(pages.id, pageId))
+  if (!page || !(await roleOn(tx, identity, page.wikiId))) return null
+  return page
+}
+
+/**
+ * A page of a wiki the person is a member of, in the trash or not. It makes
+ * the check of pageInReach on the page it reads whole, with the person's
+ * marks, so each read of a page takes one query for it rather than two.
+ */
 async function rowOf(tx: Tx, identity: Identity, pageId: string) {
   const [row] = await tx
     .select({
