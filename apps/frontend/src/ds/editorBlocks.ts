@@ -24,6 +24,12 @@ export const EDITOR_BLOCKS = [
  */
 export const KEPT_BLOCK = 'keptBlock'
 
+/** What the blocks of the pages take from the app to show. */
+export interface BlockOptions {
+  /** Names the kind of a block the editor does not write, from its type. */
+  kindOf: (type: string) => string
+}
+
 const written: ReadonlySet<unknown> = new Set(EDITOR_BLOCKS)
 
 /** An object of the blocks, such as a block or its props, unchecked. */

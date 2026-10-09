@@ -17,7 +17,7 @@ import { useI18n } from '@/ui/i18n/useI18n'
 import { useImageSources } from '@/ui/ImageSourcesProvider'
 import { ConflictNotice, PublishOverDialog } from '@/ui/page/ConflictNotice'
 import { ImagesNotShown } from '@/ui/page/ImagesNotShown'
-import { useBlockKind } from '@/ui/page/useBlockKind'
+import { useBlockOptions } from '@/ui/page/useBlockOptions'
 import { useDraft } from '@/ui/page/useDraft'
 import { useEditable } from '@/ui/page/useEditable'
 import { useWikiPage } from '@/ui/page/useWikiPage'
@@ -89,7 +89,7 @@ function PageEditor({
     publish.error instanceof EditConflict ? publish.error.current : null
   const imageSources = useImageSources()
   const hidden = imageHostsNotShown(draft.content, imageSources)
-  const blockKind = useBlockKind()
+  const blockOptions = useBlockOptions()
   const path = pathInItsWiki(page, page.home)
 
   const restart = () => {
@@ -196,7 +196,7 @@ function PageEditor({
         label={t('editor.content')}
         lang={lang}
         loadingLabel={t('app.loading')}
-        blockKind={blockKind}
+        options={blockOptions}
         onChange={content => {
           change({ content })
         }}

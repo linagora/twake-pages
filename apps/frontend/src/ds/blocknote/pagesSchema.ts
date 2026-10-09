@@ -5,7 +5,7 @@ import {
 } from '@blocknote/core'
 
 import { keptBlockSpec } from '@/ds/blocknote/KeptBlock'
-import { KEPT_BLOCK } from '@/ds/editorBlocks'
+import { KEPT_BLOCK, type BlockOptions } from '@/ds/editorBlocks'
 
 /** The type of one of BlockNote's blocks. */
 export type BlockNoteType = keyof typeof defaultBlockSpecs
@@ -19,7 +19,7 @@ export type BlockNoteType = keyof typeof defaultBlockSpecs
  */
 export const pagesSchema = (
   types: readonly BlockNoteType[],
-  { kindOf }: { kindOf: (type: string) => string }
+  { kindOf }: BlockOptions
 ) =>
   BlockNoteSchema.create<BlockSpecs>({
     blockSpecs: {

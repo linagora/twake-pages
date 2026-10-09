@@ -1,6 +1,7 @@
 import { lazy, Suspense, type ReactElement } from 'react'
 
 import { blockNoteChunk } from '@/ds/blockNoteChunk'
+import type { BlockOptions } from '@/ds/editorBlocks'
 import { ListSkeleton } from '@/ds/EmptyState'
 
 const BlocksEditorView = lazy(async () => ({
@@ -17,7 +18,7 @@ export function BlocksEditor({
   label,
   lang,
   loadingLabel,
-  blockKind,
+  options,
   onChange
 }: {
   initial: Record<string, unknown>[]
@@ -26,8 +27,7 @@ export function BlocksEditor({
   lang: string
   /** Names the placeholder shown while BlockNote loads. */
   loadingLabel: string
-  /** Names the kind of a block the editor does not write, from its type. */
-  blockKind: (type: string) => string
+  options: BlockOptions
   onChange: (blocks: Record<string, unknown>[]) => void
 }): ReactElement {
   return (
@@ -36,7 +36,7 @@ export function BlocksEditor({
         initial={initial}
         label={label}
         lang={lang}
-        blockKind={blockKind}
+        options={options}
         onChange={onChange}
       />
     </Suspense>

@@ -15,33 +15,36 @@ import {
   pastesWithoutKeptBlocks
 } from '@/ds/blocknote/KeptBlock'
 import { pagesSchema } from '@/ds/blocknote/pagesSchema'
-import { EDITOR_BLOCKS, fromEditor, toEditor } from '@/ds/editorBlocks'
+import {
+  EDITOR_BLOCKS,
+  fromEditor,
+  toEditor,
+  type BlockOptions
+} from '@/ds/editorBlocks'
 
 type Blocks = Record<string, unknown>[]
 
 /**
  * BlockNote, the editor of the pages, writing blocks from `initial` on. A
  * block it does not write, it keeps as stored (see toEditor), named by
- * `blockKind`: the block menu does not offer the kept block, and a paste
- * does not make it (see pastesWithoutKeptBlocks).
+ * `options.kindOf`: the block menu does not offer the kept block, and a
+ * paste does not make it (see pastesWithoutKeptBlocks).
  */
 export function BlocksEditorView({
   initial,
   label,
   lang,
-  blockKind,
+  options,
   onChange
 }: {
   initial: Blocks
   label: string
   lang: string
-  blockKind: (type: string) => string
+  options: BlockOptions
   onChange: (blocks: Blocks) => void
 }): ReactElement {
   // Made once, as the editor is.
-  const [schema] = useState(() =>
-    pagesSchema(EDITOR_BLOCKS, { kindOf: blockKind })
-  )
+  const [schema] = useState(() => pagesSchema(EDITOR_BLOCKS, options))
   const editor = useCreateBlockNote({
     schema,
     dictionary: lang === 'fr' ? fr : en,
