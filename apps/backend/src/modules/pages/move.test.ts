@@ -1,6 +1,5 @@
-import { eq, sql as raw } from 'drizzle-orm'
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest'
-import { createDb, inTenant } from '../../infra/db.ts'
+import { createDb } from '../../infra/db.ts'
 import {
   aPage,
   aPageIn,
@@ -19,7 +18,7 @@ import {
   type NeighbourPages,
   type TestUser
 } from '../../testing/app.ts'
-import { wikis } from '../wikis/schema.ts'
+import { behindAChange } from '../wikis/testing.ts'
 import type { PageMove } from './store.ts'
 
 let api: Awaited<ReturnType<typeof startApp>>
@@ -34,8 +33,6 @@ afterAll(async () => {
   await sql.end()
 })
 
-type Answer = Awaited<ReturnType<typeof movePage>>
-
 /** Where the wiki's tree shows the page. */
 const placeOf = async (user: TestUser, wikiId: string, pageId: string) => {
   const tree = (await api.as(user).get(`/wikis/${wikiId}/tree`)).json<{
@@ -43,55 +40,6 @@ const placeOf = async (user: TestUser, wikiId: string, pageId: string) => {
   }>()
   const page = tree.pages.find(({ id }) => id === pageId)
   return page && { parentId: page.parentId, position: page.position }
-}
-
-/** Waits until `count` transactions wait their turn, one behind the other. */
-async function waitingBehind(pid: number, count: number) {
-  for (;;) {
-    const [behind] = await sql<{ count: number }[]>`
-      with recursive behind as (
-        select pid from pg_stat_activity
-        where ${pid} = any(pg_blocking_pids(pid))
-        union
-        select activity.pid from pg_stat_activity activity
-        join behind on behind.pid = any(pg_blocking_pids(activity.pid))
-      )
-      select count(*)::int as count from behind`
-    if (behind && behind.count >= count) return
-    await new Promise(resolve => setTimeout(resolve, 10))
-  }
-}
-
-/**
- * Sends the requests while a transaction holds the wiki's row lock, as a
- * change to the wiki does, each once the one before waits its turn, then
- * ends the transaction. It locks the row without changing it, so the first
- * request sent takes the row before the others: behind a row that changed,
- * they would all race for its new version.
- */
-async function behindAChange(
-  user: TestUser,
-  wikiId: string,
-  requests: (() => Promise<Answer>)[]
-) {
-  const sent: Promise<Answer>[] = []
-  await inTenant(db, user, async tx => {
-    const [wiki] = await tx
-      .select({ id: wikis.id })
-      .from(wikis)
-      .where(eq(wikis.id, wikiId))
-      .for('no key update')
-    if (!wiki) throw new Error('no wiki to lock')
-    const [change] = await tx.execute<{ pid: number }>(
-      raw`select pg_backend_pid() as pid`
-    )
-    if (!change) throw new Error('no backend for the change')
-    for (const request of requests) {
-      sent.push(request())
-      await waitingBehind(change.pid, sent.length)
-    }
-  })
-  return Promise.all(sent)
 }
 
 describe('POST /pages/:pageId/move', () => {
@@ -280,7 +228,7 @@ describe('POST /pages/:pageId/move', () => {
     const goals = await aPage(api, alice, wiki.id, { title: 'Goals' })
     const before = await versionOf(api, alice, wiki.id)
 
-    const [first, second] = await behindAChange(alice, wiki.id, [
+    const [first, second] = await behindAChange(db, alice, wiki.id, [
       () => movePage(api, alice, plans, { parentId: goals }),
       () => movePage(api, bob, goals, { parentId: plans })
     ])
