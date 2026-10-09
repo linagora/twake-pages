@@ -271,9 +271,12 @@ describe('a page moved from the keyboard, in the tree', () => {
     press(arrow, { altKey: true, shiftKey: true })
   }
 
-  // What the tree, in the wiki's navigation, says to screen readers.
-  const said = () =>
-    within(screen.getByRole('navigation', { name: 'Wiki' })).getByRole('status')
+  // What the tree, in the wiki's navigation, says to screen readers, found
+  // by its words, as the navigation may hold other statuses.
+  const saying = (sentence: string) =>
+    within(screen.getByRole('navigation', { name: 'Wiki' })).findByText(
+      sentence
+    )
 
   // Lets a move the keys would have started reach the API.
   const settle = () =>
@@ -295,11 +298,9 @@ describe('a page moved from the keyboard, in the tree', () => {
       expect(titlesIn(tree)).toEqual(['Engineering', 'Onboarding'])
     })
     expect(item('Onboarding')).toHaveFocus()
-    await waitFor(() => {
-      expect(said()).toHaveTextContent(
-        'Onboarding moved to the top of the tree, position 2 of 2.'
-      )
-    })
+    expect(
+      await saying('Onboarding moved to the top of the tree, position 2 of 2.')
+    ).toHaveAttribute('role', 'status')
     expect(tree).toHaveAttribute('aria-busy', 'false')
 
     move('ArrowUp')
@@ -308,11 +309,9 @@ describe('a page moved from the keyboard, in the tree', () => {
       expect(titlesIn(tree)).toEqual(['Onboarding', 'Engineering'])
     })
     expect(item('Onboarding')).toHaveFocus()
-    await waitFor(() => {
-      expect(said()).toHaveTextContent(
-        'Onboarding moved to the top of the tree, position 1 of 2.'
-      )
-    })
+    expect(
+      await saying('Onboarding moved to the top of the tree, position 1 of 2.')
+    ).toHaveAttribute('role', 'status')
   })
 
   it('goes under the page before it at its level, which opens, keeping the focus', async () => {
@@ -328,11 +327,9 @@ describe('a page moved from the keyboard, in the tree', () => {
     })
     expect(item('Engineering')).toHaveAttribute('aria-level', '2')
     expect(item('Engineering')).toHaveFocus()
-    await waitFor(() => {
-      expect(said()).toHaveTextContent(
-        'Engineering moved under Onboarding, position 3 of 3.'
-      )
-    })
+    expect(
+      await saying('Engineering moved under Onboarding, position 3 of 3.')
+    ).toHaveAttribute('role', 'status')
   })
 
   it('goes under the page before it at its level, not under the child page shown above it', async () => {
@@ -371,11 +368,9 @@ describe('a page moved from the keyboard, in the tree', () => {
     })
     expect(item('First day')).toHaveAttribute('aria-level', '1')
     expect(item('First day')).toHaveFocus()
-    await waitFor(() => {
-      expect(said()).toHaveTextContent(
-        'First day moved to the top of the tree, position 2 of 3.'
-      )
-    })
+    expect(
+      await saying('First day moved to the top of the tree, position 2 of 3.')
+    ).toHaveAttribute('role', 'status')
   })
 
   it('stays put where it can go no further', async () => {
