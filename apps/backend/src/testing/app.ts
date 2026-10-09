@@ -233,7 +233,8 @@ export function pagesIn(
   )
 }
 
-// Search is not served yet, so the plain text of a page and of its versions is
+// No route serves a plain text whole: search quotes a few words of a page's,
+// and none shows a version's. So the texts of a page and of its versions are
 // read from their tables, the first version first.
 export const textsOf = (db: Db, user: TestUser, pageId: string) =>
   inTenant(db, user, async tx => {
