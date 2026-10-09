@@ -1,4 +1,4 @@
-import { Icon, Plus } from '@linagora/twake-icons'
+import { Icon, Plus, Share } from '@linagora/twake-icons'
 import { Button, Typography } from '@linagora/twake-mui'
 import { useState, type ReactElement } from 'react'
 import { useNavigate, useParams } from 'react-router'
@@ -13,6 +13,7 @@ import { PageContent } from '@/ui/page/PageContent'
 import { PageVersion } from '@/ui/page/PageVersion'
 import { useDocumentTitle } from '@/ui/useDocumentTitle'
 import { usePage, useWiki } from '@/ui/wiki/queries'
+import { ShareWikiDialog } from '@/ui/wiki/ShareWikiDialog'
 import { useWikiName } from '@/ui/wiki/useWikiName'
 import { WikiMenu } from '@/ui/wiki/WikiMenu'
 
@@ -24,6 +25,7 @@ export function WikiHomeScreen(): ReactElement {
   const wikiName = useWikiName()
   const name = wiki.data ? wikiName(wiki.data) : null
   const [creating, setCreating] = useState(false)
+  const [sharing, setSharing] = useState(false)
   useDocumentTitle(name)
 
   return (
@@ -60,6 +62,17 @@ export function WikiHomeScreen(): ReactElement {
                   wikiId={wikiId}
                   pageId={wiki.data.homePageId}
                 />
+                {wiki.data.role === 'admin' && wiki.data.kind === 'shared' && (
+                  <Button
+                    variant="secondary"
+                    startIcon={<Icon icon={Share} />}
+                    onClick={() => {
+                      setSharing(true)
+                    }}
+                  >
+                    {t('sharing.share')}
+                  </Button>
+                )}
                 {wiki.data.role !== 'viewer' && (
                   <>
                     <Button
@@ -79,6 +92,14 @@ export function WikiHomeScreen(): ReactElement {
             }
           />
           <HomePage wikiId={wikiId} pageId={wiki.data.homePageId} />
+          {sharing && (
+            <ShareWikiDialog
+              wiki={wiki.data}
+              onClose={() => {
+                setSharing(false)
+              }}
+            />
+          )}
         </>
       )}
       {creating && (

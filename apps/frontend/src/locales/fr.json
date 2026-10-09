@@ -77,6 +77,22 @@
     "cancel": "Annuler",
     "failed": "Le wiki n'a pas pu être supprimé."
   },
+  "sharing": {
+    "share": "Partager",
+    "title": "Partager %{name}",
+    "invite": "Inviter",
+    "email": "E-mail",
+    "roles": {
+      "viewer": "Lecteur",
+      "editor": "Éditeur",
+      "admin": "Administrateur"
+    },
+    "roleOf": "Rôle : %{role}",
+    "invited": "%{email} a été invité.",
+    "people": "Personnes ayant accès",
+    "invitation": "Invitation",
+    "close": "Fermer"
+  },
   "tree": {
     "title": "Pages",
     "empty": "Aucune page pour l'instant",

@@ -16,7 +16,9 @@ import type {
   NewPage,
   NewVersion,
   NewWiki,
+  PagesApi,
   RecentPage,
+  Sharing,
   Tree,
   WikiChanges
 } from '@/application/pages'
@@ -47,6 +49,8 @@ const historyKey = (wikiId: string, pageId: string) =>
   [...wikiKey(wikiId), 'history', pageId] as const
 const versionKey = (wikiId: string, pageId: string, number: number | null) =>
   [...historyKey(wikiId, pageId), number] as const
+// Below the wiki, so a change of its members elsewhere reloads them too.
+const sharingKey = (wikiId: string) => [...wikiKey(wikiId), 'sharing'] as const
 
 /**
  * A page carries no version of its wiki, so it keeps the one known as its
@@ -194,6 +198,39 @@ export function useLiveWiki(wikiId: string, watching: boolean): void {
       }
     })
   }, [api, queryClient, wikiId, watching])
+}
+
+/** The members of the wiki, and its invitations for an admin. */
+export function useSharing(wikiId: string): UseQueryResult<Sharing> {
+  const api = usePagesApi()
+  return useQuery({
+    queryKey: sharingKey(wikiId),
+    queryFn: () => api.getMembers(wikiId)
+  })
+}
+
+/**
+ * Changes the wiki's members or invitations, each change made through the
+ * API it is given. They are read again after it, with the wiki and the role
+ * it gives the person, as Twake Tasks' useBoardChange reads the board again:
+ * refused or not, since a refusal may come from a list behind the wiki.
+ */
+export function useSharingChange(
+  wikiId: string
+): UseMutationResult<void, Error, (api: PagesApi) => Promise<void>> {
+  const api = usePagesApi()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (change: (api: PagesApi) => Promise<void>) => change(api),
+    onSettled: () =>
+      Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: wikiKey(wikiId),
+          exact: true
+        }),
+        queryClient.invalidateQueries({ queryKey: sharingKey(wikiId) })
+      ])
+  })
 }
 
 export function useTree(wikiId: string): UseQueryResult<Tree> {

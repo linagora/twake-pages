@@ -77,6 +77,22 @@
     "cancel": "Cancel",
     "failed": "The wiki could not be deleted."
   },
+  "sharing": {
+    "share": "Share",
+    "title": "Share %{name}",
+    "invite": "Invite",
+    "email": "Email",
+    "roles": {
+      "viewer": "Viewer",
+      "editor": "Editor",
+      "admin": "Admin"
+    },
+    "roleOf": "Role: %{role}",
+    "invited": "Invited %{email}.",
+    "people": "People with access",
+    "invitation": "Invitation",
+    "close": "Close"
+  },
   "tree": {
     "title": "Pages",
     "empty": "No pages yet",
