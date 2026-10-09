@@ -281,36 +281,6 @@ export async function aPageIn(
 }
 
 /**
- * The next version of a database page, with another Grist address, written
- * straight into the wiki as publishing will write it: by its number.
- */
-export async function aGristVersionOf(
-  db: Db,
-  author: TestUser,
-  pageId: string,
-  gristUrl: string
-): Promise<void> {
-  await inTenant(db, author, async tx => {
-    const [page] = await tx
-      .select({ title: pages.title, version: pages.version })
-      .from(pages)
-      .where(eq(pages.id, pageId))
-    if (!page) throw new Error('no page')
-    const number = page.version + 1
-    await addVersion(tx, author, {
-      pageId,
-      number,
-      title: page.title,
-      gristUrl
-    })
-    await tx
-      .update(pages)
-      .set({ gristUrl, version: number })
-      .where(eq(pages.id, pageId))
-  })
-}
-
-/**
  * `count` pages written straight into the wiki, side by side at the top of
  * its tree, each titled after its position unless `titleOf` says otherwise.
  * Their ids come in the order of their positions. They are written at once:
@@ -869,14 +839,15 @@ export const STALE_NEIGHBOURS: [
   ['an unknown page', () => ({ afterId: randomUUID() })]
 ]
 
-/** What `publish` sends: a draft and the version it started from. */
-export interface DraftToPublish {
-  baseVersion: number
-  title: string
-  content: unknown[]
-}
+/**
+ * What `publish` sends: a draft, of blocks or at a Grist address, and the
+ * version it started from.
+ */
+export type DraftToPublish = { baseVersion: number; title: string } & (
+  { content: unknown[] } | { gristUrl: string }
+)
 
-/** `POST /pages/:pageId/versions` by the person, for a page of blocks. */
+/** `POST /pages/:pageId/versions` by the person. */
 export function publish(
   app: Awaited<ReturnType<typeof startApp>>,
   user: TestUser,

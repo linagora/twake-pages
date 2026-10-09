@@ -6,7 +6,7 @@ import type { Identity } from '../auth/index.ts'
 import { pageFollowers } from '../notifications/schema.ts'
 import { checkRole, roleOn } from '../wikis/access.ts'
 import { bumpWiki } from '../wikis/live.ts'
-import { checkBlocks, checkContent, type Blocks } from './blocks.ts'
+import { checkContent, type Blocks } from './blocks.ts'
 import { previewOf, queuePageEvent } from './events.ts'
 import {
   labels,
@@ -437,13 +437,15 @@ export type NewPage = PageMove & { title: string } & (
     | { kind: 'database'; gristUrl: string }
   )
 
-export interface NewVersion {
+/**
+ * A page's next version: blocks for a document, a Grist address for a
+ * database page, unchecked until the store checks them.
+ */
+export type NewVersion = {
   /** The version the draft started from. */
   baseVersion: number
   title: string
-  /** Unchecked, until the store checks them. */
-  content: Blocks
-}
+} & ({ content: Blocks } | { gristUrl: string })
 
 export function createPageStore(db: Db, gristOrigins: readonly string[]) {
   return {
@@ -493,12 +495,14 @@ export function createPageStore(db: Db, gristOrigins: readonly string[]) {
     /** The page's next version, by the person who publishes it. */
     publish(identity: Identity, pageId: string, input: NewVersion) {
       return writeOrRefuse(db, identity, async tx => {
-        // Before the wiki's row lock, as for a new page.
-        const blocks = checkBlocks(input.content, gristOrigins)
+        // Before the role and the wiki's row lock, as for a new page.
+        const checked = checkContent(input, gristOrigins)
         const page = await pageToPublish(tx, identity, pageId)
-        // Blocks fit a page of blocks only: a database page's version takes
-        // its Grist address instead (api.md).
-        if (page.kind !== 'document') throw new Refused('invalid_request')
+        // A document's version takes blocks, and a database page's its Grist
+        // address, which only the page tells (api.md).
+        if ((page.kind === 'document') !== 'content' in input) {
+          throw new Refused('invalid_request')
+        }
         if (page.version !== input.baseVersion) {
           throw new Refused('edit_conflict', {
             current: await summaryOf(tx, pageId, page.version)
@@ -506,7 +510,7 @@ export function createPageStore(db: Db, gristOrigins: readonly string[]) {
         }
         return publishVersion(tx, identity, page, {
           title: input.title,
-          ...blocks
+          ...checked
         })
       })
     }

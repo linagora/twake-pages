@@ -10,7 +10,9 @@ import {
   createPage,
   GRIST_ORIGIN,
   joinWiki,
+  MALFORMED_GRIST_URLS,
   malformedOrUnknownIds,
+  OFF_GRIST_ORIGINS,
   pageOf,
   paragraph,
   personOf,
@@ -319,7 +321,19 @@ describe('POST /pages/:pageId/versions', () => {
       'a NUL character in the title',
       { baseVersion: 1, title: 'On\u0000boarding', content: [] }
     ],
-    ['no blocks', { baseVersion: 1, title: 'Onboarding' }]
+    [
+      'neither blocks nor a Grist address',
+      { baseVersion: 1, title: 'Onboarding' }
+    ],
+    [
+      'both blocks and a Grist address',
+      {
+        baseVersion: 1,
+        title: 'Onboarding',
+        content: [],
+        gristUrl: `${GRIST_ORIGIN}/o/docs/4kq2/Budget`
+      }
+    ]
   ])('answers invalid_request for %s', async (_case, draft) => {
     const alice = aUser()
     const { wiki, page } = await aPageOf(alice)
@@ -332,5 +346,215 @@ describe('POST /pages/:pageId/versions', () => {
     expect(response.statusCode).toBe(400)
     expect(response.json()).toEqual({ error: 'invalid_request' })
     expect(await versionOf(api, alice, wiki.id)).toBe(before)
+  })
+
+  describe('a database page', () => {
+    const gristUrl = `${GRIST_ORIGIN}/o/docs/4kq2/Budget`
+    const nextUrl = `${GRIST_ORIGIN}/o/docs/9mz3/Budget`
+
+    /** Budget, a database page of the person's new wiki, at its version 1. */
+    async function aBudgetOf(user: TestUser) {
+      const wiki = await aWikiOf(api, user)
+      const pageId = await aPage(api, user, wiki.id, {
+        title: 'Budget',
+        kind: 'database',
+        gristUrl
+      })
+      return { wiki, pageId }
+    }
+
+    it('publishes the title and the Grist address as the next version, with no blocks', async () => {
+      const alice = aUser()
+      const { pageId } = await aBudgetOf(alice)
+
+      const response = await publish(api, alice, pageId, {
+        baseVersion: 1,
+        title: ' Budget 2027 ',
+        gristUrl: nextUrl
+      })
+
+      expect(response.statusCode).toBe(201)
+      expect(response.json()).toMatchObject({
+        id: pageId,
+        kind: 'database',
+        title: 'Budget 2027',
+        content: [],
+        gristUrl: nextUrl,
+        version: 2
+      })
+    })
+
+    it('writes its Grist address in the version', async () => {
+      const alice = aUser()
+      const { pageId } = await aBudgetOf(alice)
+      await publish(api, alice, pageId, {
+        baseVersion: 1,
+        title: 'Budget',
+        gristUrl: nextUrl
+      })
+
+      const version = await api.as(alice).get(`/pages/${pageId}/versions/2`)
+
+      expect(version.json()).toMatchObject({
+        number: 2,
+        content: [],
+        gristUrl: nextUrl
+      })
+    })
+
+    it.each(OFF_GRIST_ORIGINS)(
+      'answers invalid_grist_url for a version %s, and leaves the wiki as it was',
+      async (_case, url) => {
+        const alice = aUser()
+        const { wiki, pageId } = await aBudgetOf(alice)
+        const before = await versionOf(api, alice, wiki.id)
+
+        const response = await publish(api, alice, pageId, {
+          baseVersion: 1,
+          title: 'Budget',
+          gristUrl: url
+        })
+
+        expect(response.statusCode).toBe(400)
+        expect(response.json()).toEqual({ error: 'invalid_grist_url' })
+        expect(await versionOf(api, alice, wiki.id)).toBe(before)
+      }
+    )
+
+    // Two checks apply to each: the address, which needs nothing but the
+    // body, comes first (api.md).
+    it.each([
+      [
+        'forbidden, to a viewer',
+        async (alice: TestUser) => {
+          const { wiki, pageId } = await aBudgetOf(alice)
+          const bob = aUser({ organizationId: alice.organizationId })
+          await joinWiki(db, alice, wiki.id, bob, 'viewer')
+          return { who: bob, wikiId: wiki.id, pageId }
+        }
+      ],
+      [
+        'in_trash, for a page in the trash',
+        async (alice: TestUser) => {
+          const wiki = await aWikiOf(api, alice)
+          const pageId = await aPageIn(db, alice, wiki.id, {
+            title: 'Budget',
+            position: 'a0',
+            gristUrl,
+            deleted: true
+          })
+          return { who: alice, wikiId: wiki.id, pageId }
+        }
+      ],
+      [
+        'edit_conflict, for a draft started from an older version',
+        async (alice: TestUser) => {
+          const { wiki, pageId } = await aBudgetOf(alice)
+          await publish(api, alice, pageId, {
+            baseVersion: 1,
+            title: 'Budget',
+            gristUrl: nextUrl
+          })
+          return { who: alice, wikiId: wiki.id, pageId }
+        }
+      ]
+    ])(
+      'answers invalid_grist_url, not %s, with an address off the Grist origins',
+      async (_case, aPageToPublish) => {
+        const alice = aUser()
+        const { who, wikiId, pageId } = await aPageToPublish(alice)
+        const before = await versionOf(api, alice, wikiId)
+
+        const response = await publish(api, who, pageId, {
+          baseVersion: 1,
+          title: 'Budget',
+          gristUrl: 'https://docs.example.com/o/docs/4kq2'
+        })
+
+        expect(response.statusCode).toBe(400)
+        expect(response.json()).toEqual({ error: 'invalid_grist_url' })
+        expect(await versionOf(api, alice, wikiId)).toBe(before)
+      }
+    )
+
+    it('answers invalid_request for a Grist address sent to a document', async () => {
+      const alice = aUser()
+      const { wiki, page } = await aPageOf(alice)
+      const before = await versionOf(api, alice, wiki.id)
+
+      const response = await publish(api, alice, page.id, {
+        baseVersion: 1,
+        title: 'Onboarding',
+        gristUrl
+      })
+
+      expect(response.statusCode).toBe(400)
+      expect(response.json()).toEqual({ error: 'invalid_request' })
+      expect(await versionOf(api, alice, wiki.id)).toBe(before)
+    })
+
+    // The page tells its kind behind the wiki's row lock: after the trash,
+    // before the version the draft started from (api.md).
+    it('answers in_trash, not invalid_request, for blocks sent to a database page in the trash', async () => {
+      const alice = aUser()
+      const wiki = await aWikiOf(api, alice)
+      const pageId = await aPageIn(db, alice, wiki.id, {
+        title: 'Budget',
+        position: 'a0',
+        gristUrl,
+        deleted: true
+      })
+      const before = await versionOf(api, alice, wiki.id)
+
+      const response = await publish(api, alice, pageId, {
+        baseVersion: 1,
+        title: 'Budget',
+        content: [paragraph('Spent in March')]
+      })
+
+      expect(response.statusCode).toBe(409)
+      expect(response.json()).toEqual({ error: 'in_trash' })
+      expect(await versionOf(api, alice, wiki.id)).toBe(before)
+    })
+
+    it('answers invalid_request, not edit_conflict, for a Grist address sent to a document from an older version', async () => {
+      const alice = aUser()
+      const { wiki, page } = await aPageOf(alice)
+      await publish(api, alice, page.id, {
+        baseVersion: 1,
+        title: 'Onboarding',
+        content: [paragraph('Ask for a laptop')]
+      })
+      const before = await versionOf(api, alice, wiki.id)
+
+      const response = await publish(api, alice, page.id, {
+        baseVersion: 1,
+        title: 'Onboarding',
+        gristUrl
+      })
+
+      expect(response.statusCode).toBe(400)
+      expect(response.json()).toEqual({ error: 'invalid_request' })
+      expect(await versionOf(api, alice, wiki.id)).toBe(before)
+    })
+
+    it.each(MALFORMED_GRIST_URLS)(
+      'answers invalid_request for a Grist address %s, and leaves the wiki as it was',
+      async (_case, url) => {
+        const alice = aUser()
+        const { wiki, pageId } = await aBudgetOf(alice)
+        const before = await versionOf(api, alice, wiki.id)
+
+        const response = await api.as(alice).post(`/pages/${pageId}/versions`, {
+          baseVersion: 1,
+          title: 'Budget',
+          gristUrl: url
+        })
+
+        expect(response.statusCode).toBe(400)
+        expect(response.json()).toEqual({ error: 'invalid_request' })
+        expect(await versionOf(api, alice, wiki.id)).toBe(before)
+      }
+    )
   })
 })

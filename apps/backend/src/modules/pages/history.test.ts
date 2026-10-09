@@ -2,7 +2,6 @@ import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest'
 import { createDb } from '../../infra/db.ts'
 import {
   aBlock,
-  aGristVersionOf,
   aPage,
   aPageIn,
   aUser,
@@ -385,14 +384,11 @@ describe('POST /pages/:pageId/versions/:number/restore', () => {
       kind: 'database',
       gristUrl: first
     })
-    // Written straight into the wiki, as no route publishes a database page
-    // yet.
-    await aGristVersionOf(
-      db,
-      alice,
-      pageId,
-      `${GRIST_ORIGIN}/o/docs/9mz3/Budget`
-    )
+    await publish(api, alice, pageId, {
+      baseVersion: 1,
+      title: 'Budget',
+      gristUrl: `${GRIST_ORIGIN}/o/docs/9mz3/Budget`
+    })
 
     const response = await restoreVersion(api, alice, pageId, 1)
 
@@ -437,19 +433,17 @@ describe('POST /pages/:pageId/versions/:number/restore', () => {
     const alice = aUser()
     const wiki = await aWikiOf(api, alice)
     // Written straight into the wiki, as created while the deployment's Grist
-    // origins named this one, then published again as no route publishes a
-    // database page yet.
+    // origins named this one.
     const pageId = await aPageIn(db, alice, wiki.id, {
       title: 'Budget',
       position: 'a0',
       gristUrl: `${FORMER_GRIST_ORIGIN}/o/docs/4kq2/Budget`
     })
-    await aGristVersionOf(
-      db,
-      alice,
-      pageId,
-      `${GRIST_ORIGIN}/o/docs/4kq2/Budget`
-    )
+    await publish(api, alice, pageId, {
+      baseVersion: 1,
+      title: 'Budget',
+      gristUrl: `${GRIST_ORIGIN}/o/docs/4kq2/Budget`
+    })
     const before = await versionOf(api, alice, wiki.id)
 
     const response = await restoreVersion(api, alice, pageId, 1)

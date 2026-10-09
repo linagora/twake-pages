@@ -19,7 +19,8 @@ const REFUSAL_STATUS = {
   not_same_organization: 400,
   invalid_label: 400,
   // A malformed body, which the routes answer themselves, unless only the
-  // page tells it: blocks sent to a database page.
+  // page tells it: blocks sent to a database page, or a Grist address to a
+  // document.
   invalid_request: 400
 } as const
 

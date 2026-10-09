@@ -40,12 +40,14 @@ const newPage = z.discriminatedUnion('kind', [
   })
 ])
 
-// Database pages come with their own ticket.
-const newVersion = z.object({
-  baseVersion: z.int().min(1),
-  title: pageTitle,
-  content: pageBlocks
-})
+const draft = { baseVersion: z.int().min(1), title: pageTitle }
+
+// A version holds blocks or a Grist address, as its page does: a body with
+// both, or neither, is malformed.
+const newVersion = z.union([
+  z.object({ ...draft, content: pageBlocks, gristUrl: z.never().optional() }),
+  z.object({ ...draft, gristUrl, content: z.never().optional() })
+])
 
 export const wikiParams = z.object({ wikiId: z.uuid() })
 
