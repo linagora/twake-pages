@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
-import { typeInBlocks } from './editor.ts'
+import { publishText, typeInBlocks } from './editor.ts'
 import { aliceWiki, newPage } from './wiki.ts'
 
 const TEXT = 'Bring your badge on the first day.'
@@ -25,9 +25,7 @@ test('edits "Onboarding", types text and publishes it: the page shows the text a
 }) => {
   await aliceOnboarding(page)
 
-  await page.getByRole('link', { name: 'Edit page' }).click()
-  await typeInBlocks(page, TEXT)
-  await page.getByRole('button', { name: 'Publish' }).click()
+  await publishText(page, TEXT)
 
   await expectPublished(page)
   await page.reload()

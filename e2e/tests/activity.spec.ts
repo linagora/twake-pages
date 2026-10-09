@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { typeInBlocks } from './editor.ts'
+import { publishText } from './editor.ts'
 import { pagePublishedEvents } from './platform.ts'
 import { aliceSpaceWiki } from './space.ts'
 
@@ -15,10 +15,7 @@ test('puts page.published on the activity exchange, with the wiki as container, 
   const edit = page.getByRole('link', { name: 'Edit page' })
   const pageId = (await edit.getAttribute('href'))?.split('/').at(-2) ?? ''
 
-  await edit.click()
-  await typeInBlocks(page, 'Sprint goals')
-  await page.getByRole('button', { name: 'Publish' }).click()
-  await expect(page.getByText('Version 2', { exact: true })).toBeVisible()
+  await publishText(page, 'Sprint goals')
 
   await expect(() => {
     expect(pagePublishedEvents(pageId)).toEqual([
