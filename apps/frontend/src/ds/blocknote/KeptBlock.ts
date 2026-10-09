@@ -1,80 +1,90 @@
-import { createExtension } from '@blocknote/core'
-import { createReactBlockSpec } from '@blocknote/react'
-import { Box, Typography } from '@linagora/twake-mui'
+import { createBlockSpec, createExtension } from '@blocknote/core'
+import type { SxProps, Theme } from '@linagora/twake-mui'
 import { Plugin } from 'prosemirror-state'
-import { createContext, use, useId, type ReactElement } from 'react'
 
 import { isFields, KEPT_BLOCK, storedBlock } from '@/ds/editorBlocks'
-
-/** Names the kind of a block the editor does not write, from its type. */
-export const BlockKindContext = createContext<(type: string) => string>(
-  type => type
-)
 
 const textOf = (value: unknown): string =>
   typeof value === 'string' ? value : ''
 
+// Names each card by the line of its kind, under an id of its own.
+let cards = 0
+
+/** A line of the card of a kept block. */
+function line(className: string, text: string): HTMLDivElement {
+  const element = document.createElement('div')
+  element.className = className
+  element.textContent = text
+  return element
+}
+
 /**
  * A block the editor does not write, by its kind, its caption or else its
  * name, and its address. The address shows as text, as no check of the
- * server covers that of a block it does not know.
+ * server covers that of a block it does not know. Drawn with the DOM, not
+ * React: BlockNote draws a React block of an editor that is not shown in a
+ * root of its own, through flushSync, which does nothing while React
+ * renders, where the read view draws its blocks.
  */
-function KeptBlockView({ stored }: { stored: string }): ReactElement {
-  const kindOf = use(BlockKindContext)
-  const kindId = useId()
+function keptBlockCard(
+  stored: string,
+  kindOf: (type: string) => string
+): HTMLElement {
   const block = storedBlock(stored) ?? {}
   const props = isFields(block.props) ? block.props : {}
   const caption = textOf(props.caption) || textOf(props.name)
   const url = textOf(props.url)
+  cards += 1
+  const kind = line('twake-kept-block-kind', kindOf(textOf(block.type)))
+  kind.id = `twake-kept-block-${String(cards)}`
+  const card = document.createElement('div')
+  card.className = 'twake-kept-block'
+  card.setAttribute('role', 'group')
+  card.setAttribute('aria-labelledby', kind.id)
+  // ProseMirror makes a block without content so through a property, which
+  // jsdom lacks: the attribute says it in tests too.
+  card.setAttribute('contenteditable', 'false')
+  card.append(kind)
+  if (caption) card.append(line('twake-kept-block-caption', caption))
+  if (url) card.append(line('twake-kept-block-url', url))
+  return card
+}
 
-  return (
-    <Box
-      role="group"
-      aria-labelledby={kindId}
-      // ProseMirror makes a block without content so through a property,
-      // which jsdom lacks: the attribute says it in tests too.
-      contentEditable={false}
-      sx={theme => ({
-        width: '100%',
-        border: `1px solid ${theme.vars.palette.divider}`,
-        borderRadius: 1,
-        padding: theme.spacing(1, 1.5)
-      })}
-    >
-      <Typography id={kindId} component="div" variant="subtitle2">
-        {kindOf(textOf(block.type))}
-      </Typography>
-      {caption && (
-        <Typography component="div" variant="body2">
-          {caption}
-        </Typography>
-      )}
-      {url && (
-        <Typography
-          component="div"
-          variant="caption"
-          color="textSecondary"
-          sx={{ overflowWrap: 'anywhere' }}
-        >
-          {url}
-        </Typography>
-      )}
-    </Box>
-  )
+/** The styles of the cards of kept blocks, for the element that holds them. */
+export const keptBlockStyles: SxProps<Theme> = {
+  '& .twake-kept-block': {
+    width: '100%',
+    border: 1,
+    borderColor: 'divider',
+    borderRadius: 1,
+    px: 1.5,
+    py: 1
+  },
+  '& .twake-kept-block-kind': { typography: 'subtitle2' },
+  '& .twake-kept-block-caption': { typography: 'body2' },
+  '& .twake-kept-block-url': {
+    typography: 'caption',
+    color: 'text.secondary',
+    overflowWrap: 'anywhere'
+  }
 }
 
 /**
  * The kept block: a block the editor does not write, held as the page
  * stores it, in JSON, which the editor shows and does not edit. Its menu
- * offers none.
+ * offers none. `kindOf` names the kind of the block held, from its type.
  */
-export const keptBlockSpec = createReactBlockSpec(
+export const keptBlockSpec = createBlockSpec(
   {
     type: KEPT_BLOCK,
     propSchema: { stored: { default: '' } },
     content: 'none'
   },
-  { render: ({ block }) => <KeptBlockView stored={block.props.stored} /> }
+  ({ kindOf = type => type }: { kindOf?: (type: string) => string }) => ({
+    render: (block: { props: { stored: string } }) => ({
+      dom: keptBlockCard(block.props.stored, kindOf)
+    })
+  })
 )
 
 /**

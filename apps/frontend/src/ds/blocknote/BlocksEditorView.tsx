@@ -12,12 +12,12 @@ import { en, fr } from '@blocknote/core/locales'
 // Ariakit one, the docs offer without recommending it.
 import { BlockNoteView } from '@blocknote/mantine'
 import { useCreateBlockNote } from '@blocknote/react'
-import { useColorScheme } from '@linagora/twake-mui'
-import type { ReactElement } from 'react'
+import { Box, useColorScheme } from '@linagora/twake-mui'
+import { useState, type ReactElement } from 'react'
 
 import {
-  BlockKindContext,
   keptBlockSpec,
+  keptBlockStyles,
   pastesWithoutKeptBlocks
 } from '@/ds/blocknote/KeptBlock'
 import {
@@ -29,20 +29,23 @@ import {
 
 type Blocks = Record<string, unknown>[]
 
-// The blocks of the editor: those it writes, and the kept block, which the
-// block menu does not offer and a paste does not make (see
-// pastesWithoutKeptBlocks). Its blocks are given as any blocks, as
-// BlockNote's heading fails BlockNote's own constraint on them under
-// exactOptionalPropertyTypes (its optional isToggleable); spread, they type
-// as the kept block alone.
-const schema = BlockNoteSchema.create<BlockSpecs>({
-  blockSpecs: {
-    ...Object.fromEntries(
-      EDITOR_BLOCKS.map(type => [type, defaultBlockSpecs[type]])
-    ),
-    [KEPT_BLOCK]: keptBlockSpec()
-  }
-})
+/**
+ * The blocks of the editor: those it writes, and the kept block, which the
+ * block menu does not offer and a paste does not make (see
+ * pastesWithoutKeptBlocks), named by `kindOf`. Its blocks are given as any
+ * blocks, as BlockNote's heading fails BlockNote's own constraint on them
+ * under exactOptionalPropertyTypes (its optional isToggleable); spread,
+ * they type as the kept block alone.
+ */
+const schemaOf = (kindOf: (type: string) => string) =>
+  BlockNoteSchema.create<BlockSpecs>({
+    blockSpecs: {
+      ...Object.fromEntries(
+        EDITOR_BLOCKS.map(type => [type, defaultBlockSpecs[type]])
+      ),
+      [KEPT_BLOCK]: keptBlockSpec({ kindOf })
+    }
+  })
 
 /**
  * BlockNote, the editor of the pages, writing blocks from `initial` on. A
@@ -61,6 +64,8 @@ export function BlocksEditorView({
   blockKind: (type: string) => string
   onChange: (blocks: Blocks) => void
 }): ReactElement {
+  // Made once, as the editor is.
+  const [schema] = useState(() => schemaOf(blockKind))
   const editor = useCreateBlockNote({
     schema,
     dictionary: lang === 'fr' ? fr : en,
@@ -74,7 +79,7 @@ export function BlocksEditorView({
   const dark = (mode === 'system' ? systemMode : mode) === 'dark'
 
   return (
-    <BlockKindContext value={blockKind}>
+    <Box sx={keptBlockStyles}>
       <BlockNoteView
         editor={editor}
         theme={dark ? 'dark' : 'light'}
@@ -82,6 +87,6 @@ export function BlocksEditorView({
           onChange(fromEditor(editor.document))
         }}
       />
-    </BlockKindContext>
+    </Box>
   )
 }
