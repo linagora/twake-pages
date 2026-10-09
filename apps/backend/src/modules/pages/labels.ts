@@ -74,6 +74,27 @@ async function ensureLabels(
   return named.map(({ id }) => id)
 }
 
+/**
+ * Deletes those of the labels that no page carries any more, as api.md says.
+ * A page in the trash still carries its labels, and may come back with them.
+ */
+export async function deleteUnusedLabels(tx: Tx, labelIds: string[]) {
+  if (labelIds.length === 0) return
+  await tx
+    .delete(labels)
+    .where(
+      and(
+        inArray(labels.id, labelIds),
+        notExists(
+          tx
+            .select({ labelId: pageLabels.labelId })
+            .from(pageLabels)
+            .where(eq(pageLabels.labelId, labels.id))
+        )
+      )
+    )
+}
+
 // A page in the trash still carries its labels, but the wiki lists only its
 // live pages, and the labels they carry.
 const toItsLivePage = and(
@@ -120,24 +141,10 @@ function createLabelStore(db: Db) {
             )
           )
           .returning({ labelId: pageLabels.labelId })
-        if (dropped.length > 0) {
-          // A page in the trash still carries its labels, and may come back
-          // with them.
-          await tx.delete(labels).where(
-            and(
-              inArray(
-                labels.id,
-                dropped.map(({ labelId }) => labelId)
-              ),
-              notExists(
-                tx
-                  .select({ labelId: pageLabels.labelId })
-                  .from(pageLabels)
-                  .where(eq(pageLabels.labelId, labels.id))
-              )
-            )
-          )
-        }
+        await deleteUnusedLabels(
+          tx,
+          dropped.map(({ labelId }) => labelId)
+        )
         if (kept.length > 0) {
           await tx
             .insert(pageLabels)
