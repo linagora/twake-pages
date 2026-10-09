@@ -1,16 +1,22 @@
-import { fireEvent, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
 import { ApiError } from '@/application/pages'
+import type { Role } from '@/domain/wiki'
 import { findAppSearch } from '@/testing/appSearch'
 import { findEmptyState } from '@/testing/emptyState'
 import { fakePagesApi, paragraph } from '@/testing/fakePagesApi'
 import { renderRoute } from '@/testing/renderWithProviders'
 
-/** Alice's Handbook, whose "Onboarding" tells to bring a badge. */
-function handbook() {
+const BOB = 'bob@example.com'
+
+/**
+ * Alice's Handbook, which she runs with `members`, whose "Onboarding" tells
+ * to bring a badge.
+ */
+function handbook(members: Record<string, Role> = {}) {
   const pagesApi = fakePagesApi()
-  const wiki = pagesApi.withWiki({ name: 'Handbook' })
+  const wiki = pagesApi.withWiki({ name: 'Handbook', members })
   const onboarding = pagesApi.withPage(wiki.id, {
     title: 'Onboarding',
     content: [paragraph('Bring your badge on the first day.')]
@@ -21,6 +27,16 @@ function handbook() {
 /** The results shown for `text`, once found. */
 const resultsFor = async (text: string) =>
   within(await screen.findByRole('region', { name: `Results for “${text}”` }))
+
+/** The search field of a wiki's own search. */
+const wikiSearch = () =>
+  screen.findByRole('searchbox', { name: 'Search this wiki' })
+
+/** The search of every wiki and that of one wiki, each by its address. */
+const searches: [string, (wikiId: string) => string][] = [
+  ['every wiki', () => '/search'],
+  ['one wiki', wikiId => `/wikis/${wikiId}/search`]
+]
 
 describe('SearchScreen', () => {
   it('lists the pages found in every wiki, the best first, each with its wiki', async () => {
@@ -104,24 +120,29 @@ describe('SearchScreen', () => {
     )
   })
 
-  it('shows a home page under the name of its wiki, which opens on it', async () => {
-    const pagesApi = fakePagesApi()
-    const wiki = pagesApi.withWiki({ name: 'Handbook' })
-    await pagesApi.publish(wiki.homePageId, {
-      baseVersion: 1,
-      title: 'Welcome',
-      content: [paragraph('Wear your badge at all times.')]
-    })
-    const { router } = renderRoute('/search?q=badge', { pagesApi })
+  it.each(searches)(
+    'shows a home page under the name of its wiki, which opens on it, in the search of %s',
+    async (_search, addressOf) => {
+      const pagesApi = fakePagesApi()
+      const wiki = pagesApi.withWiki({ name: 'Handbook' })
+      await pagesApi.publish(wiki.homePageId, {
+        baseVersion: 1,
+        title: 'Welcome',
+        content: [paragraph('Wear your badge at all times.')]
+      })
+      const { router } = renderRoute(`${addressOf(wiki.id)}?q=badge`, {
+        pagesApi
+      })
 
-    const results = await resultsFor('badge')
-    expect(
-      results.getByRole('listitem', { name: 'Handbook' })
-    ).toHaveTextContent('Home page')
-    fireEvent.click(results.getByRole('link', { name: 'Handbook' }))
+      const results = await resultsFor('badge')
+      expect(
+        results.getByRole('listitem', { name: 'Handbook' })
+      ).toHaveTextContent('Home page')
+      fireEvent.click(results.getByRole('link', { name: 'Handbook' }))
 
-    expect(router.state.location.pathname).toBe(`/wikis/${wiki.id}`)
-  })
+      expect(router.state.location.pathname).toBe(`/wikis/${wiki.id}`)
+    }
+  )
 
   it("highlights the title of a home page only when it is its wiki's name", async () => {
     const pagesApi = fakePagesApi()
@@ -168,15 +189,18 @@ describe('SearchScreen', () => {
     )
   })
 
-  it('says so when the search fails', async () => {
-    const { pagesApi } = handbook()
-    pagesApi.search.mockRejectedValue(new ApiError(400, 'invalid_request'))
-    renderRoute('/search?q=badge', { pagesApi })
+  it.each(searches)(
+    'says so when the search of %s fails',
+    async (_search, addressOf) => {
+      const { pagesApi, wiki } = handbook()
+      pagesApi.search.mockRejectedValue(new ApiError(400, 'invalid_request'))
+      renderRoute(`${addressOf(wiki.id)}?q=badge`, { pagesApi })
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(
-      'The pages could not be searched.'
-    )
-  })
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'The pages could not be searched.'
+      )
+    }
+  )
 
   it('searches nothing without words', async () => {
     const { pagesApi } = handbook()
@@ -233,5 +257,77 @@ describe('the search of the app bar', () => {
     renderRoute(`/wikis/${wiki.id}/search?q=badge`, { pagesApi })
 
     expect(await findAppSearch()).toHaveValue('')
+  })
+})
+
+describe("a wiki's search", () => {
+  it('searches the wiki alone for the words typed in its own field', async () => {
+    const { pagesApi, wiki } = handbook()
+    const guide = pagesApi.withWiki({ name: 'Guide' })
+    pagesApi.withPage(guide.id, { title: 'Badges' })
+    const { router } = renderRoute(`/wikis/${wiki.id}/search`, { pagesApi })
+
+    fireEvent.change(await wikiSearch(), { target: { value: ' badge ' } })
+    fireEvent.submit(screen.getByRole('search', { name: 'Search this wiki' }))
+
+    const results = await resultsFor('badge')
+    expect(
+      results
+        .getAllByRole('listitem')
+        .map(result => result.getAttribute('aria-label'))
+    ).toEqual(['Onboarding'])
+    expect(router.state.location.pathname).toBe(`/wikis/${wiki.id}/search`)
+    expect(router.state.location.search).toBe('?q=badge')
+    expect(pagesApi.search).toHaveBeenCalledWith('badge', wiki.id)
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Search this wiki' })
+    ).toBeVisible()
+  })
+
+  it('keeps the words searched in its field', async () => {
+    const { pagesApi, wiki } = handbook()
+    renderRoute(`/wikis/${wiki.id}/search?q=badge`, { pagesApi })
+
+    expect(await wikiSearch()).toHaveValue('badge')
+  })
+
+  it('opens the pages found inside the frame of TwakeSpace', async () => {
+    const { pagesApi, wiki, onboarding } = handbook()
+    const { router } = renderRoute(`/embed/wikis/${wiki.id}/search?q=badge`, {
+      pagesApi
+    })
+
+    fireEvent.click(
+      (await resultsFor('badge')).getByRole('link', { name: 'Onboarding' })
+    )
+
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Onboarding' })
+    ).toBeVisible()
+    expect(router.state.location.pathname).toBe(
+      `/embed/wikis/${wiki.id}/pages/${onboarding.id}`
+    )
+    expect(screen.queryByRole('banner')).not.toBeInTheDocument()
+  })
+
+  it('drops a page that another member sends to the trash', async () => {
+    const { pagesApi, wiki, onboarding } = handbook({ [BOB]: 'editor' })
+    pagesApi.withPage(wiki.id, { title: 'Badges' })
+    const bob = pagesApi.signedInAs(BOB)
+    renderRoute(`/wikis/${wiki.id}/search?q=badge`, { pagesApi })
+    expect(
+      (await resultsFor('badge')).getByRole('listitem', { name: 'Onboarding' })
+    ).toBeInTheDocument()
+
+    await act(() => bob.deletePage(onboarding.id))
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('listitem', { name: 'Onboarding' })
+      ).not.toBeInTheDocument()
+    })
+    expect(
+      (await resultsFor('badge')).getByRole('listitem', { name: 'Badges' })
+    ).toBeInTheDocument()
   })
 })

@@ -10,36 +10,81 @@ import { ResultList, ResultRow } from '@/ds/ResultList'
 import type { PageRef } from '@/domain/page'
 import { excerptParts, type SearchResult } from '@/domain/search'
 import { useI18n } from '@/ui/i18n/useI18n'
-import { PlaceholderScreen } from '@/ui/PlaceholderScreen'
+import { SearchField } from '@/ui/search/SearchField'
 import { useDocumentTitle } from '@/ui/useDocumentTitle'
-import { useSearch } from '@/ui/wiki/queries'
-import { usePageEntry, type PageEntry } from '@/ui/wiki/usePageEntry'
+import { useSearch, useWikiSearch } from '@/ui/wiki/queries'
+import {
+  usePageEntry,
+  type PageEntry,
+  type PathOf
+} from '@/ui/wiki/usePageEntry'
 
+/** The search of every wiki of the person, or of the wiki of the address. */
 export function SearchScreen(): ReactElement {
   const { t } = useI18n()
   const { wikiId } = useParams()
-  if (wikiId !== undefined) {
-    return <PlaceholderScreen title={t('search.inWiki')} />
-  }
-  return <AppSearchScreen />
-}
-
-/** The search of every wiki of the person. */
-function AppSearchScreen(): ReactElement {
-  const { t } = useI18n()
   const [params] = useSearchParams()
   const text = params.get('q')?.trim() ?? ''
-  const results = useSearch(text)
-  const entryOf = usePageEntry()
-  useDocumentTitle(t('search.title'))
+  const title = t(wikiId === undefined ? 'search.title' : 'search.inWiki')
+  useDocumentTitle(title)
 
   return (
     <main className="u-p-2">
       <Typography variant="h3" component="h1" className="u-mb-2">
-        {t('search.title')}
+        {title}
       </Typography>
-      <Outcome text={text} results={results} entryOf={entryOf} />
+      {wikiId === undefined ? (
+        <AppSearch text={text} />
+      ) : (
+        <WikiSearch wikiId={wikiId} text={text} />
+      )}
     </main>
+  )
+}
+
+/** The search of every wiki, whose field is in the app bar. */
+function AppSearch({ text }: { text: string }): ReactElement {
+  const results = useSearch(text)
+  const entryOf = usePageEntry()
+  return <Outcome text={text} results={results} entryOf={entryOf} />
+}
+
+/**
+ * The path to a page found from its wiki's own screen, which keeps to the
+ * frame of TwakeSpace, where the wiki's address would leave it.
+ */
+const pathInItsWiki: PathOf = (page, home) =>
+  home ? '..' : `../pages/${page.id}`
+
+/**
+ * The search of one wiki. It has a field of its own, as TwakeSpace shows the
+ * wiki without the app bar, and its results open inside the frame of
+ * TwakeSpace too.
+ */
+function WikiSearch({
+  wikiId,
+  text
+}: {
+  wikiId: string
+  text: string
+}): ReactElement {
+  const { t } = useI18n()
+  const [, setParams] = useSearchParams()
+  const results = useWikiSearch(wikiId, text)
+  const entryOf = usePageEntry(pathInItsWiki)
+  return (
+    <>
+      <div className="u-mb-2 u-maw-7">
+        <SearchField
+          label={t('search.inWiki')}
+          searched={text}
+          onSearch={words => {
+            setParams({ q: words })
+          }}
+        />
+      </div>
+      <Outcome text={text} results={results} entryOf={entryOf} />
+    </>
   )
 }
 

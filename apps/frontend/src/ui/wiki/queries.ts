@@ -34,6 +34,8 @@ const treeKey = (wikiId: string) => [...wikiKey(wikiId), 'tree'] as const
 const pagesKey = (wikiId: string) => [...wikiKey(wikiId), 'pages'] as const
 const pageKey = (wikiId: string, pageId: string) =>
   [...pagesKey(wikiId), pageId] as const
+const wikiSearchKey = (wikiId: string, text: string) =>
+  [...wikiKey(wikiId), 'search', text] as const
 
 /**
  * A page carries no version of its wiki, so it keeps the one known as its
@@ -69,6 +71,22 @@ export function useSearch(text: string): UseQueryResult<SearchResult[]> {
   return useQuery({
     queryKey: searchKey(text),
     queryFn: () => api.search(text),
+    enabled: text.trim() !== ''
+  })
+}
+
+/**
+ * The pages of `wikiId` found for `text`, the best first, found again with
+ * the rest of the wiki when its stream tells of a change.
+ */
+export function useWikiSearch(
+  wikiId: string,
+  text: string
+): UseQueryResult<SearchResult[]> {
+  const api = usePagesApi()
+  return useQuery({
+    queryKey: wikiSearchKey(wikiId, text),
+    queryFn: () => api.search(text, wikiId),
     enabled: text.trim() !== ''
   })
 }
