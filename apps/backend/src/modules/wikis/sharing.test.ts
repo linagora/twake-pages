@@ -316,3 +316,125 @@ describe('POST /wikis/:wikiId/invites', () => {
     }
   )
 })
+
+/** Invites the email to the wiki, and gives the invitation's id. */
+async function anInvitation(
+  admin: TestUser,
+  wikiId: string,
+  email = anEmail('carol')
+) {
+  await invite(api, admin, wikiId, email)
+  const invitation = (await sharingOf(admin, wikiId)).invites.find(
+    listed => listed.email === email.toLowerCase()
+  )
+  if (!invitation) throw new Error(`${email} is not invited`)
+  return invitation.id
+}
+
+const cancel = (admin: TestUser, wikiId: string, inviteId: string) =>
+  api.as(admin).delete(`/wikis/${wikiId}/invites/${inviteId}`)
+
+describe('DELETE /wikis/:wikiId/invites/:inviteId', () => {
+  it('cancels an invitation, which its email then no longer claims', async () => {
+    const alice = aUser()
+    const bob = aColleagueOf(alice, 'bob')
+    const wiki = await aWikiOf(api, alice)
+    const invitation = await anInvitation(alice, wiki.id, bob.email)
+
+    const response = await cancel(alice, wiki.id, invitation)
+
+    expect(response.statusCode).toBe(204)
+    expect((await sharingOf(alice, wiki.id)).invites).toEqual([])
+    expect((await wikisOf(api, bob)).map(listed => listed.id)).not.toContain(
+      wiki.id
+    )
+  })
+
+  it('moves the wiki’s version', async () => {
+    const alice = aUser()
+    const wiki = await aWikiOf(api, alice)
+    const invitation = await anInvitation(alice, wiki.id)
+    const before = await versionOf(api, alice, wiki.id)
+
+    await cancel(alice, wiki.id, invitation)
+
+    expect(await versionOf(api, alice, wiki.id)).toBeGreaterThan(before)
+  })
+
+  it('answers the same for an invitation already canceled', async () => {
+    const alice = aUser()
+    const wiki = await aWikiOf(api, alice)
+    const invitation = await anInvitation(alice, wiki.id)
+    await cancel(alice, wiki.id, invitation)
+
+    const response = await cancel(alice, wiki.id, invitation)
+
+    expect(response.statusCode).toBe(204)
+  })
+
+  it('leaves the invitations of the admin’s other wikis', async () => {
+    const alice = aUser()
+    const wiki = await aWikiOf(api, alice)
+    const archives = await aWikiOf(api, alice, 'Archives')
+    const invitation = await anInvitation(alice, archives.id)
+
+    await cancel(alice, wiki.id, invitation)
+
+    expect((await sharingOf(alice, archives.id)).invites).toHaveLength(1)
+  })
+
+  it.each(['viewer', 'editor'] as const)('refuses %ss', async role => {
+    const alice = aUser()
+    const bob = aColleagueOf(alice)
+    const wiki = await aWikiOf(api, alice)
+    await joinWiki(db, alice, wiki.id, bob, role)
+    const invitation = await anInvitation(alice, wiki.id)
+    const before = await versionOf(api, alice, wiki.id)
+
+    const response = await cancel(bob, wiki.id, invitation)
+
+    expect(response.statusCode).toBe(403)
+    expect(response.json()).toEqual({ error: 'forbidden' })
+    expect(await versionOf(api, alice, wiki.id)).toBe(before)
+    expect((await sharingOf(alice, wiki.id)).invites).toHaveLength(1)
+  })
+
+  it('hides the wiki from someone who is no member', async () => {
+    const alice = aUser()
+    const wiki = await aWikiOf(api, alice)
+    const invitation = await anInvitation(alice, wiki.id)
+    const before = await versionOf(api, alice, wiki.id)
+
+    const response = await cancel(aColleagueOf(alice), wiki.id, invitation)
+
+    expect(response.statusCode).toBe(404)
+    expect(response.json()).toEqual({ error: 'not_found' })
+    expect(await versionOf(api, alice, wiki.id)).toBe(before)
+  })
+
+  it.each(WIKIS_WITH_MANAGED_MEMBERS)(
+    'answers managed for %s',
+    async (_case, aWiki) => {
+      const alice = aUser()
+      const wikiId = await aWiki(alice, aColleagueOf(alice))
+      const before = await versionOf(api, alice, wikiId)
+
+      const response = await cancel(alice, wikiId, randomUUID())
+
+      expect(response.statusCode).toBe(409)
+      expect(response.json()).toEqual({ error: 'managed' })
+      expect(await versionOf(api, alice, wikiId)).toBe(before)
+    }
+  )
+
+  it('answers not_found for an invitation id that is no uuid', async () => {
+    const alice = aUser()
+    const wiki = await aWikiOf(api, alice)
+
+    const response = await cancel(alice, wiki.id, 'carol')
+
+    expect(response.statusCode).toBe(404)
+    expect(response.json()).toEqual({ error: 'not_found' })
+    expect(await versionOf(api, alice, wiki.id)).toBe(wiki.version)
+  })
+})

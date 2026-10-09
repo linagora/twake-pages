@@ -13,6 +13,8 @@ const role = z.enum(['viewer', 'editor', 'admin'])
 
 const newInvite = z.object({ email: z.email().max(254).toLowerCase(), role })
 
+const inviteParams = wikiParams.extend({ inviteId: z.uuid() })
+
 // A personal wiki stays private, and a space wiki takes its members from its
 // space. Unlike Twake Tasks, which answers forbidden, both are managed, as
 // renaming a space wiki is.
@@ -110,6 +112,18 @@ function createSharingStore(db: Db) {
             : []
         return { members, invites, managed: wiki.kind !== 'shared' }
       })
+    },
+
+    /** Answers the same for an invitation already gone, as Twake Tasks does. */
+    cancelInvite(identity: Identity, wikiId: string, inviteId: string) {
+      return writeOrRefuse(db, identity, async tx => {
+        await sharedWiki(tx, identity, wikiId)
+        await tx
+          .delete(wikiInvites)
+          .where(
+            and(eq(wikiInvites.wikiId, wikiId), eq(wikiInvites.id, inviteId))
+          )
+      })
     }
   }
 }
@@ -153,6 +167,24 @@ export function registerSharing(
       )
       if (!result.ok) return refuse(reply, result.error)
       return reply.code(202).send({ status: 'invited' })
+    }
+  )
+
+  app.delete(
+    '/wikis/:wikiId/invites/:inviteId',
+    { preHandler: deps.requireIdentity },
+    async (request, reply) => {
+      const identity = request.identity
+      if (!identity) return reply.code(401).send()
+      const params = inviteParams.safeParse(request.params)
+      if (!params.success) return refuse(reply, 'not_found')
+      const result = await store.cancelInvite(
+        identity,
+        params.data.wikiId,
+        params.data.inviteId
+      )
+      if (!result.ok) return refuse(reply, result.error)
+      return reply.code(204).send()
     }
   )
 }

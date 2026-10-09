@@ -159,7 +159,7 @@ The personal wiki is stored with the name `Personal`. Clients show a translated 
 |---|---|---|---|
 | `GET /wikis/:wikiId/members` | | `{ members: Member[], invites: Invite[], managed: boolean }` | member (invites: admin only, else `[]`) |
 | `POST /wikis/:wikiId/invites` | `{ email, role }` | `202 { status: 'invited' }`, whether the email has an account or not | admin, shared wiki |
-| `DELETE /wikis/:wikiId/invites/:inviteId` | | `204` | admin |
+| `DELETE /wikis/:wikiId/invites/:inviteId` | | `204`, also for an invitation already gone | admin, shared wiki |
 | `PATCH /wikis/:wikiId/members/:userId` | `{ role }` | `204` | admin, shared wiki |
 | `DELETE /wikis/:wikiId/members/:userId` | | `204`; a member may remove themself | admin, shared wiki |
 | `GET /people?q=` | | `{ people: { email, name }[] }`, at most 10, same organization; `[]` in B2C | anyone |
