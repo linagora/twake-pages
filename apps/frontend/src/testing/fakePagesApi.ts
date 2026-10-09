@@ -1262,6 +1262,11 @@ function signedIn(world: World, person: Person): FakePagesApi {
         if (page?.wikiId !== wikiId) throw refuse('not_found')
         if (page.deletion?.rootId !== page.id) throw refuse('not_in_trash')
         for (const each of branchOf(page)) world.pages.delete(each.id)
+        // As on the backend, a branch deleted before under the purged one
+        // stays in the trash, and comes back at the top of the tree.
+        for (const each of pagesOf(wikiId)) {
+          if (!parentOf(each)) each.parentId = null
+        }
         bump(wiki)
       })
     ),

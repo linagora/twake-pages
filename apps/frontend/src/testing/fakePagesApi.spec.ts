@@ -1056,6 +1056,28 @@ describe('fakePagesApi', () => {
       await expect(api.listTrash(wiki.id)).resolves.toEqual([])
     })
 
+    it('brings a branch deleted before under a purged one to the top', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki()
+      const onboarding = api.withPage(wiki.id, { title: 'Onboarding' })
+      const laptop = api.withPage(wiki.id, {
+        title: 'Laptop',
+        parentId: onboarding.id
+      })
+      await api.deletePage(laptop.id)
+      await api.deletePage(onboarding.id)
+
+      await api.purgePage(wiki.id, onboarding.id)
+
+      await expect(api.getPage(laptop.id)).resolves.toMatchObject({
+        parentId: null,
+        ancestors: []
+      })
+      await expect(api.restorePage(laptop.id)).resolves.toMatchObject({
+        parentId: null
+      })
+    })
+
     it('never deletes the home page', async () => {
       const api = fakePagesApi()
       const wiki = api.withWiki()
