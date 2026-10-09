@@ -165,3 +165,19 @@ export function checkGristUrl(
   }
   return gristUrl
 }
+
+/**
+ * A page's content as the store keeps it: a document's checked blocks with
+ * their plain text, or a database page's checked Grist address and no blocks.
+ */
+export function checkContent(
+  body: { content: Blocks } | { gristUrl: string },
+  gristOrigins: readonly string[]
+): { content: Blocks; text: string; gristUrl?: string } {
+  if ('content' in body) return checkBlocks(body.content, gristOrigins)
+  return {
+    content: [],
+    text: '',
+    gristUrl: checkGristUrl(body.gristUrl, gristOrigins)
+  }
+}

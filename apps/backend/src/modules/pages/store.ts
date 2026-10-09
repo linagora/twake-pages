@@ -6,7 +6,7 @@ import type { Identity } from '../auth/index.ts'
 import { pageFollowers } from '../notifications/schema.ts'
 import { checkRole, roleOn } from '../wikis/access.ts'
 import { bumpWiki } from '../wikis/live.ts'
-import { checkBlocks, type Blocks } from './blocks.ts'
+import { checkBlocks, checkContent, type Blocks } from './blocks.ts'
 import { previewOf, queuePageEvent } from './events.ts'
 import {
   labels,
@@ -252,9 +252,10 @@ async function writeVersion(
 }
 
 /**
- * Writes a page of blocks in its wiki's tenant, with its version 1 by its
- * author, empty unless given checked blocks. The follower is the author, as
- * the creator of any page follows it, unless told otherwise.
+ * Writes a page in its wiki's tenant, with its version 1 by its author: a
+ * document, empty unless given checked blocks, or a database page at a
+ * checked Grist address. The follower is the author, as the creator of any
+ * page follows it, unless told otherwise.
  */
 export async function addPage(
   tx: Tx,
@@ -265,6 +266,7 @@ export async function addPage(
     title: string
     content?: Blocks
     text?: string
+    gristUrl?: string
     home?: true
     parentId?: string | null
     position?: string
@@ -275,7 +277,8 @@ export async function addPage(
     .insert(pages)
     .values({
       ...page,
-      kind: 'document',
+      // A Grist address makes a database page, as the pages' check says.
+      kind: page.gristUrl === undefined ? 'document' : 'database',
       createdBy: author.userId,
       updatedBy: author.userId
     })
@@ -292,7 +295,8 @@ export async function addPage(
     number: 1,
     title: added.title,
     content: page.content,
-    text: page.text
+    text: page.text,
+    gristUrl: page.gristUrl
   })
   if (follower !== null) {
     await tx.insert(pageFollowers).values({
@@ -424,11 +428,14 @@ export interface PageMove {
   beforeId?: string | undefined
 }
 
-export interface NewPage extends PageMove {
-  title: string
-  /** Unchecked, until the store checks them. */
-  content: Blocks
-}
+/**
+ * A document of blocks or a database page at a Grist address, unchecked
+ * until the store checks them.
+ */
+export type NewPage = PageMove & { title: string } & (
+    | { kind: 'document'; content: Blocks }
+    | { kind: 'database'; gristUrl: string }
+  )
 
 export interface NewVersion {
   /** The version the draft started from. */
@@ -453,12 +460,15 @@ export function createPageStore(db: Db, gristOrigins: readonly string[]) {
       })
     },
 
-    /** A page of blocks, version 1 by its creator, who follows it. */
+    /**
+     * A document of blocks or a database page at a Grist address, version 1
+     * by its creator, who follows it.
+     */
     createPage(identity: Identity, wikiId: string, input: NewPage) {
       return writeOrRefuse(db, identity, async tx => {
-        // Before the wiki's row lock, which 2 MiB of blocks to check would
-        // hold longer.
-        const blocks = checkBlocks(input.content, gristOrigins)
+        // Before the role and the wiki's row lock, which 2 MiB of blocks to
+        // check would hold longer (api.md).
+        const checked = checkContent(input, gristOrigins)
         await checkRole(tx, identity, wikiId, 'editor')
         const wiki = await bumpWiki(tx, wikiId)
         if (input.parentId !== null) {
@@ -469,12 +479,12 @@ export function createPageStore(db: Db, gristOrigins: readonly string[]) {
           wikiId,
           organizationId: wiki.organizationId,
           title: input.title,
-          ...blocks,
+          ...checked,
           parentId: input.parentId,
           position: positionBetween(siblings, input.afterId, input.beforeId)
         })
         await queuePageEvent(tx, identity, 'created', page, {
-          preview: previewOf(blocks.text)
+          preview: previewOf(checked.text)
         })
         return changedPage(tx, identity, page.id)
       })

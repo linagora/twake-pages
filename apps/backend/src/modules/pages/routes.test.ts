@@ -911,4 +911,116 @@ describe('POST /wikis/:wikiId/pages', () => {
       expect(await versionOf(api, alice, wiki.id)).toBe(before)
     })
   })
+
+  describe('a database page', () => {
+    const gristUrl = `${GRIST_ORIGIN}/o/docs/4kq2/Budget`
+
+    it('creates a database page at a Grist address, with no blocks', async () => {
+      const alice = aUser()
+      const wiki = await aWikiOf(api, alice)
+
+      const response = await createPage(api, alice, wiki.id, {
+        title: 'Budget',
+        kind: 'database',
+        gristUrl
+      })
+
+      expect(response.statusCode).toBe(201)
+      expect(response.json()).toMatchObject({
+        kind: 'database',
+        title: 'Budget',
+        content: [],
+        gristUrl,
+        version: 1
+      })
+    })
+
+    it('writes its Grist address in its version 1', async () => {
+      const alice = aUser()
+      const wiki = await aWikiOf(api, alice)
+      const created = await createPage(api, alice, wiki.id, {
+        title: 'Budget',
+        kind: 'database',
+        gristUrl
+      })
+
+      const version = await api
+        .as(alice)
+        .get(`/pages/${created.json<Page>().id}/versions/1`)
+
+      expect(version.json()).toMatchObject({ number: 1, content: [], gristUrl })
+    })
+
+    it.each(OFF_GRIST_ORIGINS)(
+      'answers invalid_grist_url for a database page %s, and leaves the wiki as it was',
+      async (_case, url) => {
+        const alice = aUser()
+        const wiki = await aWikiOf(api, alice)
+        const before = await versionOf(api, alice, wiki.id)
+
+        const response = await createPage(api, alice, wiki.id, {
+          title: 'Budget',
+          kind: 'database',
+          gristUrl: url
+        })
+
+        expect(response.statusCode).toBe(400)
+        expect(response.json()).toEqual({ error: 'invalid_grist_url' })
+        expect(await versionOf(api, alice, wiki.id)).toBe(before)
+      }
+    )
+
+    it('answers invalid_grist_url, not forbidden, to a viewer with an address off the Grist origins', async () => {
+      const alice = aUser()
+      const bob = aUser({ organizationId: alice.organizationId })
+      const wiki = await aWikiOf(api, alice)
+      await joinWiki(db, alice, wiki.id, bob, 'viewer')
+      const before = await versionOf(api, alice, wiki.id)
+
+      const response = await createPage(api, bob, wiki.id, {
+        title: 'Budget',
+        kind: 'database',
+        gristUrl: 'https://docs.example.com/o/docs/4kq2'
+      })
+
+      expect(response.statusCode).toBe(400)
+      expect(response.json()).toEqual({ error: 'invalid_grist_url' })
+      expect(await versionOf(api, alice, wiki.id)).toBe(before)
+    })
+
+    it.each([
+      [
+        'blocks with a database page',
+        { kind: 'database', gristUrl, content: [] }
+      ],
+      ['a Grist address with a document', { kind: 'document', gristUrl }],
+      ['a database page with no Grist address', { kind: 'database' }],
+      ['a Grist address that is no text', { kind: 'database', gristUrl: 12 }],
+      [
+        'a NUL character in the Grist address',
+        { kind: 'database', gristUrl: `${gristUrl}\u0000` }
+      ],
+      [
+        'a lone surrogate in the Grist address',
+        { kind: 'database', gristUrl: `${gristUrl}\ud83d` }
+      ]
+    ])(
+      'answers invalid_request for %s, and leaves the wiki as it was',
+      async (_case, fields) => {
+        const alice = aUser()
+        const wiki = await aWikiOf(api, alice)
+        const before = await versionOf(api, alice, wiki.id)
+
+        const response = await api.as(alice).post(`/wikis/${wiki.id}/pages`, {
+          title: 'Budget',
+          parentId: null,
+          ...fields
+        })
+
+        expect(response.statusCode).toBe(400)
+        expect(response.json()).toEqual({ error: 'invalid_request' })
+        expect(await versionOf(api, alice, wiki.id)).toBe(before)
+      }
+    )
+  })
 })

@@ -195,10 +195,9 @@ describe('GET /pages/:pageId/versions/:number', () => {
     const alice = aUser()
     const wiki = await aWikiOf(api, alice)
     const gristUrl = `${GRIST_ORIGIN}/o/docs/4kq2/Budget`
-    // Written straight into the wiki, as no route makes a database page yet.
-    const pageId = await aPageIn(db, alice, wiki.id, {
+    const pageId = await aPage(api, alice, wiki.id, {
       title: 'Budget',
-      position: 'a0',
+      kind: 'database',
       gristUrl
     })
 
@@ -381,13 +380,13 @@ describe('POST /pages/:pageId/versions/:number/restore', () => {
     const alice = aUser()
     const wiki = await aWikiOf(api, alice)
     const first = `${GRIST_ORIGIN}/o/docs/4kq2/Budget`
-    // Written straight into the wiki, as no route makes a database page or
-    // publishes one yet.
-    const pageId = await aPageIn(db, alice, wiki.id, {
+    const pageId = await aPage(api, alice, wiki.id, {
       title: 'Budget',
-      position: 'a0',
+      kind: 'database',
       gristUrl: first
     })
+    // Written straight into the wiki, as no route publishes a database page
+    // yet.
     await aGristVersionOf(
       db,
       alice,
@@ -437,8 +436,9 @@ describe('POST /pages/:pageId/versions/:number/restore', () => {
   it('answers invalid_grist_url for an address off the deployment’s Grist origins, and leaves the wiki as it was', async () => {
     const alice = aUser()
     const wiki = await aWikiOf(api, alice)
-    // Written straight into the wiki, as no route makes a database page or
-    // publishes one yet, while the deployment's Grist origins named this one.
+    // Written straight into the wiki, as created while the deployment's Grist
+    // origins named this one, then published again as no route publishes a
+    // database page yet.
     const pageId = await aPageIn(db, alice, wiki.id, {
       title: 'Budget',
       position: 'a0',

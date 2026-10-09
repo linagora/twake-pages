@@ -717,16 +717,21 @@ export async function followingAndUnreadOf(
   }
 }
 
-/** What `createPage` sends, at the top of the tree unless it names a parent. */
+/**
+ * What `createPage` sends: a document unless it names another kind, at the
+ * top of the tree unless it names a parent.
+ */
 export interface PageToCreate {
   title: string
+  kind?: 'document' | 'database'
   parentId?: string | null
   afterId?: string
   beforeId?: string
   content?: unknown[]
+  gristUrl?: string
 }
 
-/** `POST /wikis/:wikiId/pages` by the person, for a page of blocks. */
+/** `POST /wikis/:wikiId/pages` by the person. */
 export function createPage(
   app: Awaited<ReturnType<typeof startApp>>,
   user: TestUser,

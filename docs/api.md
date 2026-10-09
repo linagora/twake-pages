@@ -16,7 +16,7 @@ A refusal answers `{ error: <Refusal> }` with its status:
 | `stale_neighbours` | 409 | `afterId` or `beforeId` is not a live sibling under the given parent |
 | `edit_conflict` | 409 | publishing from a version older than the current one (body below) |
 | `invalid_content` | 400 | blocks too large (over 2 MiB of JSON), a link that is not `http:`, `https:` or `mailto:`, an image, video, audio or file address that is not `https:`, a Grist embed address that is not `http:` or `https:` on `GRIST_ORIGINS`, or a NUL character or a lone surrogate in any key or string of the blocks |
-| `invalid_grist_url` | 400 | a database page address that is not `http:` or `https:` on `GRIST_ORIGINS` |
+| `invalid_grist_url` | 400 | a database page address that is not `http:` or `https:` on `GRIST_ORIGINS`, or one that does not parse |
 | `not_in_trash` | 409 | restoring or purging a page that is not the root of a deleted branch |
 | `in_trash` | 409 | publishing, moving, labelling, commenting or deleting a deleted page |
 | `last_admin` | 409 | removing or demoting the last admin of a shared wiki |
@@ -202,6 +202,10 @@ interface NewPage {
 ```
 
 `title` is 1 to 200 characters, trimmed, with no NUL character and no lone surrogate, which the server refuses rather than strips. `content` is an array of BlockNote blocks. The server checks its size, its strings, its links and the addresses of its blocks (see `invalid_content`) and keeps a plain text copy, a line per block, per table cell and per caption (`props.caption`), but never rewrites it. A link is an inline `{ type: 'link', href }`, wherever it sits. An `image`, `video`, `audio` or `file` block, and a Grist embed (`type: 'gristEmbed'`), hold their address in `props.url`, empty until they have one.
+
+A database page takes no blocks but `gristUrl`, the address of a Grist document or of one of its pages, kept as sent. It holds no NUL character and no lone surrogate, as a title. An address that does not parse, or is not `http:` or `https:` on one of `GRIST_ORIGINS`, answers `invalid_grist_url`. A body that gives a database page blocks, or a document a Grist address, answers `invalid_request`.
+
+Creating a page, publishing a version and restoring one refuse in this order: a malformed body (`invalid_request`); its blocks (`invalid_content`) or its Grist address (`invalid_grist_url`); the person's role (`not_found`, `forbidden`); then, behind the wiki's row lock, a new page's parent (`invalid_parent`) and neighbours (`stale_neighbours`), or the page a version goes to: `in_trash`, then `invalid_request` for a body of the other kind of page, then `edit_conflict`. The blocks and the address are checked before the role, as they need nothing but the body, and before the lock, which 2 MiB of blocks to check would hold longer. A restore has no body: it checks the blocks or the address of a version it found on a page of the person's wikis, so a page or a version out of their reach answers `not_found` first.
 
 A move takes the page with its child pages, which keep their places under it. Its `afterId` and `beforeId` name the page's new siblings as they are once the page is lifted out, as Twake Tasks names those of a moved task: the page itself is never one of them.
 

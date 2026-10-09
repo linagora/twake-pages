@@ -3,6 +3,7 @@ import { createDb } from '../../infra/db.ts'
 import {
   aB2cUser,
   aBlock,
+  aPage,
   aPageIn,
   aUser,
   aWikiOf,
@@ -205,10 +206,9 @@ describe('POST /pages/:pageId/versions', () => {
   it('answers invalid_request for blocks sent to a database page', async () => {
     const alice = aUser()
     const wiki = await aWikiOf(api, alice)
-    // Written straight into the wiki, as no route makes a database page yet.
-    const pageId = await aPageIn(db, alice, wiki.id, {
+    const pageId = await aPage(api, alice, wiki.id, {
       title: 'Budget',
-      position: 'a0',
+      kind: 'database',
       gristUrl: `${GRIST_ORIGIN}/o/docs/4kq2/Budget`
     })
     const before = await versionOf(api, alice, wiki.id)

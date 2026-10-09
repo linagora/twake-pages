@@ -11,15 +11,34 @@ import { createPageStore } from './store.ts'
 
 const pageTitle = z.string().trim().min(1).max(200).refine(storable)
 
-// Database pages come with their own ticket.
-const newPage = z.object({
-  title: pageTitle,
-  kind: z.literal('document'),
+// Kept as sent, as the address of a block is: the store checks its origin.
+const gristUrl = z.string().refine(storable)
+
+const pagePlace = {
   parentId: z.uuid().nullable(),
   afterId: z.uuid().optional(),
-  beforeId: z.uuid().optional(),
-  content: pageBlocks.default([])
-})
+  beforeId: z.uuid().optional()
+}
+
+// A database page has no blocks and a document no Grist address: a body that
+// gives a page the field of the other kind is malformed, rather than read in
+// part.
+const newPage = z.discriminatedUnion('kind', [
+  z.object({
+    title: pageTitle,
+    kind: z.literal('document'),
+    ...pagePlace,
+    content: pageBlocks.default([]),
+    gristUrl: z.never().optional()
+  }),
+  z.object({
+    title: pageTitle,
+    kind: z.literal('database'),
+    ...pagePlace,
+    gristUrl,
+    content: z.never().optional()
+  })
+])
 
 // Database pages come with their own ticket.
 const newVersion = z.object({
@@ -32,7 +51,7 @@ export const wikiParams = z.object({ wikiId: z.uuid() })
 
 export const pageParams = z.object({ pageId: z.uuid() })
 
-const pageMove = newPage.pick({ parentId: true, afterId: true, beforeId: true })
+const pageMove = z.object(pagePlace)
 
 // Every route that writes blocks gives its body room for 2 MiB of them and its
 // other fields. Over that, Fastify refuses the body before the route reads it,
