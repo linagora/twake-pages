@@ -121,6 +121,8 @@ interface PageRef { id: string; title: string; wiki: WikiRef }
 
 interface SearchResult {
   page: PageRef
+  // The page's title, each found word between U+E000 and U+E001.
+  markedTitle: string
   // Plain text around the words found, each found word between U+E000 and U+E001.
   excerpt: string
   updatedAt: string
@@ -243,6 +245,10 @@ Notifications are never sent to the person who acted, nor to people who are no l
 | `GET /favorites` | `{ pages: PageRef[] }`, live pages, most recently marked first |
 | `GET /recent` | `{ pages: (PageRef & { visitedAt: string })[] }`, live pages, the last opened first, at most 20 |
 | `GET /search?q=&wikiId=` | `{ results: SearchResult[] }`, at most 50, best first; `q` 1 to 200 characters; without `wikiId`, every wiki of the person |
+
+Search reads the words of `q` as PostgreSQL's `simple` configuration splits the text of a page: an email, a host or a version number whole, a hyphenated word or an address also in its parts. It finds the live pages whose title or text holds every word, the last one as the beginning of a word, and ranks them: first the pages whose titles hold more of the words, so that a word of the title comes above one of the text; then, among pages whose titles hold as many, by `ts_rank` over the title, weighted `A`, and the text, weighted `B`, with PostgreSQL's default weights; then the last published first. Quotes, `&`, `|`, `!`, `:`, `*`, parentheses and whatever else full text search reads as an operator are text, so a `q` without a word finds nothing. `q` is trimmed, with no NUL character and no lone surrogate, as a title, and is checked before `wikiId`; a `wikiId` the person cannot see, or a malformed one, answers `not_found`.
+
+`markedTitle` is the whole title, each word found marked: Twake Tasks highlights the searched text in a task's title on the client, but only PostgreSQL knows the words it found. The excerpt quotes the text with its whitespace run together, five words before the first word found and eight after, as Twake Tasks quotes a task's description, with `…` where the text goes on. It is empty when the text holds none of the words found, for a page found by its title alone or one without text, just as Tasks quotes no description without the searched text. Unlike Tasks, which quotes no description of a task whose title holds the searched text, a page whose title holds words found still quotes its text when the text holds some, as the words of `q` may be found apart. A U+E000 or U+E001 of the title or of the text shows as a blank.
 
 ## Settings and health
 

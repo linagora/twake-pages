@@ -32,6 +32,14 @@ export const pageKind = pgEnum('page_kind', ['document', 'database'])
 
 const tsvector = customType<{ data: string }>({ dataType: () => 'tsvector' })
 
+/**
+ * The characters of a page's text that search reads. A tsvector keeps at
+ * most 1 MiB of distinct words. The densest text found, hyphenated words of
+ * 4-byte letters, which search keeps whole and in parts, takes under 8 bytes
+ * a character, so search reads the first 100 000 characters of the text.
+ */
+export const SEARCHED_LENGTH = 100_000
+
 // pages_position, unique among the live pages of a parent, is in the
 // migration: drizzle cannot write its nulls not distinct.
 export const pages = pgTable.withRLS(
@@ -49,14 +57,11 @@ export const pages = pgTable.withRLS(
     content: jsonb().notNull().default([]),
     gristUrl: text('grist_url'),
     text: text().notNull().default(''),
-    // A tsvector keeps at most 1 MiB of distinct words. The densest text
-    // found, hyphenated words of 4-byte letters, which search keeps whole and
-    // in parts, takes under 8 bytes a character, so search reads the first
-    // 100 000 characters of the text.
+    // The words of the title weigh A, those of the text B.
     search: tsvector()
       .notNull()
       .generatedAlwaysAs(
-        sql`setweight(to_tsvector('simple', "title"), 'A') || setweight(to_tsvector('simple', left("text", 100000)), 'B')`
+        sql`setweight(to_tsvector('simple', "title"), 'A') || setweight(to_tsvector('simple', left("text", ${sql.raw(String(SEARCHED_LENGTH))})), 'B')`
       ),
     version: integer().notNull().default(1),
     // The home page is outside the tree, so it alone has no position.
