@@ -252,7 +252,7 @@ async function writeVersion(
 }
 
 /** Makes the person follow the page, unless they already do. */
-async function follow(
+export async function follow(
   tx: Tx,
   page: { id: string; organizationId: string | null },
   userId: string

@@ -9,6 +9,7 @@ import {
   type IdentityProvider
 } from './modules/auth/index.ts'
 import { registerFavorites } from './modules/pages/favorites.ts'
+import { registerFollowing } from './modules/pages/following.ts'
 import { registerHistory } from './modules/pages/history.ts'
 import { registerLabels } from './modules/pages/labels.ts'
 import { registerRecent } from './modules/pages/recent.ts'
@@ -57,6 +58,7 @@ export async function buildApp(deps: {
         requireIdentity,
         gristOrigins: deps.gristOrigins
       })
+      registerFollowing(api, { db: deps.db, requireIdentity })
       registerLive(api, {
         db: deps.db,
         requireIdentity,
