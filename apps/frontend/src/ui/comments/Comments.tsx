@@ -8,7 +8,7 @@ import { Feed, FeedItem } from '@/ds/SidePanel'
 import type { Comment } from '@/domain/comment'
 import type { Page } from '@/domain/page'
 import { displayName } from '@/domain/person'
-import { CommentForm } from '@/ui/comments/CommentForm'
+import { NewCommentForm, ReplyForm } from '@/ui/comments/CommentForm'
 import { useI18n } from '@/ui/i18n/useI18n'
 import { PersonAvatar } from '@/ui/people/PersonAvatar'
 import { localTime } from '@/ui/settings/zone'
@@ -33,7 +33,7 @@ export function Comments({ page }: { page: Page }): ReactElement {
         {t('comments.title')}
       </Typography>
       <CommentFeed page={page} />
-      {page.deletedAt === null && <CommentForm page={page} />}
+      {page.deletedAt === null && <NewCommentForm page={page} />}
     </section>
   )
 }
@@ -89,10 +89,7 @@ function CommentFeed({ page }: { page: Page }): ReactElement {
                 </div>
               )}
               {writable && replyingTo === comment.id && (
-                <CommentForm
-                  page={page}
-                  reply={{ to: comment, onClose: closeReply }}
-                />
+                <ReplyForm page={page} to={comment} onClose={closeReply} />
               )}
             </CommentItem>
           )

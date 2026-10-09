@@ -14,7 +14,6 @@ import type {
   Label,
   LabelledPage,
   Move,
-  NewComment,
   NewPage,
   NewVersion,
   NewWiki,
@@ -622,19 +621,26 @@ export function useComments(
 }
 
 /**
- * Reads again what a comment changes alone, rather than the whole wiki: once
- * it is written, its author follows the page, which shows it in place, and
- * the comments are read again. Twake Tasks reads them again after a refused
- * comment too: here a refusal changes none of them, and the stream reloads
- * those changed elsewhere.
+ * Takes the comment a reply answers here, so that one form sends a new
+ * comment and a reply alike, as their text alone. Reads again what a comment
+ * changes alone, rather than the whole wiki: once it is written, its author
+ * follows the page, which shows it in place, and the comments are read
+ * again. Twake Tasks reads them again after a refused comment too: here a
+ * refusal changes none of them, and the stream reloads those changed
+ * elsewhere.
  */
 export function useAddComment(
-  page: Page
-): UseMutationResult<Comment, Error, NewComment> {
+  page: Page,
+  parentId: string | null
+): UseMutationResult<Comment, Error, string> {
   const api = usePagesApi()
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (comment: NewComment) => api.addComment(page.id, comment),
+    mutationFn: (body: string) =>
+      api.addComment(
+        page.id,
+        parentId === null ? { body } : { body, parentId }
+      ),
     onSuccess: () => {
       changeShownPage(queryClient, page, { following: true })
       return queryClient.invalidateQueries({

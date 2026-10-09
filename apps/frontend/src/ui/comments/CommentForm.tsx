@@ -1,41 +1,94 @@
 import { Button, TextField, Typography } from '@linagora/twake-mui'
+import type { UseMutationResult } from '@tanstack/react-query'
 import { useState, type ReactElement } from 'react'
 
 import type { Comment } from '@/domain/comment'
 import type { Page } from '@/domain/page'
 import { displayName } from '@/domain/person'
 import { focusOnMount } from '@/ui/focusOnMount'
-import { useI18n } from '@/ui/i18n/useI18n'
+import { useI18n, type TranslationKey } from '@/ui/i18n/useI18n'
 import { useAddComment } from '@/ui/wiki/queries'
 
 // What the backend takes of a comment, once trimmed.
 const MAX_COMMENT = 10_000
 
-/**
- * A new comment or a reply, in plain text as the backend keeps it, where
- * Twake Tasks writes Markdown in TipTap. Ctrl+Enter sends it, as in Twake
- * Tasks. The form of a reply takes the focus as it opens, and closes once
- * the reply is sent.
- */
-export function CommentForm({
+// A reply's field is named apart from the new comment's, which the page
+// shows with it.
+const FORM_WORDS = {
+  comment: {
+    label: 'comments.comment',
+    placeholder: 'comments.placeholder',
+    hint: 'comments.sendHint',
+    submit: 'comments.send',
+    failed: 'comments.sendFailed'
+  },
+  reply: {
+    label: 'comments.replyLabel',
+    placeholder: 'comments.replyPlaceholder',
+    hint: 'comments.sendHint',
+    submit: 'comments.send',
+    failed: 'comments.sendFailed'
+  }
+} as const satisfies Record<string, Record<string, TranslationKey>>
+
+export function NewCommentForm({ page }: { page: Page }): ReactElement {
+  const add = useAddComment(page, null)
+  return <CommentForm kind="comment" change={add} />
+}
+
+export function ReplyForm({
   page,
-  reply
+  to,
+  onClose
 }: {
   page: Page
-  /** The comment a reply answers, and what closes its form. */
-  reply?: { to: Comment; onClose: () => void }
+  to: Comment
+  onClose: () => void
 }): ReactElement {
   const { t } = useI18n()
-  const add = useAddComment(page)
+  const add = useAddComment(page, to.id)
+  return (
+    <CommentForm
+      kind="reply"
+      change={add}
+      name={t('comments.replyTo', { name: displayName(to.author) })}
+      onClose={onClose}
+    />
+  )
+}
+
+/**
+ * The text of a comment, in plain text as the backend keeps it, where Twake
+ * Tasks writes Markdown in TipTap. Ctrl+Enter sends it, as in Twake Tasks. A
+ * form opened from a comment takes the focus as it opens, and closes once
+ * its text is sent.
+ */
+function CommentForm({
+  kind,
+  change,
+  name,
+  onClose
+}: {
+  kind: keyof typeof FORM_WORDS
+  /** Sends the text, trimmed. */
+  change: UseMutationResult<Comment, Error, string>
+  /** The form's name, beside the others the page shows. */
+  name?: string
+  /** Closes a form opened from a comment. */
+  onClose?: () => void
+}): ReactElement {
+  const { t } = useI18n()
+  const words = FORM_WORDS[kind]
   const [body, setBody] = useState('')
   const text = body.trim()
-  const sendable = !add.isPending && text !== '' && text.length <= MAX_COMMENT
+  const sendable =
+    !change.isPending && text !== '' && text.length <= MAX_COMMENT
   const send = () => {
     if (!sendable) return
-    add.mutate(reply ? { body: text, parentId: reply.to.id } : { body: text }, {
+    change.mutate(text, {
       onSuccess: () => {
         setBody('')
-        reply?.onClose()
+        onClose?.()
       }
     })
   }
@@ -43,20 +96,16 @@ export function CommentForm({
   return (
     <form
       className="u-mt-1"
-      aria-label={
-        reply && t('comments.replyTo', { name: displayName(reply.to.author) })
-      }
+      aria-label={name}
       onSubmit={event => {
         event.preventDefault()
         send()
       }}
     >
       <TextField
-        label={t(reply ? 'comments.replyLabel' : 'comments.comment')}
-        placeholder={t(
-          reply ? 'comments.replyPlaceholder' : 'comments.placeholder'
-        )}
-        inputRef={reply && focusOnMount}
+        label={t(words.label)}
+        placeholder={t(words.placeholder)}
+        inputRef={onClose && focusOnMount}
         value={body}
         onChange={event => {
           setBody(event.target.value)
@@ -78,20 +127,20 @@ export function CommentForm({
           color="textSecondary"
           className="u-mr-auto"
         >
-          {t('comments.sendHint')}
+          {t(words.hint)}
         </Typography>
-        {reply && (
-          <Button variant="text" size="small" onClick={reply.onClose}>
+        {onClose && (
+          <Button variant="text" size="small" onClick={onClose}>
             {t('comments.cancel')}
           </Button>
         )}
         <Button type="submit" size="small" disabled={!sendable}>
-          {t('comments.send')}
+          {t(words.submit)}
         </Button>
       </div>
-      {add.isError && (
+      {change.isError && (
         <Typography role="alert" variant="caption" color="error">
-          {t('comments.sendFailed')}
+          {t(words.failed)}
         </Typography>
       )}
     </form>
