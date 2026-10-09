@@ -72,14 +72,19 @@ const commentsOf = async (user: TestUser, pageId: string) =>
 const trash = (user: TestUser, pageId: string) =>
   inTenant(db, user, tx => putInTheTrash(tx, user, pageId))
 
-/** Bodies no comment is written from, which answer invalid_request. */
-const MALFORMED_COMMENTS: [string, object][] = [
+/** Bodies with no text a comment takes, which answer invalid_request. */
+const MALFORMED_BODIES: [string, object][] = [
   ['without a body', {}],
   ['whose body is no text', { body: 12 }],
   ['whose body is blank', { body: ' \n\t ' }],
   ['whose body is over 10 000 characters', { body: 'a'.repeat(10_001) }],
   ['whose body holds a NUL character', { body: 'Done\u0000' }],
-  ['whose body holds a lone surrogate', { body: 'Done \ud83d' }],
+  ['whose body holds a lone surrogate', { body: 'Done \ud83d' }]
+]
+
+/** Bodies no comment is written from, which answer invalid_request. */
+const MALFORMED_COMMENTS: [string, object][] = [
+  ...MALFORMED_BODIES,
   ['whose parentId is malformed', { body: 'Done', parentId: 'not-an-id' }]
 ]
 
