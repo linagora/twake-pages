@@ -890,10 +890,15 @@ function signedIn(world: World, person: Person): FakePagesApi {
         if (changes.name !== undefined && wiki.kind === 'space') {
           throw refuse('managed')
         }
-        if (changes.name !== undefined) wiki.name = checkName(changes.name)
-        if (changes.description !== undefined) {
-          wiki.description = checkDescription(changes.description)
-        }
+        // Both checked before either changes: the backend checks the whole
+        // edit before it writes it.
+        const name =
+          changes.name === undefined ? wiki.name : checkName(changes.name)
+        const description =
+          changes.description === undefined
+            ? wiki.description
+            : checkDescription(changes.description)
+        Object.assign(wiki, { name, description })
         bump(wiki)
         return wikiFor(wikiId)
       })

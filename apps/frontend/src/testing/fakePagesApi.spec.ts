@@ -129,6 +129,21 @@ describe('fakePagesApi', () => {
       ).rejects.toEqual(invalid)
     })
 
+    it('keeps the name of a wiki when the description given with it is refused', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki({ name: 'Handbook' })
+
+      await expect(
+        api.renameWiki(wiki.id, { name: 'Guide', description: 'a'.repeat(501) })
+      ).rejects.toEqual(new ApiError(400, 'invalid_request'))
+
+      await expect(api.getWiki(wiki.id)).resolves.toMatchObject({
+        name: 'Handbook',
+        description: wiki.description,
+        version: wiki.version
+      })
+    })
+
     it('hides a wiki from people who are no members', async () => {
       const api = fakePagesApi()
       const wiki = api.withWiki()
