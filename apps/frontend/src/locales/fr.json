@@ -223,7 +223,7 @@
     "draftKept": "Voici votre brouillon, commencé à partir de la version %{number}. Il est conservé dans ce navigateur jusqu'à ce que vous le publiiez ou l'abandonniez.",
     "discard": "Abandonner le brouillon",
     "failed": "La page n'a pas pu être publiée. Votre brouillon est conservé.",
-    "invalidContent": "La page n'a pas pu être publiée, car son contenu est refusé : plus de 2 Mo, un lien qui n'est pas en http, https ou mailto, une adresse d'image qui n'est pas en https, ou un caractère qui ne peut pas être enregistré. Votre brouillon est conservé.",
+    "invalidContent": "La page n'a pas pu être publiée, car son contenu est refusé : plus de 2 Mo, un lien qui n'est pas en http, https ou mailto, une adresse d'image qui n'est pas en https, un document Grist qui ne s'affiche pas, ou un caractère qui ne peut pas être enregistré. Votre brouillon est conservé.",
     "imagesNotShown": "Les images de %{hosts} ne s'afficheront pas, car Twake Pages n'affiche que les images de %{allowed}.",
     "noImagesShown": "Les images de %{hosts} ne s'afficheront pas, car Twake Pages n'affiche aucune image d'autres sites.",
     "conflict": "%{author} a publié la version %{number} le %{time}, après la version d'où part votre brouillon. Rechargez la page pour écrire à partir de cette version, ce qui abandonne votre brouillon, ou publiez votre brouillon par-dessus.",

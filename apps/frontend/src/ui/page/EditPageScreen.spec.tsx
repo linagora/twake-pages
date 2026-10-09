@@ -44,8 +44,25 @@ const VIDEO_AS_COPIED = `<div data-content-type="${KEPT_BLOCK}" data-stored='${J
 )}'></div>`
 
 describe('a Grist embed of the page', () => {
+  const ELSEWHERE = 'https://docs.example.com/o/docs/4kq2'
   // As another client of the API may store one: with no id and no children.
   const GRIST_EMBED: Block = { type: 'gristEmbed', props: { url: BUDGET } }
+
+  it('is refused off the Grist origins, which the refusal names', async () => {
+    const pagesApi = fakePagesApi()
+    // As published before the origins changed.
+    const { editor } = aPage(pagesApi, [
+      { type: 'gristEmbed', props: { url: ELSEWHERE } }
+    ])
+    renderRoute(editor, { pagesApi })
+    await screen.findByText(/^This Grist document is not shown/)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Publish' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'a Grist document that is not shown'
+    )
+  })
 
   it('frames its document, with a link that opens it in Grist', async () => {
     const pagesApi = fakePagesApi()
