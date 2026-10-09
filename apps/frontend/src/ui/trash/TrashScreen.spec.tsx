@@ -1,4 +1,4 @@
-import { fireEvent, screen, within } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError } from '@/application/pages'
@@ -54,6 +54,15 @@ async function trashListFor(role: Role) {
   await pagesApi.signedInAs(BOB).deletePage(onboarding.id)
   renderRoute(`/wikis/${wiki.id}/trash`, { pagesApi })
   return within(await screen.findByRole('list', { name: 'Trash' }))
+}
+
+/** Opens the dialog that deletes the page for good, from its line. */
+async function openPurge(title: string): Promise<HTMLElement> {
+  const trash = within(await screen.findByRole('list', { name: 'Trash' }))
+  fireEvent.click(
+    trash.getByRole('button', { name: `Delete for good ${title}` })
+  )
+  return screen.getByRole('dialog', { name: `Delete ${title} for good?` })
 }
 
 afterEach(() => {
@@ -207,5 +216,70 @@ describe('a page restored from the trash', () => {
       'Onboarding could not be restored.'
     )
     expect(trash.getByRole('listitem', { name: 'Onboarding' })).toBeVisible()
+  })
+})
+
+describe('a page deleted for good', () => {
+  it('leaves the trash once an admin is sure', async () => {
+    const { pagesApi, wiki, onboarding } = await engineeringTrash()
+    renderRoute(`/wikis/${wiki.id}/trash`, { pagesApi })
+    const dialog = await openPurge('Onboarding')
+    expect(dialog).toHaveTextContent(
+      'Any pages inside go with it, for every member. This cannot be undone.'
+    )
+
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'Delete for good' })
+    )
+
+    await waitFor(() => {
+      expect(dialog).not.toBeInTheDocument()
+    })
+    const trash = within(screen.getByRole('list', { name: 'Trash' }))
+    expect(
+      trash.queryByRole('listitem', { name: 'Onboarding' })
+    ).not.toBeInTheDocument()
+    expect(trash.getByRole('listitem', { name: 'Releases' })).toBeVisible()
+    expect(pagesApi.purgePage).toHaveBeenCalledWith(wiki.id, onboarding.id)
+  })
+
+  it('stays in the trash when not sure', async () => {
+    const { pagesApi, wiki } = await engineeringTrash()
+    renderRoute(`/wikis/${wiki.id}/trash`, { pagesApi })
+    const dialog = await openPurge('Onboarding')
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+
+    await waitFor(() => {
+      expect(dialog).not.toBeInTheDocument()
+    })
+    expect(screen.getByRole('listitem', { name: 'Onboarding' })).toBeVisible()
+    expect(pagesApi.purgePage).not.toHaveBeenCalled()
+  })
+
+  it('is offered to admins only', async () => {
+    const trash = await trashListFor('editor')
+
+    expect(
+      trash.getByRole('button', { name: 'Restore Onboarding' })
+    ).toBeVisible()
+    expect(
+      trash.queryByRole('button', { name: 'Delete for good Onboarding' })
+    ).not.toBeInTheDocument()
+  })
+
+  it('says so when it cannot be deleted for good', async () => {
+    const { pagesApi, wiki } = await engineeringTrash()
+    pagesApi.purgePage.mockRejectedValue(new ApiError(409, 'not_in_trash'))
+    renderRoute(`/wikis/${wiki.id}/trash`, { pagesApi })
+    const dialog = await openPurge('Onboarding')
+
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'Delete for good' })
+    )
+
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+      'The page could not be deleted for good.'
+    )
   })
 })

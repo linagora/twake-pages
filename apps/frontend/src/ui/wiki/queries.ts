@@ -404,6 +404,18 @@ export function useRestorePage(
   return useWikiChange(wikiId, (api, pageId: string) => api.restorePage(pageId))
 }
 
+/**
+ * The wiki, read again once the purge ends, shows the branch gone from the
+ * trash, with the pages inside.
+ */
+export function usePurgePage(
+  wikiId: string
+): UseMutationResult<unknown, Error, string> {
+  return useWikiChange(wikiId, (api, pageId: string) =>
+    api.purgePage(wikiId, pageId)
+  )
+}
+
 /** A page as shown below a wiki, which may not be its own. */
 export function usePage(wikiId: string, pageId: string): UseQueryResult<Page> {
   const api = usePagesApi()

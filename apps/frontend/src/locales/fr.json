@@ -296,7 +296,16 @@
     "restore": "Restaurer",
     "restorePage": "Restaurer %{title}",
     "restored": "La page %{title} est de retour dans l'arborescence.",
-    "restoreFailed": "La page %{title} n'a pas pu être restaurée."
+    "restoreFailed": "La page %{title} n'a pas pu être restaurée.",
+    "purge": "Supprimer définitivement",
+    "purgePage": "Supprimer définitivement %{title}"
+  },
+  "purgePage": {
+    "title": "Supprimer définitivement %{title} ?",
+    "text": "Les éventuelles pages à l'intérieur partent avec elle, pour tous les membres. Cette action est irréversible.",
+    "confirm": "Supprimer définitivement",
+    "cancel": "Annuler",
+    "failed": "La page n'a pas pu être supprimée définitivement."
   },
   "notifications": {
     "title": "Notifications"
