@@ -2,7 +2,7 @@ import { act, fireEvent, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
 import type { NewPage } from '@/application/pages'
-import { findEmptyState } from '@/testing/emptyState'
+import { findEmptyState, PAGE_NOT_FOUND } from '@/testing/emptyState'
 import {
   fakePagesApi,
   paragraph,
@@ -12,7 +12,6 @@ import { pathToThePage } from '@/testing/pagePath'
 import { renderRoute, WIKI_BASES } from '@/testing/renderWithProviders'
 
 const BOB = 'bob@example.com'
-const PAGE_NOT_FOUND = "This page doesn't exist, or you can't open it."
 const WIKI_NOT_FOUND = "This wiki doesn't exist, or you can't open it."
 
 /** Alice's Handbook, with its Onboarding page, which Bob runs with her. */

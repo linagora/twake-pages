@@ -3,11 +3,9 @@ import { describe, expect, it } from 'vitest'
 
 import { ApiError } from '@/application/pages'
 import type { Block } from '@/domain/page'
-import { findEmptyState } from '@/testing/emptyState'
+import { findEmptyState, PAGE_NOT_FOUND } from '@/testing/emptyState'
 import { fakePagesApi } from '@/testing/fakePagesApi'
 import { renderRoute, WIKI_BASES } from '@/testing/renderWithProviders'
-
-const NOT_FOUND = "This page doesn't exist, or you can't open it."
 
 /** Engineering, then Releases under it, then the Release checklist. */
 function handbook() {
@@ -230,7 +228,7 @@ describe('a page', () => {
       await pagesApi.purgePage(wiki.id, checklist.id)
       renderRoute(`${base}/${wiki.id}/pages/${checklist.id}`, { pagesApi })
 
-      expect(await findEmptyState(NOT_FOUND)).toBeInTheDocument()
+      expect(await findEmptyState(PAGE_NOT_FOUND)).toBeInTheDocument()
       expect(
         screen.queryByRole('navigation', { name: 'Path to this page' })
       ).not.toBeInTheDocument()
@@ -243,7 +241,7 @@ describe('a page', () => {
     const minutes = pagesApi.withPage(other.id, { title: 'Minutes' })
     renderRoute(`/wikis/${wiki.id}/pages/${minutes.id}`, { pagesApi })
 
-    expect(await findEmptyState(NOT_FOUND)).toBeInTheDocument()
+    expect(await findEmptyState(PAGE_NOT_FOUND)).toBeInTheDocument()
     expect(screen.queryByText('Minutes')).not.toBeInTheDocument()
   })
 
