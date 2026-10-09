@@ -211,9 +211,12 @@ describe('a page', () => {
     expect(within(main).getByRole('heading', { level: 1 })).toHaveTextContent(
       'Release checklist'
     )
-    expect(within(main).getByRole('heading', { level: 2 })).toHaveTextContent(
-      'Before the release'
-    )
+    // The comments below take the level of the page's first headings.
+    expect(
+      within(main)
+        .getAllByRole('heading', { level: 2 })
+        .map(heading => heading.textContent)
+    ).toEqual(['Before the release', 'Comments'])
     expect(within(main).getByRole('heading', { level: 3 })).toHaveTextContent(
       'On Thursday'
     )

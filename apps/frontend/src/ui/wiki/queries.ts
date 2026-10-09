@@ -24,6 +24,7 @@ import type {
   Tree,
   WikiChanges
 } from '@/application/pages'
+import type { Comment } from '@/domain/comment'
 import type {
   Page,
   PageRef,
@@ -59,6 +60,11 @@ const historyKey = (wikiId: string, pageId: string) =>
   [...wikiKey(wikiId), 'history', pageId] as const
 const versionKey = (wikiId: string, pageId: string, number: number | null) =>
   [...historyKey(wikiId, pageId), number] as const
+// Not below the pages' key either, as a page's history, where Twake Tasks
+// keeps a task's comments below the task. Below the wiki's, the stream
+// reloads them: writing, editing or deleting one moves the wiki's version.
+const commentsKey = (wikiId: string, pageId: string) =>
+  [...wikiKey(wikiId), 'comments', pageId] as const
 // Below the wiki, so a change of its members elsewhere reloads them too.
 const sharingKey = (wikiId: string) => [...wikiKey(wikiId), 'sharing'] as const
 // The people of an organization belong to no wiki, so they sit below no
@@ -599,6 +605,18 @@ export function useRestoreVersion(
       await cachePageAndInvalidateTree(queryClient, wikiId, page)
       onRestored()
     }
+  })
+}
+
+/** The comments of a page, oldest first, replies among them. */
+export function useComments(
+  wikiId: string,
+  pageId: string
+): UseQueryResult<Comment[]> {
+  const api = usePagesApi()
+  return useQuery({
+    queryKey: commentsKey(wikiId, pageId),
+    queryFn: () => api.listComments(pageId)
   })
 }
 

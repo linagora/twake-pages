@@ -280,6 +280,12 @@
     "following": "Following",
     "unfollow": "Unfollow"
   },
+  "comments": {
+    "title": "Comments",
+    "loadFailed": "The comments could not be loaded.",
+    "replies": "Replies",
+    "edited": "edited"
+  },
   "labels": {
     "title": "Pages labelled %{name}",
     "ofPage": "Page labels",

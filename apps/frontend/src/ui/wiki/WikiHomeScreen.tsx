@@ -5,6 +5,7 @@ import { useNavigate, useParams } from 'react-router'
 
 import { ListSkeleton } from '@/ds/EmptyState'
 import { PageHeader } from '@/ds/PageHeader'
+import { Comments } from '@/ui/comments/Comments'
 import { useI18n } from '@/ui/i18n/useI18n'
 import { EditAction } from '@/ui/page/EditAction'
 import { FavoriteButton } from '@/ui/page/FavoriteButton'
@@ -129,7 +130,8 @@ export function WikiHomeScreen(): ReactElement {
   )
 }
 
-// Under the name of the wiki, not its own title.
+// Under the name of the wiki, not its own title, with its comments below it
+// as on the page's own screen.
 function HomePage({
   wikiId,
   pageId
@@ -139,7 +141,14 @@ function HomePage({
 }): ReactElement {
   const { t } = useI18n()
   const page = usePage(wikiId, pageId)
-  if (page.data) return <PageContent page={page.data} />
+  if (page.data) {
+    return (
+      <>
+        <PageContent page={page.data} />
+        <Comments page={page.data} />
+      </>
+    )
+  }
   if (page.isError) {
     return <Typography role="alert">{t('page.loadFailed')}</Typography>
   }

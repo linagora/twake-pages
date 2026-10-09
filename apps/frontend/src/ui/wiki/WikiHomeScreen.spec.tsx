@@ -348,6 +348,26 @@ describe('the home page as followed', () => {
   )
 })
 
+describe('the comments of the home page', () => {
+  it('show below it', async () => {
+    const pagesApi = fakePagesApi()
+    const wiki = pagesApi.withWiki({
+      name: 'Handbook',
+      members: { 'bob@example.com': 'editor' }
+    })
+    await pagesApi
+      .signedInAs('bob@example.com', 'Bob Durand')
+      .addComment(wiki.homePageId, { body: 'Welcome aboard!' })
+    renderRoute(`/wikis/${wiki.id}`, { pagesApi })
+
+    const comments = await screen.findByRole('list', { name: 'Comments' })
+
+    expect(
+      within(comments).getByRole('article', { name: 'Bob Durand' })
+    ).toHaveTextContent('Welcome aboard!')
+  })
+})
+
 describe('the Edit action of the home page', () => {
   it.each(WIKI_BASES)(
     'leads an editor of the wiki at %s/<wiki> to the editor of its home page',

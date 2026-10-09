@@ -280,6 +280,12 @@
     "following": "Suivie",
     "unfollow": "Ne plus suivre"
   },
+  "comments": {
+    "title": "Commentaires",
+    "loadFailed": "Les commentaires n'ont pas pu être chargés.",
+    "replies": "Réponses",
+    "edited": "modifié"
+  },
   "labels": {
     "title": "Pages avec l'étiquette %{name}",
     "ofPage": "Étiquettes de la page",

@@ -91,6 +91,18 @@ describe('a wiki open in two places', () => {
     expect(await screen.findByText('Read this first.')).toBeVisible()
   })
 
+  it('shows the comments written elsewhere on the open page', async () => {
+    const { pagesApi, bob, wiki, onboarding } = sharedHandbook()
+    renderRoute(`/wikis/${wiki.id}/pages/${onboarding.id}`, { pagesApi })
+    await screen.findByRole('list', { name: 'Comments' })
+
+    await act(() => bob.addComment(onboarding.id, { body: 'Which laptop?' }))
+
+    expect(await screen.findByRole('article', { name: BOB })).toHaveTextContent(
+      'Which laptop?'
+    )
+  })
+
   it('shows the name and description given elsewhere', async () => {
     const { pagesApi, bob, wiki } = sharedHandbook()
     renderRoute(`/wikis/${wiki.id}`, { pagesApi })

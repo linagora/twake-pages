@@ -127,15 +127,19 @@ describe('a new page', () => {
 })
 
 /**
- * The headings of the blocks of the open page, one level below its title,
- * once BlockNote shows them.
+ * The headings one level below the title of the open page: those of its
+ * blocks, once BlockNote shows them, then that of its comments, which shows
+ * at once.
  */
-const findSections = async () =>
-  (
-    await within(screen.getByRole('main')).findAllByRole('heading', {
-      level: 2
-    })
-  ).map(heading => heading.textContent)
+const findSections = async () => {
+  const main = screen.getByRole('main')
+  await waitFor(() => {
+    expect(within(main).queryByRole('progressbar')).not.toBeInTheDocument()
+  })
+  return within(main)
+    .getAllByRole('heading', { level: 2 })
+    .map(heading => heading.textContent)
+}
 
 describe('the template of a new page', () => {
   it('is one of six, blank unless another is chosen', async () => {
@@ -174,7 +178,7 @@ describe('the template of a new page', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Create' }))
 
     await screen.findByRole('heading', { level: 1, name: 'Onboarding' })
-    expect(await findSections()).toEqual(titles)
+    expect(await findSections()).toEqual([...titles, 'Comments'])
   })
 
   it('is written in the language of the person', async () => {
@@ -192,7 +196,8 @@ describe('the template of a new page', () => {
     expect(await findSections()).toEqual([
       'Avant de commencer',
       'Étapes',
-      'En cas de problème'
+      'En cas de problème',
+      'Commentaires'
     ])
   })
 })

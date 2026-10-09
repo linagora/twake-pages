@@ -4,6 +4,7 @@ import { Link as RouterLink, useParams } from 'react-router'
 
 import { PageHeader } from '@/ds/PageHeader'
 import type { Page } from '@/domain/page'
+import { Comments } from '@/ui/comments/Comments'
 import { useI18n } from '@/ui/i18n/useI18n'
 import { PageLabels } from '@/ui/labels/PageLabels'
 import { EditAction } from '@/ui/page/EditAction'
@@ -67,6 +68,7 @@ export function PageScreen(): ReactElement {
           from it. */}
       {page.data.deletedAt !== null && <TrashNotice page={page.data} />}
       <PageContent page={page.data} />
+      <Comments page={page.data} />
     </main>
   )
 }
