@@ -6,7 +6,7 @@ import { useCallback, type ReactElement } from 'react'
 // The blocks each element shows. React's strict mode attaches a ref twice,
 // and the second time after the first nodes may have been found: the same
 // blocks keep them.
-const shown = new WeakMap<HTMLElement, Record<string, unknown>[]>()
+const blocksShownBy = new WeakMap<HTMLElement, Record<string, unknown>[]>()
 
 /**
  * Blocks of BlockNote, the editor of the pages, shown read only as the HTML
@@ -21,8 +21,8 @@ export function BlocksHtml({
 }): ReactElement {
   const show = useCallback(
     (element: HTMLDivElement | null) => {
-      if (!element || shown.get(element) === blocks) return
-      shown.set(element, blocks)
+      if (!element || blocksShownBy.get(element) === blocks) return
+      blocksShownBy.set(element, blocks)
       const editor = BlockNoteEditor.create({ initialContent: blocks })
       const html = DOMPurify.sanitize(editor.blocksToHTMLLossy(), {
         // A link opens in a new tab, as from the editor.
