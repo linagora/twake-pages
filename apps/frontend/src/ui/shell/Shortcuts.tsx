@@ -26,7 +26,10 @@ const typing = (target: EventTarget | null) =>
   (target.isContentEditable ||
     ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))
 
-export function useShortcuts(actions: { help: () => void }): void {
+export function useShortcuts(actions: {
+  search: () => void
+  help: () => void
+}): void {
   const navigate = useNavigate()
   const going = useRef(false)
 
@@ -45,6 +48,7 @@ export function useShortcuts(actions: { help: () => void }): void {
       g: () => {
         going.current = true
       },
+      '/': actions.search,
       '?': actions.help
     }[event.key]
     if (!action) return
@@ -78,6 +82,7 @@ export function ShortcutsHelp({
   const { t } = useI18n()
   const titleId = useId()
   const rows = [
+    ['/', t('search.label')],
     ...Object.entries(GO).map(([key, { label }]) => [
       t('shortcuts.then', { key }),
       t(label)

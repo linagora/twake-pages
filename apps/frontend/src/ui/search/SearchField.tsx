@@ -1,4 +1,4 @@
-import { useState, type ReactElement } from 'react'
+import { useState, type ReactElement, type RefObject } from 'react'
 import { useMatch, useNavigate, useSearchParams } from 'react-router'
 
 import { SearchBar } from '@/ds/SearchBar'
@@ -12,11 +12,13 @@ export function SearchField({
   label,
   searched,
   onSearch,
+  inputRef,
   size = 'medium'
 }: {
   label: string
   searched: string
   onSearch: (text: string) => void
+  inputRef?: RefObject<HTMLInputElement | null>
   size?: 'small' | 'medium'
 }): ReactElement {
   const [text, setText] = useState(searched)
@@ -41,7 +43,10 @@ export function SearchField({
         onSearch(text.trim())
       }}
       componentsProps={{
-        inputBase: { inputProps: { type: 'search', maxLength: 200 } }
+        inputBase: {
+          inputRef: inputRef ?? null,
+          inputProps: { type: 'search', maxLength: 200 }
+        }
       }}
     />
   )
@@ -53,8 +58,10 @@ export function SearchField({
  * shows without the app bar.
  */
 export function AppSearchField({
+  inputRef,
   size
 }: {
+  inputRef: RefObject<HTMLInputElement | null>
   size: 'small' | 'medium'
 }): ReactElement {
   const { t } = useI18n()
@@ -68,6 +75,7 @@ export function AppSearchField({
       onSearch={text => {
         void navigate(`/search?${new URLSearchParams({ q: text }).toString()}`)
       }}
+      inputRef={inputRef}
       size={size}
     />
   )

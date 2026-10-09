@@ -12,7 +12,13 @@ import {
   NavItem,
   NavText
 } from '@linagora/twake-mui'
-import { useState, type ElementType, type ReactElement } from 'react'
+import {
+  useRef,
+  useState,
+  type ElementType,
+  type ReactElement,
+  type RefObject
+} from 'react'
 import { Outlet, Link as RouterLink, useLocation } from 'react-router'
 
 import {
@@ -35,14 +41,18 @@ import { SidebarLink } from '@/ui/shell/SidebarLink'
 
 export function AppShell(): ReactElement {
   const [help, setHelp] = useState(false)
+  const search = useRef<HTMLInputElement>(null)
   useShortcuts({
+    search: () => {
+      search.current?.focus()
+    },
     help: () => {
       setHelp(true)
     }
   })
 
   return (
-    <AppFrame topBar={<Header />} sidebar={<AppNav />}>
+    <AppFrame topBar={<Header searchRef={search} />} sidebar={<AppNav />}>
       <Outlet />
       {help && (
         <ShortcutsHelp
@@ -55,14 +65,18 @@ export function AppShell(): ReactElement {
   )
 }
 
-function Header(): ReactElement {
+function Header({
+  searchRef
+}: {
+  searchRef: RefObject<HTMLInputElement | null>
+}): ReactElement {
   const { t } = useI18n()
   const { sdk } = useSession()
 
   // The platform bar is 48px tall: a medium search bar would fill it.
   const search = (
     <TopBarSearch>
-      <AppSearchField size={sdk ? 'small' : 'medium'} />
+      <AppSearchField inputRef={searchRef} size={sdk ? 'small' : 'medium'} />
     </TopBarSearch>
   )
 
