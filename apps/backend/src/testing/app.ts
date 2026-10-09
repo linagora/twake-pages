@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { and, eq } from 'drizzle-orm'
+import { and, asc, eq } from 'drizzle-orm'
 import { generateNKeysBetween } from 'fractional-indexing'
 import { pino } from 'pino'
 import { inject } from 'vitest'
@@ -9,7 +9,7 @@ import { createDb, inTenant, type Db, type Tx } from '../infra/db.ts'
 import type { Identity } from '../modules/auth/index.ts'
 import { anIdentity } from '../modules/auth/testing.ts'
 import type { Blocks } from '../modules/pages/blocks.ts'
-import { pages, pageVersions } from '../modules/pages/schema.ts'
+import { labels, pages, pageVersions } from '../modules/pages/schema.ts'
 import type { PageMove } from '../modules/pages/store.ts'
 import { SETTINGS_CHANNEL } from '../modules/settings/routes.ts'
 import type { Role } from '../modules/wikis/access.ts'
@@ -347,6 +347,19 @@ export const textsOf = (db: Db, user: TestUser, pageId: string) =>
       .orderBy(pageVersions.number)
     return { page: page?.text, versions: versions.map(({ text }) => text) }
   })
+
+// No route shows a label no live page carries, so the names of the wiki's
+// labels are read from their table.
+export const labelNamesIn = async (db: Db, user: TestUser, wikiId: string) => {
+  const rows = await inTenant(db, user, tx =>
+    tx
+      .select({ name: labels.name })
+      .from(labels)
+      .where(eq(labels.wikiId, wikiId))
+      .orderBy(asc(labels.name))
+  )
+  return rows.map(({ name }) => name)
+}
 
 /** A wiki as `GET /wikis` lists it. */
 export interface WikiSummary {

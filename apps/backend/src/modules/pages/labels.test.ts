@@ -1,4 +1,3 @@
-import { asc, eq } from 'drizzle-orm'
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest'
 import { createDb, inTenant } from '../../infra/db.ts'
 import {
@@ -8,6 +7,7 @@ import {
   aWikiOf,
   createPage,
   joinWiki,
+  labelNamesIn,
   malformedOrUnknownIds,
   pageOf,
   putInTheTrash,
@@ -18,7 +18,6 @@ import {
   waysOutOfAWiki,
   type TestUser
 } from '../../testing/app.ts'
-import { labels } from './schema.ts'
 
 let api: Awaited<ReturnType<typeof startApp>>
 const { sql, db } = createDb(inject('databaseUrl'))
@@ -31,19 +30,6 @@ afterAll(async () => {
   await api.close()
   await sql.end()
 })
-
-// No route shows a label no live page carries, so the names of the wiki's
-// labels are read from their table.
-const labelNamesIn = async (user: TestUser, wikiId: string) => {
-  const rows = await inTenant(db, user, tx =>
-    tx
-      .select({ name: labels.name })
-      .from(labels)
-      .where(eq(labels.wikiId, wikiId))
-      .orderBy(asc(labels.name))
-  )
-  return rows.map(({ name }) => name)
-}
 
 /** The wiki's labels, as `GET /wikis/:wikiId/labels` lists them to the person. */
 const listedLabels = async (user: TestUser, wikiId: string) =>
@@ -131,7 +117,7 @@ describe('PUT /pages/:pageId/labels', () => {
     ])
 
     expect(response.json()).toEqual({ labels: ['\u00e9quipe'] })
-    expect(await labelNamesIn(alice, wiki.id)).toEqual(['\u00e9quipe'])
+    expect(await labelNamesIn(db, alice, wiki.id)).toEqual(['\u00e9quipe'])
   })
 
   it('takes off the labels it does not name, and leaves other pages theirs', async () => {
@@ -162,7 +148,7 @@ describe('PUT /pages/:pageId/labels', () => {
 
       await setLabels(api, alice, onboarding, [])
 
-      expect(await labelNamesIn(alice, wiki.id)).toEqual(['howto'])
+      expect(await labelNamesIn(db, alice, wiki.id)).toEqual(['howto'])
       expect((await pageOf(api, alice, holidays)).labels).toEqual(['howto'])
     }
   )
@@ -176,7 +162,7 @@ describe('PUT /pages/:pageId/labels', () => {
 
     await setLabels(api, alice, onboarding, [])
 
-    expect(await labelNamesIn(alice, wiki.id)).toEqual(['old'])
+    expect(await labelNamesIn(db, alice, wiki.id)).toEqual(['old'])
     expect((await pageOf(api, alice, drafts)).labels).toEqual(['old'])
   })
 
