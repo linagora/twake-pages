@@ -65,6 +65,13 @@ async function openPurge(title: string): Promise<HTMLElement> {
   return screen.getByRole('dialog', { name: `Delete ${title} for good?` })
 }
 
+/** Opens the dialog that empties the trash, from above its list. */
+async function openEmptyTrash(): Promise<HTMLElement> {
+  await screen.findByRole('list', { name: 'Trash' })
+  fireEvent.click(screen.getByRole('button', { name: 'Empty the trash' }))
+  return screen.getByRole('dialog', { name: 'Empty the trash?' })
+}
+
 afterEach(() => {
   followZone(null)
   vi.useRealTimers()
@@ -280,6 +287,79 @@ describe('a page deleted for good', () => {
 
     expect(await within(dialog).findByRole('alert')).toHaveTextContent(
       'The page could not be deleted for good.'
+    )
+  })
+})
+
+describe('the trash emptied', () => {
+  it('holds no page once an admin is sure', async () => {
+    const { pagesApi, wiki } = await engineeringTrash()
+    renderRoute(`/wikis/${wiki.id}/trash`, { pagesApi })
+    const dialog = await openEmptyTrash()
+    expect(dialog).toHaveTextContent(
+      'Every page in it is deleted for good, for every member. This cannot be undone.'
+    )
+
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'Empty the trash' })
+    )
+
+    await waitFor(() => {
+      expect(dialog).not.toBeInTheDocument()
+    })
+    expect(await findEmptyState('The trash is empty')).toBeVisible()
+    expect(pagesApi.emptyTrash).toHaveBeenCalledWith(wiki.id)
+  })
+
+  it('keeps its pages when not sure', async () => {
+    const { pagesApi, wiki } = await engineeringTrash()
+    renderRoute(`/wikis/${wiki.id}/trash`, { pagesApi })
+    const dialog = await openEmptyTrash()
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+
+    await waitFor(() => {
+      expect(dialog).not.toBeInTheDocument()
+    })
+    expect(
+      within(screen.getByRole('list', { name: 'Trash' })).getAllByRole(
+        'listitem'
+      )
+    ).toHaveLength(2)
+    expect(pagesApi.emptyTrash).not.toHaveBeenCalled()
+  })
+
+  it('is offered to admins only', async () => {
+    await trashListFor('editor')
+
+    expect(
+      screen.queryByRole('button', { name: 'Empty the trash' })
+    ).not.toBeInTheDocument()
+  })
+
+  it('is offered with pages in the trash only', async () => {
+    const pagesApi = fakePagesApi()
+    const wiki = pagesApi.withWiki({ name: 'Engineering' })
+    renderRoute(`/wikis/${wiki.id}/trash`, { pagesApi })
+
+    expect(await findEmptyState('The trash is empty')).toBeVisible()
+    expect(
+      screen.queryByRole('button', { name: 'Empty the trash' })
+    ).not.toBeInTheDocument()
+  })
+
+  it('says so when it cannot be emptied', async () => {
+    const { pagesApi, wiki } = await engineeringTrash()
+    pagesApi.emptyTrash.mockRejectedValue(new ApiError(500, null))
+    renderRoute(`/wikis/${wiki.id}/trash`, { pagesApi })
+    const dialog = await openEmptyTrash()
+
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'Empty the trash' })
+    )
+
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+      'The trash could not be emptied.'
     )
   })
 })

@@ -416,6 +416,16 @@ export function usePurgePage(
   )
 }
 
+/**
+ * The wiki, read again once the trash is emptied, shows the trash without
+ * the pages it held.
+ */
+export function useEmptyTrash(
+  wikiId: string
+): UseMutationResult<unknown, Error, void> {
+  return useWikiChange(wikiId, api => api.emptyTrash(wikiId))
+}
+
 /** A page as shown below a wiki, which may not be its own. */
 export function usePage(wikiId: string, pageId: string): UseQueryResult<Page> {
   const api = usePagesApi()

@@ -298,7 +298,8 @@
     "restored": "La page %{title} est de retour dans l'arborescence.",
     "restoreFailed": "La page %{title} n'a pas pu être restaurée.",
     "purge": "Supprimer définitivement",
-    "purgePage": "Supprimer définitivement %{title}"
+    "purgePage": "Supprimer définitivement %{title}",
+    "emptyTrash": "Vider la corbeille"
   },
   "purgePage": {
     "title": "Supprimer définitivement %{title} ?",
@@ -306,6 +307,13 @@
     "confirm": "Supprimer définitivement",
     "cancel": "Annuler",
     "failed": "La page n'a pas pu être supprimée définitivement."
+  },
+  "emptyTrash": {
+    "title": "Vider la corbeille ?",
+    "text": "Toutes ses pages sont définitivement supprimées, pour tous les membres. Cette action est irréversible.",
+    "confirm": "Vider la corbeille",
+    "cancel": "Annuler",
+    "failed": "La corbeille n'a pas pu être vidée."
   },
   "notifications": {
     "title": "Notifications"

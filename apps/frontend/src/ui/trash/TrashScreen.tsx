@@ -14,6 +14,7 @@ import { PersonAvatar } from '@/ui/people/PersonAvatar'
 import { localTime } from '@/ui/settings/zone'
 import { useDocumentTitle } from '@/ui/useDocumentTitle'
 import {
+  useEmptyTrash,
   usePurgePage,
   useRestorePage,
   useTrash,
@@ -43,9 +44,10 @@ export function TrashScreen(): ReactElement {
   // again, and with it what its restore became.
   const restore = useRestorePage(wikiId)
   const [restored, setRestored] = useState<TrashEntry | null>(null)
-  // The dialog sits with the screen too, open while the trash is read again
-  // without the line that opened it.
+  // The dialogs sit with the screen too, open while the trash is read again
+  // without the line or the button that opened them.
   const [purging, setPurging] = useState<TrashEntry | null>(null)
+  const [emptying, setEmptying] = useState(false)
   const title = t('trash.title')
   useDocumentTitle(title)
   const entries = trash.data ?? []
@@ -59,6 +61,20 @@ export function TrashScreen(): ReactElement {
           <Typography variant="h3" component="h1">
             {title}
           </Typography>
+        }
+        actions={
+          admin &&
+          entries.length > 0 && (
+            <Button
+              variant="secondary"
+              startIcon={<Icon icon={Trash} />}
+              onClick={() => {
+                setEmptying(true)
+              }}
+            >
+              {t('trash.emptyTrash')}
+            </Button>
+          )
         }
       />
       {/* A status, where Twake Tasks keeps the role of an alert: it tells
@@ -117,6 +133,14 @@ export function TrashScreen(): ReactElement {
           entry={purging}
           onClose={() => {
             setPurging(null)
+          }}
+        />
+      )}
+      {emptying && (
+        <EmptyTrashDialog
+          wikiId={wikiId}
+          onClose={() => {
+            setEmptying(false)
           }}
         />
       )}
@@ -236,6 +260,37 @@ function PurgePageDialog({
       pending={purge.isPending}
       onConfirm={() => {
         purge.mutate(entry.id, { onSuccess: onClose })
+      }}
+      onClose={onClose}
+    />
+  )
+}
+
+/**
+ * Asks before every page in the trash is deleted for good, which nothing
+ * brings back. Twake Tasks has no such dialog: its trash empties itself, a
+ * task after its 30 days.
+ */
+function EmptyTrashDialog({
+  wikiId,
+  onClose
+}: {
+  wikiId: string
+  onClose: () => void
+}): ReactElement {
+  const { t } = useI18n()
+  const empty = useEmptyTrash(wikiId)
+
+  return (
+    <ConfirmDialog
+      title={t('emptyTrash.title')}
+      text={t('emptyTrash.text')}
+      confirm={t('emptyTrash.confirm')}
+      cancel={t('emptyTrash.cancel')}
+      failed={empty.isError ? t('emptyTrash.failed') : null}
+      pending={empty.isPending}
+      onConfirm={() => {
+        empty.mutate(undefined, { onSuccess: onClose })
       }}
       onClose={onClose}
     />

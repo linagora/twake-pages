@@ -298,7 +298,8 @@
     "restored": "%{title} is back in the tree.",
     "restoreFailed": "%{title} could not be restored.",
     "purge": "Delete for good",
-    "purgePage": "Delete for good %{title}"
+    "purgePage": "Delete for good %{title}",
+    "emptyTrash": "Empty the trash"
   },
   "purgePage": {
     "title": "Delete %{title} for good?",
@@ -306,6 +307,13 @@
     "confirm": "Delete for good",
     "cancel": "Cancel",
     "failed": "The page could not be deleted for good."
+  },
+  "emptyTrash": {
+    "title": "Empty the trash?",
+    "text": "Every page in it is deleted for good, for every member. This cannot be undone.",
+    "confirm": "Empty the trash",
+    "cancel": "Cancel",
+    "failed": "The trash could not be emptied."
   },
   "notifications": {
     "title": "Notifications"
