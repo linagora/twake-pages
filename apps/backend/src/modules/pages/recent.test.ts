@@ -1,4 +1,3 @@
-import { generateNKeysBetween } from 'fractional-indexing'
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest'
 import { createDb } from '../../infra/db.ts'
 import {
@@ -7,6 +6,7 @@ import {
   aWikiOf,
   createPage,
   joinWiki,
+  pagesIn,
   personalWikiOf,
   startApp,
   waysOutOfAWiki,
@@ -36,11 +36,7 @@ const open = (user: TestUser, pageId: string) =>
 
 /** Pages of the wiki, made at once, that the person opens one after the other. */
 const openedInTurn = async (user: TestUser, wikiId: string, count: number) => {
-  const opened = await Promise.all(
-    generateNKeysBetween(null, null, count).map(position =>
-      aPageIn(db, user, wikiId, { title: position, position })
-    )
-  )
+  const opened = await pagesIn(db, user, wikiId, count)
   for (const pageId of opened) await open(user, pageId)
   return opened
 }

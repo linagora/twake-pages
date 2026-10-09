@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { and, eq } from 'drizzle-orm'
+import { generateNKeysBetween } from 'fractional-indexing'
 import { pino } from 'pino'
 import { inject } from 'vitest'
 import { buildApp } from '../app.ts'
@@ -209,6 +210,27 @@ export async function aPageIn(
     }
     return written.id
   })
+}
+
+/**
+ * `count` pages written straight into the wiki, side by side at the top of
+ * its tree, each titled after its position unless `titleOf` says otherwise.
+ * Their ids come in the order of their positions. They are written at once:
+ * one after the other, a hundred pages outlast a test's time on a busy
+ * machine.
+ */
+export function pagesIn(
+  db: Db,
+  author: TestUser,
+  wikiId: string,
+  count: number,
+  titleOf: (position: string) => string = position => position
+): Promise<string[]> {
+  return Promise.all(
+    generateNKeysBetween(null, null, count).map(position =>
+      aPageIn(db, author, wikiId, { title: titleOf(position), position })
+    )
+  )
 }
 
 // Search is not served yet, so the plain text of a page and of its versions is

@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto'
 import { desc, eq } from 'drizzle-orm'
-import { generateNKeysBetween } from 'fractional-indexing'
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest'
 import { createDb, inTenant } from '../../infra/db.ts'
 import {
@@ -15,6 +14,7 @@ import {
   joinWiki,
   neighbourPagesIn,
   pageOf,
+  pagesIn,
   personOf,
   publish,
   removeFromWiki,
@@ -102,13 +102,7 @@ const visitedLongAgo = async (
   wikiId: string,
   count: number
 ) => {
-  // At once: one after the other, a hundred pages outlast the test's time on
-  // a busy machine.
-  const visited = await Promise.all(
-    generateNKeysBetween(null, null, count).map(position =>
-      aPageIn(db, user, wikiId, { title: position, position })
-    )
-  )
+  const visited = await pagesIn(db, user, wikiId, count)
   await inTenant(db, user, tx =>
     tx.insert(pageVisits).values(
       visited.map((pageId, minutes) => ({
