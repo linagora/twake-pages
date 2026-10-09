@@ -188,6 +188,22 @@ describe('a page', () => {
     ).toHaveAttribute('target', '_blank')
   })
 
+  it('shows a block of a type it does not know as a card naming its kind, then the blocks under it', async () => {
+    openChecklistOf([
+      {
+        type: 'callout',
+        props: { tone: 'warning' },
+        content: 'Mind the badge',
+        children: [{ type: 'paragraph', content: 'Ask the release team.' }]
+      }
+    ])
+
+    expect(
+      await screen.findByRole('group', { name: 'callout block' })
+    ).toBeVisible()
+    expect(screen.getByText('Ask the release team.')).toBeVisible()
+  })
+
   it('says when it holds nothing yet', async () => {
     const { pagesApi, wiki, checklist } = handbook()
     renderRoute(`/wikis/${wiki.id}/pages/${checklist.id}`, { pagesApi })

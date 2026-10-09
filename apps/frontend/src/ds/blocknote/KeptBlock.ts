@@ -51,7 +51,7 @@ function keptBlockCard(
 }
 
 /** The styles of the cards of kept blocks, for the element that holds them. */
-export const keptBlockStyles: SxProps<Theme> = {
+export const keptBlockStyles = {
   '& .twake-kept-block': {
     width: '100%',
     border: 1,
@@ -67,7 +67,7 @@ export const keptBlockStyles: SxProps<Theme> = {
     color: 'text.secondary',
     overflowWrap: 'anywhere'
   }
-}
+} satisfies SxProps<Theme>
 
 /**
  * The kept block: a block the editor does not write, held as the page

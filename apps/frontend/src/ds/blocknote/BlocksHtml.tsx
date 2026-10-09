@@ -3,27 +3,55 @@ import { Box } from '@linagora/twake-mui'
 import DOMPurify from 'dompurify'
 import { useCallback, type ReactElement } from 'react'
 
-// The blocks each element shows. React's strict mode attaches a ref twice,
-// and the second time after the first nodes may have been found: the same
-// blocks keep them.
-const blocksShownBy = new WeakMap<HTMLElement, Record<string, unknown>[]>()
+import { keptBlockStyles } from '@/ds/blocknote/KeptBlock'
+import { pagesSchema } from '@/ds/blocknote/pagesSchema'
+import {
+  EDITOR_BLOCKS,
+  withOthersKept,
+  type BlockOptions
+} from '@/ds/editorBlocks'
+
+type Blocks = Record<string, unknown>[]
+
+/**
+ * The blocks shown as BlockNote exports them: those the editor writes, and
+ * BlockNote's video, audio and file ones, as a player or a link. A block of
+ * another type shows as the editor shows it, in a kept block.
+ */
+const SHOWN_BLOCKS = [...EDITOR_BLOCKS, 'video', 'audio', 'file'] as const
+const shown: ReadonlySet<unknown> = new Set(SHOWN_BLOCKS)
+
+// What each element shows. React's strict mode attaches a ref twice, and the
+// second time after the first nodes may have been found: the same blocks,
+// with the same options, keep them.
+const shownBy = new WeakMap<
+  HTMLElement,
+  { blocks: Blocks; options: BlockOptions }
+>()
 
 /**
  * Blocks of BlockNote, the editor of the pages, shown read only as the HTML
  * it exports: its editor draws a list item as a paragraph, which a screen
  * reader does not read as a list. Others write the blocks, so the HTML is
- * sanitized.
+ * sanitized. `options.kindOf` names the kind of a block of another type.
  */
 export function BlocksHtml({
-  blocks
+  blocks,
+  options
 }: {
-  blocks: Record<string, unknown>[]
+  blocks: Blocks
+  options: BlockOptions
 }): ReactElement {
   const show = useCallback(
     (element: HTMLDivElement | null) => {
-      if (!element || blocksShownBy.get(element) === blocks) return
-      blocksShownBy.set(element, blocks)
-      const editor = BlockNoteEditor.create({ initialContent: blocks })
+      if (!element) return
+      const before = shownBy.get(element)
+      if (before?.blocks === blocks && before.options === options) return
+      shownBy.set(element, { blocks, options })
+      const editor = BlockNoteEditor.create({
+        schema: pagesSchema(SHOWN_BLOCKS, options),
+        initialContent: withOthersKept(blocks, shown)
+      })
       const html = DOMPurify.sanitize(editor.blocksToHTMLLossy(), {
         // A link opens in a new tab, as from the editor.
         ADD_ATTR: ['target'],
@@ -44,26 +72,29 @@ export function BlocksHtml({
       }
       element.replaceChildren(html)
     },
-    [blocks]
+    [blocks, options]
   )
 
   return (
     <Box
       ref={show}
-      sx={theme => ({
-        // The exported HTML comes without styles: its lists as Twake Tasks
-        // styles those of its rich text, and nothing wider than the page.
-        '& li > p': { margin: 0 },
-        '& li:has(> input)': { listStyle: 'none' },
-        '& li > input + p': { display: 'inline' },
-        '& pre': { overflowX: 'auto' },
-        '& img, & video': { maxWidth: '100%' },
-        '& table': { borderCollapse: 'collapse' },
-        '& th, & td': {
-          border: `1px solid ${theme.vars.palette.divider}`,
-          padding: theme.spacing(0.5, 1)
-        }
-      })}
+      sx={[
+        theme => ({
+          // The exported HTML comes without styles: its lists as Twake Tasks
+          // styles those of its rich text, and nothing wider than the page.
+          '& li > p': { margin: 0 },
+          '& li:has(> input)': { listStyle: 'none' },
+          '& li > input + p': { display: 'inline' },
+          '& pre': { overflowX: 'auto' },
+          '& img, & video': { maxWidth: '100%' },
+          '& table': { borderCollapse: 'collapse' },
+          '& th, & td': {
+            border: `1px solid ${theme.vars.palette.divider}`,
+            padding: theme.spacing(0.5, 1)
+          }
+        }),
+        keptBlockStyles
+      ]}
     />
   )
 }

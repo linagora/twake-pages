@@ -348,11 +348,6 @@ const GRIST_EMBED: Block = {
   props: { url: `${GRIST_ORIGIN}/o/docs/budget` }
 }
 
-/** Leaves the next publish pending, so that the page does not show next. */
-function holdPublish(pagesApi: FakePagesApi) {
-  pagesApi.publish.mockImplementationOnce(() => new Promise(() => undefined))
-}
-
 describe('a block of the page that the editor does not offer', () => {
   it('shows by its kind, its caption or else its name, and its address, and cannot be edited', async () => {
     const pagesApi = fakePagesApi()
@@ -395,8 +390,6 @@ describe('a block of the page that the editor does not offer', () => {
   it('is published as stored when the title alone changes', async () => {
     const pagesApi = fakePagesApi()
     const { page, editor } = aPage(pagesApi, [VIDEO, GRIST_EMBED])
-    // The page would show its Grist embed next, which reading cannot yet.
-    holdPublish(pagesApi)
     renderRoute(editor, { pagesApi })
 
     await within(
@@ -425,8 +418,6 @@ describe('a block of the page that the editor does not offer', () => {
       GRIST_EMBED,
       paragraph('Bring your badge')
     ])
-    // The page would show its Grist embed next, which reading cannot yet.
-    holdPublish(pagesApi)
     renderRoute(editor, { pagesApi })
 
     await typeInBlocks(
@@ -468,8 +459,6 @@ describe('a block of the page that the editor does not offer', () => {
       children: [under]
     })
     const { editor } = aPage(pagesApi, [callout(desk('Ask at the desk'))])
-    // The page would show its callout next, which reading cannot yet.
-    holdPublish(pagesApi)
     renderRoute(editor, { pagesApi })
 
     const content = await screen.findByRole('textbox', { name: 'Content' })
