@@ -52,6 +52,9 @@ export function normalizeLabelName(text: string): string {
   return text.trim().toLowerCase().normalize('NFC')
 }
 
+/** The most labels a page carries: the backend refuses more. */
+export const MAX_LABELS = 50
+
 export interface VersionSummary {
   number: number
   title: string

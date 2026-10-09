@@ -346,6 +346,29 @@ describe('the labels picker', () => {
     expect(within(dialog).queryByRole('alert')).not.toBeInTheDocument()
   })
 
+  it('says that a page carries at most 50 labels, without saving a 51st', async () => {
+    const names = Array.from(
+      { length: 50 },
+      (_, index) => `label-${String(index + 1).padStart(2, '0')}`
+    )
+    const { pagesApi, wiki, onboarding } = await onboardingLabelled(names)
+    renderRoute(`/wikis/${wiki.id}/pages/${onboarding.id}`, { pagesApi })
+
+    const dialog = await openLabels()
+    typeIn(dialog, 'Search labels', 'release')
+    fireEvent.click(
+      within(dialog).getByRole('menuitem', { name: 'Create “release”' })
+    )
+
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+      'A page carries at most 50 labels.'
+    )
+    expect(pagesApi.setLabels).not.toHaveBeenCalledWith(
+      onboarding.id,
+      expect.arrayContaining(['release'])
+    )
+  })
+
   it('says when the labels could not be saved, and shows those the page carries', async () => {
     const { pagesApi, wiki, onboarding } = await handbookWithHowTo()
     pagesApi.setLabels.mockRejectedValueOnce(new ApiError(500, null))

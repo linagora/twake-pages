@@ -194,8 +194,8 @@ export interface PagesApi {
   /** Editor; the page and its live descendants go to the trash as one branch. */
   deletePage: (pageId: string) => Promise<void>
   /**
-   * Editor; at most 50 names, trimmed, lowercased and composed (NFC). Answers
-   * the page's labels.
+   * Editor; at most `MAX_LABELS` names, trimmed, lowercased and composed (NFC).
+   * Answers the page's labels.
    */
   setLabels: (pageId: string, names: string[]) => Promise<string[]>
   /** Whether the person is notified of the page's versions and comments. */

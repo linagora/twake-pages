@@ -213,6 +213,7 @@
     "create": "Créer « %{name} »",
     "hint": "Saisissez un nom pour créer une étiquette.",
     "invalid": "Une étiquette se compose de 1 à 50 lettres, chiffres, tirets ou tirets bas.",
+    "tooMany": "Une page porte au plus %{max} étiquettes.",
     "saveFailed": "Les étiquettes n'ont pas pu être enregistrées.",
     "loadFailed": "Les étiquettes du wiki n'ont pas pu être chargées.",
     "retry": "Réessayer"

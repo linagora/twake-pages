@@ -13,6 +13,7 @@ import { isFields, isList, type Fields } from '@/domain/blocks'
 import { mentionsIn, type Comment } from '@/domain/comment'
 import type { Notification, NotificationReason } from '@/domain/notification'
 import {
+  MAX_LABELS,
   normalizeLabelName,
   type Block,
   type Page,
@@ -1151,7 +1152,7 @@ function signedIn(world: World, person: Person): FakePagesApi {
     setLabels: vi.fn<PagesApi['setLabels']>((pageId, names) =>
       answer(() => {
         // The backend checks the body before it looks for the page.
-        if (names.length > 50) throw refuse('invalid_request')
+        if (names.length > MAX_LABELS) throw refuse('invalid_request')
         const { page, wiki } = liveAccess(pageId)
         page.labels = [...new Set(names.map(checkLabel))].sort(byName)
         bump(wiki)

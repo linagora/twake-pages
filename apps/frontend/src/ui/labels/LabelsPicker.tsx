@@ -10,7 +10,7 @@ import {
   PickerOption,
   PickerPopover
 } from '@/ds/Picker'
-import { normalizeLabelName, type Page } from '@/domain/page'
+import { MAX_LABELS, normalizeLabelName, type Page } from '@/domain/page'
 import { useI18n } from '@/ui/i18n/useI18n'
 import { useSetLabels, useWikiLabels } from '@/ui/wiki/queries'
 
@@ -31,6 +31,9 @@ export function LabelsPicker({
   const labels = useWikiLabels(page.wikiId)
   const [search, setSearch] = useState('')
   const [chosen, setChosen] = useState(() => new Set(page.labels))
+  // Twake Tasks says only that the save failed: the picker says why, without
+  // asking the backend, which takes at most MAX_LABELS names.
+  const [tooMany, setTooMany] = useState(false)
   // Making a label saves the page's labels too, but on its own, as making a
   // label is in Twake Tasks, so that what it says of a name goes as the name
   // changes.
@@ -51,6 +54,8 @@ export function LabelsPicker({
     next: Set<string>,
     onSaved?: () => void
   ) => {
+    setTooMany(next.size > MAX_LABELS)
+    if (next.size > MAX_LABELS) return
     setChosen(next)
     change.mutate([...next], {
       onSuccess: () => {
@@ -79,7 +84,7 @@ export function LabelsPicker({
         create.reset()
       }}
       footer={
-        (labels.isError || create.isError || save.isError) && (
+        (labels.isError || tooMany || create.isError || save.isError) && (
           <>
             {labels.isError && (
               <PickerError
@@ -91,9 +96,13 @@ export function LabelsPicker({
                 {t('labels.loadFailed')}
               </PickerError>
             )}
-            {(create.isError || save.isError) && (
+            {(tooMany || create.isError || save.isError) && (
               <Typography role="alert" variant="caption" color="error">
-                {invalid ? t('labels.invalid') : t('labels.saveFailed')}
+                {tooMany
+                  ? t('labels.tooMany', { max: MAX_LABELS })
+                  : invalid
+                    ? t('labels.invalid')
+                    : t('labels.saveFailed')}
               </Typography>
             )}
           </>

@@ -213,6 +213,7 @@
     "create": "Create “%{name}”",
     "hint": "Type a name to create a label.",
     "invalid": "A label is 1 to 50 letters, digits, hyphens or underscores.",
+    "tooMany": "A page carries at most %{max} labels.",
     "saveFailed": "The labels could not be saved.",
     "loadFailed": "The labels of the wiki could not be loaded.",
     "retry": "Retry"
