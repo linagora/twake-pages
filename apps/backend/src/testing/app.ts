@@ -88,16 +88,19 @@ export function removeMember(
   return app.as(someone).delete(`/wikis/${wikiId}/members/${userId}`)
 }
 
-/** The ways a member leaves a shared wiki, with the answer to the request. */
-export const WAYS_TO_LEAVE: [
-  string,
-  (
-    app: Awaited<ReturnType<typeof startApp>>,
-    admin: TestUser,
-    wikiId: string,
-    member: TestUser
-  ) => ReturnType<typeof removeMember>
-][] = [
+/**
+ * What takes a member out of a wiki, done by its admin or by the member, with
+ * the answer to the request.
+ */
+export type TakeOut = (
+  app: Awaited<ReturnType<typeof startApp>>,
+  admin: TestUser,
+  wikiId: string,
+  member: TestUser
+) => ReturnType<typeof removeMember>
+
+/** The ways a member leaves a shared wiki. */
+export const WAYS_TO_LEAVE: [string, TakeOut][] = [
   [
     'removed by its admin',
     (app, admin, wikiId, member) =>
@@ -110,29 +113,21 @@ export const WAYS_TO_LEAVE: [
   ]
 ]
 
-/** What a wiki's admin does that takes a member out of the wiki. */
-export type TakeOut = (
-  app: Awaited<ReturnType<typeof startApp>>,
-  db: Db,
-  admin: TestUser,
-  wikiId: string,
-  member: TestUser
-) => Promise<unknown>
-
-const removeInTheDatabase: TakeOut = (_app, db, admin, wikiId, member) =>
-  removeFromWiki(db, admin, wikiId, member)
-
 /**
- * The ways a member ends out of a wiki, with who the member is: removed by its
- * admin, in an organization or in B2C, or out with the deleted wiki.
+ * The ways a member ends out of a wiki, with who the member is: leaving it in
+ * an organization or in B2C, or out with the deleted wiki.
  */
 export const waysOutOfAWiki: [string, () => TestUser, TakeOut][] = [
-  ['a wiki the person left', aUser, removeInTheDatabase],
-  ['a wiki the person left, in B2C', aB2cUser, removeInTheDatabase],
+  ...WAYS_TO_LEAVE.flatMap(
+    ([way, takeOut]): [string, () => TestUser, TakeOut][] => [
+      [`a wiki the person left, ${way}`, aUser, takeOut],
+      [`a wiki the person left, ${way}, in B2C`, aB2cUser, takeOut]
+    ]
+  ),
   [
     'a deleted wiki',
     aUser,
-    (app, _db, admin, wikiId) => app.as(admin).delete(`/wikis/${wikiId}`)
+    (app, admin, wikiId) => app.as(admin).delete(`/wikis/${wikiId}`)
   ]
 ]
 

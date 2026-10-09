@@ -154,7 +154,7 @@ describe('GET /pages/:pageId/versions', () => {
       const pageId = await aPage(api, carol, wiki.id, { title: 'Onboarding' })
       expect((await listVersions(alice, pageId)).statusCode).toBe(200)
 
-      await takeOut(api, db, carol, wiki.id, alice)
+      await takeOut(api, carol, wiki.id, alice)
 
       const response = await listVersions(alice, pageId)
       expect(response.statusCode).toBe(404)
@@ -254,7 +254,7 @@ describe('GET /pages/:pageId/versions/:number', () => {
       const pageId = await aPage(api, carol, wiki.id, { title: 'Onboarding' })
       expect((await getVersion(alice, pageId, 1)).statusCode).toBe(200)
 
-      await takeOut(api, db, carol, wiki.id, alice)
+      await takeOut(api, carol, wiki.id, alice)
 
       const response = await getVersion(alice, pageId, 1)
       expect(response.statusCode).toBe(404)
@@ -497,7 +497,7 @@ describe('POST /pages/:pageId/versions/:number/restore', () => {
       await joinWiki(db, carol, wiki.id, alice, 'editor')
       const pageId = await aPage(api, carol, wiki.id, { title: 'Onboarding' })
       expect((await restoreVersion(api, alice, pageId, 1)).statusCode).toBe(201)
-      await takeOut(api, db, carol, wiki.id, alice)
+      await takeOut(api, carol, wiki.id, alice)
       const before = await wikiRowsOf(db, carol, wiki.id)
 
       const response = await restoreVersion(api, alice, pageId, 1)

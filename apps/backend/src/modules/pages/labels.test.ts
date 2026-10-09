@@ -397,7 +397,7 @@ describe('GET /wikis/:wikiId/labels', () => {
       await joinWiki(db, carol, wiki.id, alice, 'viewer')
       await setLabels(api, carol, wiki.homePageId, ['howto'])
 
-      await takeOut(api, db, carol, wiki.id, alice)
+      await takeOut(api, carol, wiki.id, alice)
       const response = await api.as(alice).get(`/wikis/${wiki.id}/labels`)
 
       expect(response.statusCode).toBe(404)
@@ -537,7 +537,7 @@ describe('GET /wikis/:wikiId/labels/:name/pages', () => {
       await joinWiki(db, carol, wiki.id, alice, 'viewer')
       await setLabels(api, carol, wiki.homePageId, ['howto'])
 
-      await takeOut(api, db, carol, wiki.id, alice)
+      await takeOut(api, carol, wiki.id, alice)
       const response = await api
         .as(alice)
         .get(`/wikis/${wiki.id}/labels/howto/pages`)

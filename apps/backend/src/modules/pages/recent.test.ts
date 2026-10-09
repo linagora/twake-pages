@@ -130,7 +130,7 @@ describe('recent pages', () => {
         wiki.homePageId
       ])
 
-      await takeOut(api, db, carol, wiki.id, alice)
+      await takeOut(api, carol, wiki.id, alice)
 
       expect(idsOf(await recentOf(alice))).toEqual([personal.homePageId])
     }

@@ -221,7 +221,7 @@ describe('GET /favorites', () => {
         'Handbook'
       ])
 
-      await takeOut(api, db, carol, wiki.id, alice)
+      await takeOut(api, carol, wiki.id, alice)
 
       expect(titlesOf(await favoritesOf(alice))).toEqual(['Personal'])
     }

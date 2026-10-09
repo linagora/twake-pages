@@ -377,7 +377,7 @@ describe('search', () => {
       })
       expect(await titlesFound(alice, 'badge')).toEqual(['Onboarding'])
 
-      await takeOut(api, db, carol, wiki.id, alice)
+      await takeOut(api, carol, wiki.id, alice)
 
       expect(await titlesFound(alice, 'badge')).toEqual([])
     }
@@ -443,7 +443,7 @@ describe('search', () => {
         (await search(alice, { q: 'badge', wikiId: wiki.id })).statusCode
       ).toBe(200)
 
-      await takeOut(api, db, carol, wiki.id, alice)
+      await takeOut(api, carol, wiki.id, alice)
 
       const response = await search(alice, { q: 'badge', wikiId: wiki.id })
       expect(response.statusCode).toBe(404)
