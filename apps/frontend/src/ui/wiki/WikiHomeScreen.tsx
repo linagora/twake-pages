@@ -8,6 +8,7 @@ import { PageHeader } from '@/ds/PageHeader'
 import { useI18n } from '@/ui/i18n/useI18n'
 import { EditAction } from '@/ui/page/EditAction'
 import { FavoriteButton } from '@/ui/page/FavoriteButton'
+import { FollowButton } from '@/ui/page/FollowButton'
 import { NewPageDialog } from '@/ui/page/NewPageDialog'
 import { PageContent } from '@/ui/page/PageContent'
 import { PageVersion } from '@/ui/page/PageVersion'
@@ -60,7 +61,7 @@ export function WikiHomeScreen(): ReactElement {
                   pageId={wiki.data.homePageId}
                   to={`pages/${wiki.data.homePageId}/edit`}
                 />
-                <HomePageFavorite
+                <HomePageButtons
                   wikiId={wikiId}
                   pageId={wiki.data.homePageId}
                 />
@@ -146,11 +147,13 @@ function HomePage({
 }
 
 /**
- * Any member keeps favorites, viewers too, so the home page's button shows
- * apart from the editors' actions. It reads the page through the query the
- * page below reads, which fetches it once: one visit.
+ * Any member follows pages and keeps favorites, viewers too, so the home
+ * page's buttons show apart from the editors' actions, as on the page's own
+ * screen. Its creator follows it from the start, and stops here. They read
+ * the page through the query the page below reads, which fetches it once:
+ * one visit.
  */
-function HomePageFavorite({
+function HomePageButtons({
   wikiId,
   pageId
 }: {
@@ -158,5 +161,11 @@ function HomePageFavorite({
   pageId: string
 }): ReactElement | null {
   const page = usePage(wikiId, pageId)
-  return page.data ? <FavoriteButton page={page.data} /> : null
+  if (!page.data) return null
+  return (
+    <>
+      <FollowButton page={page.data} />
+      <FavoriteButton page={page.data} />
+    </>
+  )
 }

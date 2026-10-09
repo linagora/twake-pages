@@ -323,6 +323,31 @@ describe('the home page as a favorite', () => {
   })
 })
 
+describe('the home page as followed', () => {
+  it.each(['admin', 'editor', 'viewer'] as const)(
+    'is followed by a member with the %s role, and no more',
+    async role => {
+      const pagesApi = fakePagesApi()
+      const wiki = pagesApi.withWiki({ name: 'Handbook', role })
+      await pagesApi.setFollowing(wiki.homePageId, false)
+      renderRoute(`/wikis/${wiki.id}`, { pagesApi })
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Follow' }))
+      const following = await screen.findByRole('button', {
+        name: 'Following'
+      })
+      const followed = (await pagesApi.getPage(wiki.homePageId)).following
+      fireEvent.click(following)
+      await screen.findByRole('button', { name: 'Follow' })
+
+      expect({
+        followed,
+        left: (await pagesApi.getPage(wiki.homePageId)).following
+      }).toEqual({ followed: true, left: false })
+    }
+  )
+})
+
 describe('the Edit action of the home page', () => {
   it.each(WIKI_BASES)(
     'leads an editor of the wiki at %s/<wiki> to the editor of its home page',
