@@ -315,7 +315,8 @@ async function pageAt(tx: Tx, pageId: string) {
       home: pages.home,
       kind: pages.kind,
       version: pages.version,
-      deletedAt: pages.deletedAt
+      deletedAt: pages.deletedAt,
+      trashRootId: pages.trashRootId
     })
     .from(pages)
     .where(eq(pages.id, pageId))

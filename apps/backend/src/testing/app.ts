@@ -733,6 +733,15 @@ export function deletePage(
   return app.as(user).delete(`/pages/${pageId}`)
 }
 
+/** `POST /pages/:pageId/restore` by the person, for the root of a branch. */
+export function restorePage(
+  app: Awaited<ReturnType<typeof startApp>>,
+  user: TestUser,
+  pageId: string
+) {
+  return app.as(user).post(`/pages/${pageId}/restore`, {})
+}
+
 /** A parent the test makes in or beside the person's wiki, by its id. */
 type ParentOf = (test: {
   app: Awaited<ReturnType<typeof startApp>>
