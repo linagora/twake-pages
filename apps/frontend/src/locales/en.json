@@ -219,7 +219,9 @@
     "retry": "Retry",
     "list": "Labels",
     "entry": "%{name}, %{smart_count} page |||| %{name}, %{smart_count} pages",
-    "empty": "No labels yet"
+    "empty": "No labels yet",
+    "noPages": "No pages with this label",
+    "pagesLoadFailed": "The pages with this label could not be loaded."
   },
   "search": {
     "title": "Search",

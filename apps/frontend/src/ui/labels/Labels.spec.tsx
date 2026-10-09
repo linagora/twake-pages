@@ -514,3 +514,66 @@ describe('the labels of a wiki', () => {
     ).toBeInTheDocument()
   })
 })
+
+describe('the screen of a label', () => {
+  it.each(WIKI_BASES)(
+    'lists at %s/<wiki>/labels/<name> the pages that carry it, by title, each leading to its page',
+    async base => {
+      const { pagesApi, wiki, onboarding } = await onboardingLabelled(['howto'])
+      const laptops = pagesApi.withPage(wiki.id, { title: 'Laptops' })
+      await pagesApi.setLabels(laptops.id, ['howto', 'hr'])
+      const releases = pagesApi.withPage(wiki.id, { title: 'Releases' })
+      await pagesApi.setLabels(releases.id, ['hr'])
+      renderRoute(`${base}/${wiki.id}/labels/howto`, { pagesApi })
+
+      const pages = within(
+        await screen.findByRole('list', { name: 'Pages labelled howto' })
+      )
+      expect(
+        pages
+          .getAllByRole('link')
+          .map(link => [link.textContent, link.getAttribute('href')])
+      ).toEqual([
+        ['Laptops', `${base}/${wiki.id}/pages/${laptops.id}`],
+        ['Onboarding', `${base}/${wiki.id}/pages/${onboarding.id}`]
+      ])
+    }
+  )
+
+  it('says when no page carries the label', async () => {
+    const { pagesApi, wiki } = await onboardingLabelled(['hr'])
+    renderRoute(`/wikis/${wiki.id}/labels/howto`, { pagesApi })
+
+    expect(await findEmptyState('No pages with this label')).toBeVisible()
+    expect(
+      screen.queryByRole('list', { name: 'Pages labelled howto' })
+    ).not.toBeInTheDocument()
+  })
+
+  it('says so when its pages cannot be loaded, and never looks empty', async () => {
+    const { pagesApi, wiki } = await onboardingLabelled(['howto'])
+    pagesApi.pagesWithLabel.mockRejectedValue(new ApiError(403, null))
+    renderRoute(`/wikis/${wiki.id}/labels/howto`, { pagesApi })
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'The pages with this label could not be loaded.'
+    )
+    expect(
+      screen.queryByText('No pages with this label')
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('list', { name: 'Pages labelled howto' })
+    ).not.toBeInTheDocument()
+  })
+
+  it('reads the name of the label from the address', async () => {
+    const { pagesApi, wiki } = await onboardingLabelled(['ångström'])
+    renderRoute(`/wikis/${wiki.id}/labels/%C3%A5ngstr%C3%B6m`, { pagesApi })
+
+    const pages = within(
+      await screen.findByRole('list', { name: 'Pages labelled ångström' })
+    )
+    expect(pages.getByRole('link', { name: 'Onboarding' })).toBeVisible()
+    expect(pagesApi.pagesWithLabel).toHaveBeenCalledWith(wiki.id, 'ångström')
+  })
+})

@@ -10,6 +10,7 @@ import { useEffect } from 'react'
 
 import type {
   Label,
+  LabelledPage,
   Move,
   NewPage,
   NewVersion,
@@ -308,6 +309,18 @@ export function useWikiLabels(wikiId: string): UseQueryResult<Label[]> {
   return useQuery({
     queryKey: labelsKey(wikiId),
     queryFn: () => api.listLabels(wikiId)
+  })
+}
+
+/** Read again with the wiki's labels, once a page's labels change. */
+export function usePagesWithLabel(
+  wikiId: string,
+  name: string
+): UseQueryResult<LabelledPage[]> {
+  const api = usePagesApi()
+  return useQuery({
+    queryKey: [...labelsKey(wikiId), name],
+    queryFn: () => api.pagesWithLabel(wikiId, name)
   })
 }
 

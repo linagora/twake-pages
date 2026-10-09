@@ -219,7 +219,9 @@
     "retry": "Réessayer",
     "list": "Étiquettes",
     "entry": "%{name}, %{smart_count} page |||| %{name}, %{smart_count} pages",
-    "empty": "Aucune étiquette pour l'instant"
+    "empty": "Aucune étiquette pour l'instant",
+    "noPages": "Aucune page avec cette étiquette",
+    "pagesLoadFailed": "Les pages avec cette étiquette n'ont pas pu être chargées."
   },
   "search": {
     "title": "Recherche",
