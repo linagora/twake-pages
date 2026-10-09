@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
-import { ApiError, EditConflict } from '@/application/pages'
+import { ApiError, EditConflict, type NewPage } from '@/application/pages'
 import { FOUND_END, FOUND_START } from '@/domain/search'
 import { buildTree, byPosition, type TreeNode } from '@/domain/tree'
 import {
   fakePagesApi,
   GRIST_ORIGIN,
+  OFF_GRIST_ORIGINS,
   paragraph,
   type FakePagesApi
 } from '@/testing/fakePagesApi'
@@ -514,12 +515,270 @@ describe('fakePagesApi', () => {
         content: [],
         gristUrl: `${GRIST_ORIGIN}/o/docs/budget`
       })
-      await expect(
-        api.createPage(wiki.id, {
-          ...database,
-          gristUrl: 'https://evil.example.com/o/docs/budget'
+    })
+
+    describe('its Grist address', () => {
+      const budget = {
+        title: 'Budget',
+        kind: 'database' as const,
+        parentId: null
+      }
+      const gristUrl = `${GRIST_ORIGIN}/o/docs/budget`
+      const offOrigin = 'https://docs.example.com/o/docs/budget'
+      const invalidRequest = new ApiError(400, 'invalid_request')
+      const invalidGristUrl = new ApiError(400, 'invalid_grist_url')
+
+      it('publishes the next version of a database page at an address', async () => {
+        const api = fakePagesApi()
+        const wiki = api.withWiki()
+        const page = api.withPage(wiki.id, { ...budget, gristUrl })
+        const next = `${GRIST_ORIGIN}/o/docs/budget-2027`
+
+        await expect(
+          api.publish(page.id, {
+            baseVersion: 1,
+            title: ' Budget 2027 ',
+            gristUrl: next
+          })
+        ).resolves.toMatchObject({
+          title: 'Budget 2027',
+          content: [],
+          gristUrl: next,
+          version: 2
         })
-      ).rejects.toEqual(new ApiError(400, 'invalid_grist_url'))
+        await expect(api.getVersion(page.id, 1)).resolves.toMatchObject({
+          gristUrl
+        })
+      })
+
+      it.each(OFF_GRIST_ORIGINS)(
+        'refuses an address %s, on creation and on publishing',
+        async (_case, address) => {
+          const api = fakePagesApi()
+          const wiki = api.withWiki()
+          const page = api.withPage(wiki.id, budget)
+
+          await expect(
+            api.createPage(wiki.id, { ...budget, gristUrl: address })
+          ).rejects.toEqual(invalidGristUrl)
+          await expect(
+            api.publish(page.id, {
+              baseVersion: 1,
+              title: 'Budget',
+              gristUrl: address
+            })
+          ).rejects.toEqual(invalidGristUrl)
+        }
+      )
+
+      it.each([
+        ['with a NUL character', `${gristUrl}\u0000`],
+        ['with a lone surrogate', `${gristUrl}\ud83d`]
+      ])(
+        'refuses an address %s as a malformed body, on creation and on publishing',
+        async (_case, address) => {
+          const api = fakePagesApi()
+          const wiki = api.withWiki()
+          const page = api.withPage(wiki.id, budget)
+
+          await expect(
+            api.createPage(wiki.id, { ...budget, gristUrl: address })
+          ).rejects.toEqual(invalidRequest)
+          await expect(
+            api.publish(page.id, {
+              baseVersion: 1,
+              title: 'Budget',
+              gristUrl: address
+            })
+          ).rejects.toEqual(invalidRequest)
+        }
+      )
+
+      const mixed: [string, NewPage][] = [
+        [
+          'a database page with blocks',
+          { ...budget, gristUrl, content: [paragraph('Q1')] }
+        ],
+        [
+          'a document with a Grist address',
+          { ...budget, kind: 'document', gristUrl }
+        ],
+        ['a database page with no Grist address', budget]
+      ]
+
+      it.each(mixed)(
+        'refuses to create %s, as a malformed body',
+        async (_case, input) => {
+          const api = fakePagesApi()
+          const wiki = api.withWiki()
+
+          await expect(api.createPage(wiki.id, input)).rejects.toEqual(
+            invalidRequest
+          )
+        }
+      )
+
+      it('refuses a draft for the other kind of page, or with both blocks and an address', async () => {
+        const api = fakePagesApi()
+        const wiki = api.withWiki()
+        const database = api.withPage(wiki.id, budget)
+        const document = api.withPage(wiki.id, { title: 'Onboarding' })
+        const draft = { baseVersion: 1, title: 'Budget' }
+
+        await expect(
+          api.publish(database.id, { ...draft, content: [] })
+        ).rejects.toEqual(invalidRequest)
+        await expect(
+          api.publish(document.id, { ...draft, gristUrl })
+        ).rejects.toEqual(invalidRequest)
+        await expect(
+          api.publish(document.id, { ...draft, content: [], gristUrl })
+        ).rejects.toEqual(invalidRequest)
+      })
+
+      // The page tells its kind after the trash, and before the version the
+      // draft started from (docs/api.md).
+      it('answers in_trash, not invalid_request, for blocks sent to a database page in the trash', async () => {
+        const api = fakePagesApi()
+        const wiki = api.withWiki()
+        const page = api.withPage(wiki.id, budget)
+        await api.deletePage(page.id)
+        const before = (await api.getWiki(wiki.id)).version
+
+        await expect(
+          api.publish(page.id, {
+            baseVersion: 1,
+            title: 'Budget',
+            content: [paragraph('Q1')]
+          })
+        ).rejects.toEqual(new ApiError(409, 'in_trash'))
+        expect((await api.getWiki(wiki.id)).version).toBe(before)
+      })
+
+      it('answers invalid_request, not edit_conflict, for an address sent to a document from an older version', async () => {
+        const api = fakePagesApi()
+        const wiki = api.withWiki()
+        const document = api.withPage(wiki.id, { title: 'Onboarding' })
+        await api.publish(document.id, {
+          baseVersion: 1,
+          title: 'Onboarding',
+          content: [paragraph('Ask for a laptop')]
+        })
+        const before = (await api.getWiki(wiki.id)).version
+
+        await expect(
+          api.publish(document.id, {
+            baseVersion: 1,
+            title: 'Onboarding',
+            gristUrl
+          })
+        ).rejects.toEqual(invalidRequest)
+        expect((await api.getWiki(wiki.id)).version).toBe(before)
+      })
+
+      it('checks the body, then its blocks or address, before the role and the place, as the backend does', async () => {
+        const api = fakePagesApi()
+        const wiki = api.withWiki({ role: 'viewer' })
+        // A page of another wiki, which no page of this one may be under.
+        const elsewhere = { parentId: api.withPage(api.withWiki().id).id }
+
+        await expect(
+          api.createPage(wiki.id, {
+            ...budget,
+            ...elsewhere,
+            title: ' ',
+            gristUrl: offOrigin
+          })
+        ).rejects.toEqual(invalidRequest)
+        await expect(
+          api.createPage(wiki.id, {
+            ...budget,
+            ...elsewhere,
+            gristUrl: offOrigin
+          })
+        ).rejects.toEqual(invalidGristUrl)
+        await expect(
+          api.createPage(wiki.id, {
+            title: 'Onboarding',
+            kind: 'document',
+            ...elsewhere,
+            content: [paragraph('Steps\u0000')]
+          })
+        ).rejects.toEqual(new ApiError(400, 'invalid_content'))
+        await expect(
+          api.createPage(wiki.id, { ...budget, ...elsewhere, gristUrl })
+        ).rejects.toEqual(new ApiError(403, 'forbidden'))
+      })
+
+      type Arrange = (
+        api: FakePagesApi,
+        pageId: string
+      ) => Promise<FakePagesApi>
+
+      const viewerOrTrash: [string, Arrange][] = [
+        [
+          'forbidden, to a viewer',
+          api => Promise.resolve(api.signedInAs('bob@example.com'))
+        ],
+        [
+          'in_trash, for a page in the trash',
+          async (api, pageId) => {
+            await api.deletePage(pageId)
+            return api
+          }
+        ]
+      ]
+
+      const overANewerVersion: [string, Arrange] = [
+        'edit_conflict, over a newer version',
+        async (api, pageId) => {
+          await api.publish(pageId, {
+            baseVersion: 1,
+            title: 'Budget',
+            gristUrl
+          })
+          return api
+        }
+      ]
+
+      // Seeded unchecked, as published while the Grist origins named its own.
+      const aBudgetAtAFormerOrigin = (api: FakePagesApi) => {
+        const wiki = api.withWiki({ members: { 'bob@example.com': 'viewer' } })
+        return api.withPage(wiki.id, {
+          ...budget,
+          gristUrl: 'https://grist.example.net/o/docs/budget'
+        })
+      }
+
+      it.each([...viewerOrTrash, overANewerVersion])(
+        'answers invalid_grist_url, not %s, for a draft at an address off the Grist origin',
+        async (_case, arrange) => {
+          const api = fakePagesApi()
+          const page = aBudgetAtAFormerOrigin(api)
+          const person = await arrange(api, page.id)
+
+          await expect(
+            person.publish(page.id, {
+              baseVersion: 1,
+              title: 'Budget',
+              gristUrl: offOrigin
+            })
+          ).rejects.toEqual(invalidGristUrl)
+        }
+      )
+
+      it.each(viewerOrTrash)(
+        'answers invalid_grist_url, not %s, for a version restored at an address off the Grist origin',
+        async (_case, arrange) => {
+          const api = fakePagesApi()
+          const page = aBudgetAtAFormerOrigin(api)
+          const person = await arrange(api, page.id)
+
+          await expect(person.restoreVersion(page.id, 1)).rejects.toEqual(
+            invalidGristUrl
+          )
+        }
+      )
     })
 
     it('refuses a title with a NUL character or a lone surrogate', async () => {

@@ -76,6 +76,20 @@ export const NO_SETTINGS: UserSettings = {
 
 export const GRIST_ORIGIN = 'https://grist.example.com'
 
+const gristHost = new URL(GRIST_ORIGIN).host
+
+/** Addresses off `GRIST_ORIGIN`, the ones the backend's tests refuse. */
+export const OFF_GRIST_ORIGINS: [string, string][] = [
+  ['on another origin', 'https://docs.example.com/o/docs/4kq2'],
+  ['on a look-alike origin', `${GRIST_ORIGIN}.example.net/o/docs/4kq2`],
+  ['on the Grist host over http:', `http://${gristHost}/o/docs/4kq2`],
+  [
+    'on another origin behind a user name',
+    `https://${gristHost}@docs.example.com/`
+  ],
+  ['at no address at all', 'Tasks']
+]
+
 export const paragraph = (text: string): Block => ({
   type: 'paragraph',
   content: [{ type: 'text', text, styles: {} }],
@@ -351,11 +365,17 @@ function checkDescription(value = '') {
   return value
 }
 
-function checkGristUrl(value: string | undefined) {
-  if (value === undefined) throw refuse('invalid_request')
-  const url = URL.parse(value)
-  if (!url) throw refuse('invalid_request')
-  if (url.origin !== GRIST_ORIGIN) throw refuse('invalid_grist_url')
+/** A Grist address as a body holds it, or `invalid_request`. */
+function gristUrlOf(value: string | undefined) {
+  if (value === undefined || !storable(value)) throw refuse('invalid_request')
+  return value
+}
+
+/** The address as sent, or `invalid_grist_url` off the Grist origin. */
+function checkGristUrl(value: string) {
+  if (URL.parse(value)?.origin !== GRIST_ORIGIN) {
+    throw refuse('invalid_grist_url')
+  }
   return value
 }
 
@@ -429,6 +449,18 @@ function checkBlocks(blocks: Block[]) {
     }
   }
   return blocks
+}
+
+/**
+ * A page's content as the fake keeps it: a document's checked blocks, or a
+ * database page's checked Grist address and no blocks.
+ */
+function checkContent(
+  body: { content: Block[] } | { gristUrl: string | undefined }
+) {
+  return 'content' in body
+    ? { content: checkBlocks(body.content), gristUrl: null }
+    : { content: [], gristUrl: checkGristUrl(gristUrlOf(body.gristUrl)) }
 }
 
 function positionBetween(
@@ -1084,13 +1116,19 @@ function signedIn(world: World, person: Person): FakePagesApi {
 
     createPage: vi.fn<PagesApi['createPage']>((wikiId, input) =>
       answer(() => {
-        const { wiki } = access(wikiId, 'editor')
+        // In the backend's order: the body, its blocks or Grist address, the
+        // role, then the place (docs/api.md).
         const title = checkTitle(input.title)
-        const placement = placementFor(wikiId, input)
-        const body =
+        const otherKind =
+          input.kind === 'database' ? input.content : input.gristUrl
+        if (otherKind !== undefined) throw refuse('invalid_request')
+        const body = checkContent(
           input.kind === 'database'
-            ? { content: [], gristUrl: checkGristUrl(input.gristUrl) }
-            : { content: checkBlocks(input.content ?? []), gristUrl: null }
+            ? { gristUrl: input.gristUrl }
+            : { content: input.content ?? [] }
+        )
+        const { wiki } = access(wikiId, 'editor')
+        const placement = placementFor(wikiId, input)
         const page = makePage(wiki, {
           ...body,
           ...placement,
@@ -1120,9 +1158,13 @@ function signedIn(world: World, person: Person): FakePagesApi {
     ),
     publish: vi.fn<PagesApi['publish']>((pageId, draft) =>
       answer(() => {
+        // In the backend's order: the body, its blocks or Grist address, then
+        // the page (docs/api.md).
         const title = checkTitle(draft.title)
-        // As the backend, which checks them before it locks the wiki.
-        const content = 'content' in draft ? checkBlocks(draft.content) : []
+        if ('content' in draft === 'gristUrl' in draft) {
+          throw refuse('invalid_request')
+        }
+        const body = checkContent(draft)
         const { page, wiki } = liveAccess(pageId)
         if ((page.kind === 'document') !== 'content' in draft) {
           throw refuse('invalid_request')
@@ -1131,11 +1173,7 @@ function signedIn(world: World, person: Person): FakePagesApi {
         if (draft.baseVersion !== latest.number) {
           throw new EditConflict(summaryOfVersion(latest))
         }
-        addVersion(page, wiki, {
-          title,
-          content,
-          gristUrl: 'gristUrl' in draft ? checkGristUrl(draft.gristUrl) : null
-        })
+        addVersion(page, wiki, { title, ...body })
         return pageFor(page)
       })
     ),
