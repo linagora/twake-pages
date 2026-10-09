@@ -40,7 +40,7 @@ export function aB2cUser(): TestUser {
   return aUser({ organizationId: null })
 }
 
-/** Adds the person to the wiki, as its admin will by sharing it. */
+/** Adds the person to the wiki, as sharing it does once they sign in. */
 export async function joinWiki(
   db: Db,
   admin: TestUser,

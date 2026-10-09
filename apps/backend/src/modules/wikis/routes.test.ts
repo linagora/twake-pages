@@ -1,11 +1,12 @@
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest'
-import { createDb, inTenant } from '../../infra/db.ts'
+import { createDb } from '../../infra/db.ts'
 import {
   aB2cUser,
   aPageIn,
   aSpaceWiki,
   aUser,
   aWikiOf,
+  invite,
   joinWiki,
   purgeJobOf,
   startApp,
@@ -14,7 +15,6 @@ import {
   type TestUser
 } from '../../testing/app.ts'
 import { notify } from '../notifications/testing.ts'
-import { wikiInvites } from './schema.ts'
 import { purgeWiki } from './store.ts'
 
 let api: Awaited<ReturnType<typeof startApp>>
@@ -33,18 +33,6 @@ afterAll(async () => {
 
 const roles = async (user: TestUser) =>
   (await wikisOf(api, user)).map(wiki => [wiki.name, wiki.role])
-
-// Sharing is not served yet, so invites are written as it will write them.
-const invite = (admin: TestUser, wikiId: string, email: string) =>
-  inTenant(db, admin, tx =>
-    tx.insert(wikiInvites).values({
-      wikiId,
-      organizationId: admin.organizationId,
-      email: email.toLowerCase(),
-      role: 'editor',
-      invitedBy: admin.userId
-    })
-  )
 
 // No policy shows the pages of a wiki that is gone: this counts them with the
 // policies lifted, in a transaction that puts them back before it commits.
@@ -140,7 +128,7 @@ describe('GET /wikis', () => {
       email: `Bob-${crypto.randomUUID()}@Example.com`
     })
     const wiki = await aWikiOf(api, alice)
-    await invite(alice, wiki.id, bob.email)
+    await invite(api, alice, wiki.id, bob.email)
 
     expect(await roles(bob)).toEqual([
       ['Personal', 'admin'],
@@ -154,8 +142,8 @@ describe('GET /wikis', () => {
     const wiki = await aWikiOf(api, alice)
     const shared = await aWikiOf(api, carol, 'Recipes')
     const email = `dave-${crypto.randomUUID()}@example.com`
-    await invite(alice, wiki.id, email)
-    await invite(carol, shared.id, email)
+    await invite(api, alice, wiki.id, email)
+    await invite(api, carol, shared.id, email)
 
     expect(await roles(aUser({ email }))).toEqual([['Personal', 'admin']])
     expect(await roles(aUser({ email, organizationId: null }))).toEqual([
