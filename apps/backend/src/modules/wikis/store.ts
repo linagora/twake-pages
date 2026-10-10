@@ -4,7 +4,7 @@ import { asTenant, inTenant, type Db, type Tx } from '../../infra/db.ts'
 import { Refused, writeOrRefuse, type Result } from '../../infra/refusals.ts'
 import { schedule, type Handler } from '../../scheduler/scheduler.ts'
 import type { Identity } from '../auth/index.ts'
-import { notifications } from '../notifications/schema.ts'
+import { seenNotifications } from '../notifications/store.ts'
 import { pages } from '../pages/schema.ts'
 import { addPage, type Author } from '../pages/store.ts'
 import { accessibleWikis, checkRole, type Role } from './access.ts'
@@ -139,6 +139,10 @@ async function ensurePersonalWiki(tx: Tx, identity: Identity) {
 
 function wikisOf(tx: Tx, userId: string) {
   const accessible = accessibleWikis(tx, userId)
+  // The same seen query the list, the unread counts and the badges read, so
+  // the four agree: a notification about a page in the trash counts, and one
+  // about a wiki the person left is already out of `seen`.
+  const seen = seenNotifications(tx, userId)
   return tx
     .select({
       id: wikis.id,
@@ -148,12 +152,8 @@ function wikisOf(tx: Tx, userId: string) {
       role: accessible.role,
       homePageId: pages.id,
       unread: tx.$count(
-        notifications,
-        and(
-          eq(notifications.wikiId, wikis.id),
-          eq(notifications.userId, userId),
-          isNull(notifications.readAt)
-        )
+        seen,
+        and(eq(seen.wikiId, wikis.id), isNull(seen.readAt))
       ),
       version: wikis.version
     })
