@@ -19,8 +19,14 @@ export type CommentPart = { text: string } | { mention: string }
 // characters Twake Tasks takes, though Tasks reads a mention after a space
 // alone: plain text has no editor to set a mention apart, and prose writes
 // brackets and quotes around one.
-const MENTION =
-  /(?<=^|[\s([{"'])@([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]*[A-Za-z0-9])/u
+
+/** The characters a mention may follow, unless it starts the text. */
+export const BEFORE_MENTION = /[\s([{"']/u
+
+const MENTION = new RegExp(
+  `(?<=^|${BEFORE_MENTION.source})@([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]*[A-Za-z0-9])`,
+  'u'
+)
 
 export function commentParts(body: string): CommentPart[] {
   return body
