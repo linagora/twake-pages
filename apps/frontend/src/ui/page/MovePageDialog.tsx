@@ -81,7 +81,7 @@ function MoveForm({
 }): ReactElement {
   const { t } = useI18n()
   const tree = useTree(page.wikiId)
-  const { move, moveTo } = useMoveTo(page.wikiId)
+  const { move, moveTo, failure } = useMoveTo(page.wikiId)
   const [parentId, setParentId] = useState(page.parentId)
   const [chosen, setChosen] = useState<string | null>(null)
 
@@ -158,9 +158,9 @@ function MoveForm({
           ))}
           <option value={LAST}>{t('movePage.last')}</option>
         </TextField>
-        {move.isError && (
+        {failure !== null && (
           <Typography role="alert" color="error">
-            {t('movePage.failed')}
+            {failure}
           </Typography>
         )}
       </DialogContent>

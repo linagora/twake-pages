@@ -125,7 +125,7 @@ describe('a page moved from its menu', () => {
 
   it('says so when it cannot be moved', async () => {
     const { pagesApi } = engineering()
-    pagesApi.movePage.mockRejectedValue(new ApiError(409, 'stale_neighbours'))
+    pagesApi.movePage.mockRejectedValue(new ApiError(500, 'server_error'))
     const dialog = await openMove('Laptop setup')
 
     chooseIn(dialog, 'Parent', 'Top of the tree')
@@ -250,5 +250,24 @@ describe('a page moved from its menu, while the tree changes elsewhere', () => {
       parentId: null,
       afterId: onboarding.id
     })
+  })
+
+  it('says the tree changed meanwhile when its new parent went to the trash', async () => {
+    const { pagesApi, bob, releases } = engineering()
+    // Down, so the dialog still offers Releases once Bob deleted it.
+    pagesApi.watchWiki.mockImplementation(() => () => undefined)
+    const dialog = await openMove('Laptop setup')
+    chooseIn(dialog, 'Parent', 'Releases')
+    await bob.deletePage(releases.id)
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Move' }))
+
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+      'The tree changed meanwhile: the page stays where it was.'
+    )
+    // In the tree behind the dialog, which stays open.
+    expect(
+      screen.getByRole('treeitem', { name: 'Laptop setup', hidden: true })
+    ).toHaveAttribute('aria-level', '2')
   })
 })

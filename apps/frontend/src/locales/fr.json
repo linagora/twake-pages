@@ -155,6 +155,8 @@
     "cancel": "Annuler",
     "move": "Déplacer",
     "failed": "La page n'a pas pu être déplacée.",
+    "treeChanged": "L'arborescence a changé entre-temps : la page reste où elle était.",
+    "forbidden": "Vous ne pouvez plus déplacer de pages dans ce wiki.",
     "under": "Page %{title} déplacée sous %{parent}, position %{position} sur %{count}.",
     "toTop": "Page %{title} déplacée en haut de l'arborescence, position %{position} sur %{count}."
   },

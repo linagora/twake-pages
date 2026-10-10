@@ -155,6 +155,8 @@
     "cancel": "Cancel",
     "move": "Move",
     "failed": "The page could not be moved.",
+    "treeChanged": "The tree changed meanwhile: the page stays where it was.",
+    "forbidden": "You can no longer move pages in this wiki.",
     "under": "%{title} moved under %{parent}, position %{position} of %{count}.",
     "toTop": "%{title} moved to the top of the tree, position %{position} of %{count}."
   },

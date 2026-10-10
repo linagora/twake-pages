@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { ApiError } from '@/application/pages'
 import type { Role } from '@/domain/wiki'
 import { findEmptyState } from '@/testing/emptyState'
+import { engineering } from '@/testing/engineering'
 import { fakePagesApi } from '@/testing/fakePagesApi'
 import { renderRoute, WIKI_BASES } from '@/testing/renderWithProviders'
 
@@ -278,6 +279,19 @@ describe('a page moved from the keyboard, in the tree', () => {
       sentence
     )
 
+  // What the tree says went wrong, as the page beside it may say more.
+  const treeAlert = () =>
+    within(screen.getByRole('navigation', { name: 'Wiki' })).findByRole('alert')
+
+  // Engineering, open on Laptop setup, with live updates down: the wiki
+  // shows as it was before what Bob does, until it is read again.
+  async function engineeringWithoutLiveUpdates() {
+    const opened = engineering()
+    opened.pagesApi.watchWiki.mockImplementation(() => () => undefined)
+    await screen.findByRole('treeitem', { name: 'Laptop setup' })
+    return opened
+  }
+
   // Lets a move the keys would have started reach the API.
   const settle = () =>
     act(
@@ -404,9 +418,7 @@ describe('a page moved from the keyboard, in the tree', () => {
 
   it('says so when it cannot be moved, then takes the next move', async () => {
     const { pagesApi, tree } = await renderTree()
-    pagesApi.movePage.mockRejectedValueOnce(
-      new ApiError(409, 'stale_neighbours')
-    )
+    pagesApi.movePage.mockRejectedValueOnce(new ApiError(500, 'server_error'))
     focus('Onboarding')
 
     move('ArrowDown')
@@ -424,6 +436,66 @@ describe('a page moved from the keyboard, in the tree', () => {
     await waitFor(() => {
       expect(titlesIn(tree)).toEqual(['Engineering', 'Onboarding'])
     })
+  })
+
+  it('says the tree changed meanwhile when a page beside its new place went to the trash, and shows it where it was', async () => {
+    const { bob, releases } = await engineeringWithoutLiveUpdates()
+    await bob.deletePage(releases.id)
+    focus('Laptop setup')
+
+    // Out to the top of the tree, between Onboarding and Releases.
+    move('ArrowLeft')
+
+    expect(await treeAlert()).toHaveTextContent(
+      'The tree changed meanwhile: the page stays where it was.'
+    )
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('treeitem', { name: 'Releases' })
+      ).not.toBeInTheDocument()
+    })
+    expect(item('Laptop setup')).toHaveAttribute('aria-level', '2')
+  })
+
+  it('says the tree changed meanwhile when the page went to the trash', async () => {
+    const { bob, laptop } = await engineeringWithoutLiveUpdates()
+    await bob.deletePage(laptop.id)
+    focus('Laptop setup')
+
+    move('ArrowLeft')
+
+    expect(await treeAlert()).toHaveTextContent(
+      'The tree changed meanwhile: the page stays where it was.'
+    )
+  })
+
+  it('says the tree changed meanwhile when the page was deleted for good', async () => {
+    const { pagesApi, bob, wiki, laptop } =
+      await engineeringWithoutLiveUpdates()
+    await pagesApi.setMemberRole(wiki.id, bob.person.id, 'admin')
+    await bob.deletePage(laptop.id)
+    await bob.purgePage(wiki.id, laptop.id)
+    focus('Laptop setup')
+
+    move('ArrowLeft')
+
+    expect(await treeAlert()).toHaveTextContent(
+      'The tree changed meanwhile: the page stays where it was.'
+    )
+  })
+
+  it('says the person can no longer move pages once made a viewer meanwhile', async () => {
+    const { pagesApi, bob, wiki } = await engineeringWithoutLiveUpdates()
+    await pagesApi.setMemberRole(wiki.id, bob.person.id, 'admin')
+    await bob.setMemberRole(wiki.id, pagesApi.person.id, 'viewer')
+    focus('Laptop setup')
+
+    move('ArrowLeft')
+
+    expect(await treeAlert()).toHaveTextContent(
+      'You can no longer move pages in this wiki.'
+    )
+    expect(item('Laptop setup')).toHaveAttribute('aria-level', '2')
   })
 
   it('takes the next move when the tree cannot be read again after one', async () => {

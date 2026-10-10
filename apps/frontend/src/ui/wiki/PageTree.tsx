@@ -19,7 +19,7 @@ export function PageTree({ wikiId }: { wikiId: string }): ReactElement {
   const { pageId = null } = useParams()
   const wiki = useWiki(wikiId)
   const tree = useTree(wikiId)
-  const { move, moveTo } = useMoveTo(wikiId)
+  const { moveTo, failure } = useMoveTo(wikiId)
   const pages = tree.data?.pages ?? []
   const path =
     pageId === null ? [] : ancestorsOf(pages, pageId).map(page => page.id)
@@ -89,9 +89,9 @@ export function PageTree({ wikiId }: { wikiId: string }): ReactElement {
           }
         />
       )}
-      {move.isError && (
+      {failure !== null && (
         <Typography role="alert" className="u-ph-1">
-          {t('movePage.failed')}
+          {failure}
         </Typography>
       )}
       <MoveStatus said={said} />
