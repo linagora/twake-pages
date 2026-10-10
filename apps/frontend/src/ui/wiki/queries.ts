@@ -32,6 +32,7 @@ import type {
   Version,
   VersionSummary
 } from '@/domain/page'
+import { sameEmail } from '@/domain/person'
 import type { SearchResult } from '@/domain/search'
 import type { Member, Wiki, WikiSummary } from '@/domain/wiki'
 import { usePagesApi } from '@/ui/PagesApiProvider'
@@ -280,7 +281,7 @@ export function useRemoveMember(
   return useMutation({
     mutationFn: (member: Member) => api.removeMember(wikiId, member.id),
     onSuccess: (_answer, member) => {
-      if (member.email.toLowerCase() !== user.email?.toLowerCase()) return
+      if (!sameEmail(member.email, user.email)) return
       queryClient.setQueryData<WikiSummary[]>(wikisKey, shown =>
         shown?.filter(wiki => wiki.id !== wikiId)
       )

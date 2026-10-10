@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { displayName } from '@/domain/person'
+import { displayName, sameEmail } from '@/domain/person'
 
 describe('displayName', () => {
   it('shows the name', () => {
@@ -13,5 +13,15 @@ describe('displayName', () => {
     expect(displayName({ email: 'ana@example.com', name })).toBe(
       'ana@example.com'
     )
+  })
+})
+
+describe('sameEmail', () => {
+  it('takes an email in any case for itself', () => {
+    expect(sameEmail('Ana@Example.com', 'ana@example.COM')).toBe(true)
+  })
+
+  it.each(['bob@example.com', null])('tells it apart from %j', other => {
+    expect(sameEmail('ana@example.com', other)).toBe(false)
   })
 })
