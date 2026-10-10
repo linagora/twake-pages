@@ -287,6 +287,8 @@
     "edited": "modifié",
     "comment": "Commentaire",
     "placeholder": "Écrire un commentaire…",
+    "mentionsLabel": "Personnes à mentionner",
+    "mentionsFailed": "Les personnes à mentionner n'ont pas pu être chargées.",
     "send": "Envoyer",
     "sendHint": "Ctrl+Entrée pour envoyer",
     "sendFailed": "Le commentaire n'a pas pu être envoyé.",

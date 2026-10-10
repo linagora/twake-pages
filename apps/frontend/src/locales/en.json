@@ -287,6 +287,8 @@
     "edited": "edited",
     "comment": "Comment",
     "placeholder": "Write a comment…",
+    "mentionsLabel": "People to mention",
+    "mentionsFailed": "The people to mention could not be loaded.",
     "send": "Send",
     "sendHint": "Ctrl+Enter to send",
     "sendFailed": "The comment could not be sent.",

@@ -31,6 +31,9 @@ Element.prototype.getBoundingClientRect = () => new DOMRect()
 Range.prototype.getClientRects = () =>
   document.createElement('div').getClientRects()
 Range.prototype.getBoundingClientRect = () => new DOMRect()
+// jsdom does no layout, and lacks scrollIntoView: a list of suggestions
+// scrolls its active option into view.
+Element.prototype.scrollIntoView = () => undefined
 
 // ProseMirror pastes HTML through a ClipboardEvent, which jsdom lacks.
 Object.defineProperty(window, 'ClipboardEvent', {

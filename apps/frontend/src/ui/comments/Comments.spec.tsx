@@ -773,6 +773,340 @@ describe('a deletion', () => {
   })
 })
 
+describe('the list of people to mention', () => {
+  /** Alice's field for a new comment on Onboarding, focused, with `text` in. */
+  async function typeInComment(text: string, session = fakeSession()) {
+    const { pagesApi, wiki, page } = onboarding()
+    renderRoute(`/wikis/${wiki.id}/pages/${page.id}`, { pagesApi, session })
+    const comments = await findCommentSection()
+    const field = within(comments).getByRole<HTMLTextAreaElement>('textbox', {
+      name: 'Comment'
+    })
+    act(() => {
+      field.focus()
+    })
+    typeIn(comments, 'Comment', text)
+    return { pagesApi, page, comments, field }
+  }
+
+  /** The list, once the members it suggests are loaded. */
+  const findList = () =>
+    screen.findByRole('listbox', { name: 'People to mention' })
+
+  /** The rank of each option shown as selected, from the top. */
+  const selectedAmong = (options: HTMLElement[]) =>
+    options.flatMap((option, index) =>
+      option.getAttribute('aria-selected') === 'true' ? [index] : []
+    )
+
+  it('opens as @ is typed, and writes the email of the member picked', async () => {
+    const { pagesApi, page, comments, field } =
+      await typeInComment('Thanks @ali')
+
+    const list = await findList()
+    expect(within(list).getAllByRole('option')).toHaveLength(1)
+    fireEvent.click(
+      within(list).getByRole('option', {
+        name: 'Alice Martin alice@example.com'
+      })
+    )
+
+    expect(field).toHaveValue('Thanks @alice@example.com ')
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+    fireEvent.click(within(comments).getByRole('button', { name: 'Send' }))
+    await waitFor(() => {
+      expect(pagesApi.addComment).toHaveBeenCalledWith(page.id, {
+        body: 'Thanks @alice@example.com'
+      })
+    })
+  })
+
+  it('puts a space after the mention, and the caret after it', async () => {
+    const { field } = await typeInComment('Hi @ali, thanks')
+    // The caret goes back after "@ali", as the arrow keys move it.
+    field.setSelectionRange(7, 7)
+    fireEvent.keyUp(field, { key: 'ArrowLeft' })
+
+    fireEvent.click(within(await findList()).getByRole('option'))
+
+    expect(field).toHaveValue('Hi @alice@example.com , thanks')
+    expect(field.selectionStart).toBe(22)
+  })
+
+  it('puts the best match first, and the person last, whatever the case of their email', async () => {
+    const { comments } = await typeInComment('@dup', aliceInCapitals())
+    expect(
+      within(await findList())
+        .getAllByRole('option')
+        .map(option => option.textContent)
+    ).toEqual([
+      expect.stringContaining('Jean Dupont'),
+      expect.stringContaining('Bob Durand')
+    ])
+
+    typeIn(comments, 'Comment', '@al')
+
+    // Mentioning yourself tells nobody.
+    expect(
+      within(screen.getByRole('listbox'))
+        .getAllByRole('option')
+        .map(option => option.textContent)
+    ).toEqual([
+      expect.stringContaining('Albert Roux'),
+      expect.stringContaining('Bob Durand'),
+      expect.stringContaining('Jean Dupont'),
+      expect.stringContaining('Alice Martin')
+    ])
+  })
+
+  it('moves with the arrows, and picks with Enter without sending', async () => {
+    const { pagesApi, field } = await typeInComment('@al')
+    const options = within(await findList()).getAllByRole('option')
+    expect(selectedAmong(options)).toEqual([0])
+
+    // Cancelled, as the caret stays where it is.
+    expect(fireEvent.keyDown(field, { key: 'ArrowDown' })).toBe(false)
+    fireEvent.keyDown(field, { key: 'ArrowDown' })
+    fireEvent.keyDown(field, { key: 'ArrowDown' })
+    expect(selectedAmong(options)).toEqual([3])
+    fireEvent.keyDown(field, { key: 'ArrowDown' })
+    expect(selectedAmong(options)).toEqual([0])
+    fireEvent.keyDown(field, { key: 'ArrowUp' })
+    expect(selectedAmong(options)).toEqual([3])
+    fireEvent.keyDown(field, { key: 'ArrowUp' })
+    expect(selectedAmong(options)).toEqual([2])
+    // Cancelled, as Enter starts no new line.
+    expect(fireEvent.keyDown(field, { key: 'Enter' })).toBe(false)
+
+    expect(field).toHaveValue('@jean_dupont@example.com ')
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+    await aMoment()
+    expect(pagesApi.addComment).not.toHaveBeenCalled()
+  })
+
+  it('starts from the best match again as what is typed changes', async () => {
+    const { comments, field } = await typeInComment('@al')
+    const options = within(await findList()).getAllByRole('option')
+    fireEvent.keyDown(field, { key: 'ArrowDown' })
+    fireEvent.keyDown(field, { key: 'ArrowDown' })
+    expect(selectedAmong(options)).toEqual([2])
+
+    typeIn(comments, 'Comment', '@a')
+
+    const shown = within(screen.getByRole('listbox')).getAllByRole('option')
+    expect(shown).toHaveLength(4)
+    expect(selectedAmong(shown)).toEqual([0])
+  })
+
+  it('picks with Tab, and lets Shift+Tab leave the field', async () => {
+    const { field } = await typeInComment('@alb')
+    await findList()
+
+    expect(fireEvent.keyDown(field, { key: 'Tab', shiftKey: true })).toBe(true)
+    expect(field).toHaveValue('@alb')
+    expect(fireEvent.keyDown(field, { key: 'Tab' })).toBe(false)
+
+    expect(field).toHaveValue('@albert@example.com ')
+  })
+
+  it('picks on Ctrl+Enter while open, and sends once closed', async () => {
+    const { pagesApi, page, field } = await typeInComment('@alb')
+    await findList()
+
+    fireEvent.keyDown(field, { key: 'Enter', ctrlKey: true })
+    expect(field).toHaveValue('@albert@example.com ')
+    await aMoment()
+    expect(pagesApi.addComment).not.toHaveBeenCalled()
+    fireEvent.keyDown(field, { key: 'Enter', ctrlKey: true })
+
+    await waitFor(() => {
+      expect(pagesApi.addComment).toHaveBeenCalledWith(page.id, {
+        body: '@albert@example.com'
+      })
+    })
+  })
+
+  it('closes on Escape, and keeps what was typed', async () => {
+    const { field } = await typeInComment('@al')
+    await findList()
+
+    fireEvent.keyDown(field, { key: 'Escape' })
+
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+    expect(field).toHaveValue('@al')
+  })
+
+  it('stays closed for the mention Escape closed it on, and opens for the next', async () => {
+    const { comments, field } = await typeInComment('@al')
+    await findList()
+    fireEvent.keyDown(field, { key: 'Escape' })
+
+    typeIn(comments, 'Comment', '@alb')
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+    typeIn(comments, 'Comment', '')
+    typeIn(comments, 'Comment', '@alb')
+
+    expect(
+      screen.getByRole('listbox', { name: 'People to mention' })
+    ).toBeVisible()
+  })
+
+  it('does not open when no member matches', async () => {
+    const { comments, field } = await typeInComment('@a')
+    await findList()
+
+    typeIn(comments, 'Comment', '@zzz')
+
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+    expect(field).not.toHaveAttribute('aria-controls')
+  })
+
+  it('does not open inside an email', async () => {
+    const { comments } = await typeInComment('write to @ali')
+    await findList()
+
+    typeIn(comments, 'Comment', 'write to bob@ali')
+
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+  })
+
+  it('closes as a space ends what was typed', async () => {
+    const { comments } = await typeInComment('@al')
+    await findList()
+
+    typeIn(comments, 'Comment', '@al ')
+
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+  })
+
+  it('opens after a bracket or a quote, where a mention is read too', async () => {
+    const { comments } = await typeInComment('cc (@ali')
+    expect(await findList()).toBeVisible()
+
+    typeIn(comments, 'Comment', 'cc "@ali')
+
+    expect(
+      screen.getByRole('listbox', { name: 'People to mention' })
+    ).toBeVisible()
+  })
+
+  it('is announced to a screen reader', async () => {
+    const { comments, field } = await typeInComment('Hi')
+    expect(field).toHaveAttribute('aria-haspopup', 'listbox')
+    expect(field).toHaveAttribute('aria-autocomplete', 'list')
+    // aria-expanded is not allowed on a textbox (ARIA 1.2)
+    expect(field).not.toHaveAttribute('aria-expanded')
+    expect(field).not.toHaveAttribute('aria-controls')
+
+    typeIn(comments, 'Comment', 'Hi @al')
+
+    const list = await findList()
+    const [first, second] = within(list).getAllByRole('option')
+    expect(field).toHaveAttribute('aria-controls', list.id)
+    expect(field).toHaveAttribute('aria-activedescendant', first?.id)
+    fireEvent.keyDown(field, { key: 'ArrowDown' })
+    expect(field).toHaveAttribute('aria-activedescendant', second?.id)
+    fireEvent.keyDown(field, { key: 'Escape' })
+    expect(field).not.toHaveAttribute('aria-controls')
+    expect(field).not.toHaveAttribute('aria-activedescendant')
+  })
+
+  it('closes when the field loses the focus', async () => {
+    const { field } = await typeInComment('@al')
+    await findList()
+
+    fireEvent.blur(field)
+
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+  })
+
+  it('suggests eight members at most, by their names', async () => {
+    const pagesApi = fakePagesApi()
+    // Nine members besides the person, whose emails sort apart from their
+    // names.
+    const names = [
+      'Ivy Moreau',
+      'Hugo Petit',
+      'Gaël Simon',
+      'Fanny Roy',
+      'Eva Blanc',
+      'Denis Morel',
+      'Chloé Faure',
+      'Bruno Leroy',
+      'Ada Garnier'
+    ]
+    const emailOf = (index: number) => `member${String(index + 1)}@example.com`
+    const wiki = pagesApi.withWiki({
+      members: Object.fromEntries(
+        names.map((name, index) => [emailOf(index), 'viewer' as const])
+      )
+    })
+    names.forEach((name, index) => {
+      pagesApi.signedInAs(emailOf(index), name)
+    })
+    const page = pagesApi.withPage(wiki.id, { title: 'Onboarding' })
+    renderRoute(`/wikis/${wiki.id}/pages/${page.id}`, { pagesApi })
+    const comments = await findCommentSection()
+    act(() => {
+      within(comments).getByRole('textbox', { name: 'Comment' }).focus()
+    })
+
+    typeIn(comments, 'Comment', '@')
+
+    expect(
+      within(await findList())
+        .getAllByRole('option')
+        .map(option => option.textContent)
+    ).toEqual([
+      expect.stringContaining('Ada Garnier'),
+      expect.stringContaining('Bruno Leroy'),
+      expect.stringContaining('Chloé Faure'),
+      expect.stringContaining('Denis Morel'),
+      expect.stringContaining('Eva Blanc'),
+      expect.stringContaining('Fanny Roy'),
+      expect.stringContaining('Gaël Simon'),
+      expect.stringContaining('Hugo Petit')
+    ])
+  })
+
+  it('says so below the field when the members cannot be loaded', async () => {
+    const { pagesApi, wiki, page } = onboarding()
+    pagesApi.getMembers.mockRejectedValue(new ApiError(403, null))
+    renderRoute(`/wikis/${wiki.id}/pages/${page.id}`, { pagesApi })
+    const comments = await findCommentSection()
+
+    expect(
+      await within(comments).findByText(
+        'The people to mention could not be loaded.'
+      )
+    ).toBeVisible()
+    expect(
+      within(comments).getByRole('textbox', { name: 'Comment' })
+    ).toHaveAccessibleDescription('The people to mention could not be loaded.')
+  })
+
+  it('opens in a reply too', async () => {
+    const { pagesApi, wiki, page, bob } = onboarding()
+    await bob.addComment(page.id, { body: 'Which laptop?' })
+    renderRoute(`/wikis/${wiki.id}/pages/${page.id}`, { pagesApi })
+    const asked = await findCommentBy('Bob Durand')
+
+    // The field of a reply takes the focus as it opens.
+    fireEvent.click(within(asked).getByRole('button', { name: 'Reply' }))
+    typeIn(
+      screen.getByRole('form', { name: 'Reply to Bob Durand' }),
+      'Reply',
+      '@bob'
+    )
+
+    expect(
+      within(await findList()).getByRole('option', {
+        name: 'Bob Durand bob@example.com'
+      })
+    ).toBeVisible()
+  })
+})
+
 describe('a mention', () => {
   /** Bob's comment, as the page shows it. */
   async function bobWrites(body: string): Promise<HTMLElement> {
