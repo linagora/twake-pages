@@ -1,5 +1,5 @@
 # docker compose -p twake-pages-e2e -f docker-compose.yml -f e2e/docker-compose.e2e.yml --profile app up
-# Only the frontend and the SSO reach the host, on ports the dev stack leaves free.
+# Only the frontend, the SSO and Grist reach the host, on ports the dev stack leaves free.
 services:
   rabbitmq:
     ports: !reset []
@@ -33,6 +33,29 @@ services:
       # Like a real SSO, it lets only some hosts frame it: TwakeSpace on 3502 is not one
       FRAME_ANCESTORS: "'self' http://localhost:3500 http://localhost:3501"
 
+  # A stand-in for Grist, whose documents the pages frame from the browser
+  grist:
+    image: node:24-slim
+    working_dir: /grist
+    command: ['node', 'server.ts']
+    volumes:
+      - ./e2e/grist:/grist:ro
+    ports:
+      - '127.0.0.1:3504:3504'
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://localhost:3504/').then(r => process.exit(r.ok ? 0 : 1), () => process.exit(1))"
+        ]
+      interval: 2s
+      retries: 20
+    environment:
+      # Like a real Grist, it lets only the hosts it names frame it
+      FRAME_ANCESTORS: http://localhost:3500
+
   backend:
     ports: !reset []
     depends_on:
@@ -58,6 +81,7 @@ services:
       OIDC_CLIENT_SECRET: e2e-backend-secret
       NODE_EXTRA_CA_CERTS: /certs/oidc.crt
       SPACE_INTEGRATION: 'true'
+      GRIST_ORIGINS: http://localhost:3504
 
   frontend:
     ports: !override
@@ -70,3 +94,4 @@ services:
       SSO_POST_LOGOUT_REDIRECT: http://localhost:3500/
       # The pages the suite plays TwakeSpace on
       CSP_FRAME_ANCESTORS: http://localhost:3501 http://localhost:3502
+      GRIST_URL: http://localhost:3504

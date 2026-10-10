@@ -7,5 +7,5 @@
     "erasableSyntaxOnly": true,
     "allowImportingTsExtensions": true
   },
-  "include": ["oidc", "tests", "playwright.config.ts"]
+  "include": ["oidc", "grist", "tests", "playwright.config.ts"]
 }
