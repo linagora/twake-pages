@@ -9,6 +9,7 @@ import {
   type IdentityProvider
 } from './modules/auth/index.ts'
 import { registerComments } from './modules/comments/routes.ts'
+import { registerNotifications } from './modules/notifications/routes.ts'
 import { registerFavorites } from './modules/pages/favorites.ts'
 import { registerFollowing } from './modules/pages/following.ts'
 import { registerHistory } from './modules/pages/history.ts'
@@ -61,6 +62,7 @@ export async function buildApp(deps: {
       })
       registerFollowing(api, { db: deps.db, requireIdentity })
       registerComments(api, { db: deps.db, requireIdentity })
+      registerNotifications(api, { db: deps.db, requireIdentity })
       registerLive(api, {
         db: deps.db,
         requireIdentity,

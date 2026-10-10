@@ -412,6 +412,25 @@ export interface Comment {
   editedAt: string | null
 }
 
+/** A notification as `GET /notifications` lists it. */
+export interface Notification {
+  id: string
+  reason: 'published' | 'commented' | 'mentioned'
+  page: { id: string; title: string }
+  wiki: Pick<WikiSummary, 'id' | 'name' | 'kind'>
+  actor: Person
+  version: number | null
+  commentId: string | null
+  createdAt: string
+  readAt: string | null
+}
+
+/** What `GET /notifications` answers. */
+export interface Notifications {
+  notifications: Notification[]
+  unread: number
+}
+
 /** The job planned to purge the deleted wiki. */
 export async function purgeJobOf(db: Db, wikiId: string) {
   const job = await jobOf(db, `${PURGE_WIKI_JOB}:${wikiId}`)
@@ -731,6 +750,14 @@ export async function followingAndUnreadOf(
     following: await isFollowing(app, user, pageId),
     unread: wiki?.unread
   }
+}
+
+/** The person's notifications, as `GET /notifications` lists them. */
+export async function notificationsOf(
+  app: Awaited<ReturnType<typeof startApp>>,
+  user: TestUser
+) {
+  return (await app.as(user).get('/notifications')).json<Notifications>()
 }
 
 /** The page's comments, as `GET /pages/:pageId/comments` lists them. */
