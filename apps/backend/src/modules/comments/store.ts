@@ -5,6 +5,7 @@ import type { Identity } from '../auth/index.ts'
 import { previewOf, queuePageEvent } from '../pages/events.ts'
 import { pages } from '../pages/schema.ts'
 import { follow, pageInReach, pageToChange } from '../pages/store.ts'
+import { tellFollowers, tellMentioned } from '../notifications/store.ts'
 import { checkRole } from '../wikis/access.ts'
 import { bumpWiki } from '../wikis/live.ts'
 import { membersMentioned } from './mentions.ts'
@@ -150,6 +151,19 @@ export function createCommentStore(db: Db) {
         await follow(tx, page, identity.userId)
         const mentioned = await membersMentioned(tx, page.wikiId, input.body)
         for (const member of mentioned) await follow(tx, page, member.userId)
+        // As Twake Tasks tells them from its trigger: the members it mentions
+        // are told `mentioned`, and the page's other followers `commented`,
+        // never the actor. The store has already made the members it mentions
+        // follow, so they are kept out of `commented` by who they are.
+        await tellMentioned(tx, page, identity, added.id, mentioned)
+        await tellFollowers(
+          tx,
+          page,
+          identity,
+          'commented',
+          { commentId: added.id },
+          mentioned.map(member => member.userId)
+        )
         // As Twake Tasks names the recipients of an assignment: by the email
         // of their membership, the person who acted among them, the key left
         // out when there are none.

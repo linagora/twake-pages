@@ -2,10 +2,12 @@ import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest'
 import { createDb } from '../../infra/db.ts'
 import {
   aColleagueOf,
+  aCommentOn,
   aPage,
   aUser,
   aWikiOf,
   backIn,
+  editComment,
   follow,
   joinWiki,
   notificationsOf,
@@ -205,4 +207,103 @@ describe('publishing', () => {
       expect(await notificationsOf(api, bob)).toEqual(nothing)
     }
   )
+})
+
+describe('commenting', () => {
+  /** A wiki with bob, carol and dan as members, all editors, and a page. */
+  async function aWikiWithThree() {
+    const alice = aUser()
+    const bob = aColleagueOf(alice, 'bob')
+    const carol = aColleagueOf(alice, 'carol')
+    const dan = aColleagueOf(alice, 'dan')
+    const wiki = await aWikiOf(api, alice)
+    await joinWiki(db, alice, wiki.id, bob, 'editor')
+    await joinWiki(db, alice, wiki.id, carol, 'editor')
+    await joinWiki(db, alice, wiki.id, dan, 'editor')
+    const page = await aPage(api, alice, wiki.id, { title: 'Onboarding' })
+    return { alice, bob, carol, dan, wiki, page }
+  }
+
+  it('tells the members a comment mentions, the page’s other followers, never its author', async () => {
+    const { alice, bob, carol, page } = await aWikiWithThree()
+    await follow(api, carol, page)
+
+    const comment = await aCommentOn(api, bob, page, {
+      body: `@${alice.email}, can you review?`
+    })
+
+    expect(await notificationsOf(api, alice)).toMatchObject({
+      notifications: [
+        { reason: 'mentioned', commentId: comment.id, actor: personOf(bob) }
+      ],
+      unread: 1
+    })
+    // The page's other follower, told `commented`, not `mentioned`.
+    expect((await notificationsOf(api, carol)).notifications).toMatchObject([
+      { reason: 'commented', commentId: comment.id }
+    ])
+    // The author is never told.
+    expect(await notificationsOf(api, bob)).toEqual(nothing)
+  })
+
+  it('tells a reply as a comment, and never the person it mentions twice', async () => {
+    const { alice, bob, carol, page } = await aWikiWithThree()
+    await follow(api, carol, page)
+    const comment = await aCommentOn(api, bob, page, { body: 'Draft ready' })
+
+    await aCommentOn(api, alice, page, {
+      body: `@${carol.email}, a reply`,
+      parentId: comment.id
+    })
+
+    // carol is told `mentioned` for the reply, and `commented` for the first
+    // comment she follows: a reply tells as a comment does.
+    expect((await notificationsOf(api, carol)).notifications).toMatchObject([
+      { reason: 'mentioned', actor: personOf(alice) },
+      { reason: 'commented', actor: personOf(bob) }
+    ])
+  })
+
+  it('tells a mentioned member out of the wiki nothing', async () => {
+    const { alice, bob, carol, wiki, page } = await aWikiWithThree()
+    await api.as(alice).delete(`/wikis/${wiki.id}/members/${carol.userId}`)
+
+    await aCommentOn(api, bob, page, { body: `@${carol.email}, hi` })
+
+    expect(await notificationsOf(api, carol)).toEqual(nothing)
+  })
+
+  it('tells a mention to a member of each tenant', async () => {
+    for (const [, someone] of someoneOfEachTenant) {
+      const alice = someone()
+      const bob = aColleagueOf(alice, 'bob')
+      const wiki = await aWikiOf(api, alice)
+      await joinWiki(db, alice, wiki.id, bob, 'editor')
+      const page = await aPage(api, alice, wiki.id, { title: 'Onboarding' })
+
+      await aCommentOn(api, alice, page, { body: `@${bob.email}, hi` })
+
+      expect((await notificationsOf(api, bob)).notifications).toMatchObject([
+        { reason: 'mentioned', page: { id: page } }
+      ])
+    }
+  })
+
+  it('keeps a mention apart from the published notifications of the same page', async () => {
+    const { bob, carol, page } = await aWikiWithThree()
+    await follow(api, carol, page)
+    await publish(api, bob, page, {
+      baseVersion: 1,
+      title: 'Onboarding',
+      content: []
+    })
+    await aCommentOn(api, bob, page, { body: `@${carol.email}, hi` })
+
+    // Newest first: the mention of the comment, then the version 2 publish,
+    // the two reasons of the same page and actor.
+    expect((await notificationsOf(api, carol)).notifications).toMatchObject([
+      { reason: 'mentioned', commentId: expect.any(String) as string },
+      { reason: 'published', version: 2 }
+    ])
+  })
 })

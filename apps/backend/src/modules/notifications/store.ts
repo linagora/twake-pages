@@ -78,6 +78,37 @@ export async function tellFollowers(
 }
 
 /**
+ * Tells the members a comment mentions, one `mentioned` notification each,
+ * for the members a new comment mentions or those an edit mentions anew. The
+ * members are the wiki's current members, as `membersMentioned` finds them;
+ * the actor, who mentions themself, is left out, as everywhere.
+ */
+export async function tellMentioned(
+  tx: Tx,
+  page: NotifiedPage,
+  actor: Identity,
+  commentId: string,
+  members: readonly { userId: string }[]
+): Promise<void> {
+  const recipients = members.filter(member => member.userId !== actor.userId)
+  if (recipients.length === 0) return
+  const reason: NotificationReason = 'mentioned'
+  await tx.insert(notifications).values(
+    recipients.map(({ userId }) => ({
+      pageId: page.id,
+      wikiId: page.wikiId,
+      organizationId: page.organizationId,
+      userId,
+      reason,
+      actorId: actor.userId,
+      actorEmail: actor.email,
+      actorName: actor.name,
+      commentId
+    }))
+  )
+}
+
+/**
  * The person's notifications about the pages of the wikis they can open, in
  * the trash or not: those of a wiki they left wait for them to be back. The
  * list, the unread counts and the badges all count these.
