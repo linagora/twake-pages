@@ -1,11 +1,19 @@
 import { Icon, Pen, Reply, Trash } from '@linagora/twake-icons'
 import { Button, Typography } from '@linagora/twake-mui'
-import { useId, useState, type ReactElement, type ReactNode } from 'react'
+import {
+  Fragment,
+  useId,
+  useMemo,
+  useState,
+  type ReactElement,
+  type ReactNode
+} from 'react'
 
 import { ListSkeleton } from '@/ds/EmptyState'
+import { Mention } from '@/ds/Mention'
 import { PlainText } from '@/ds/PlainText'
 import { Feed, FeedItem } from '@/ds/SidePanel'
-import type { Comment } from '@/domain/comment'
+import { commentParts, type Comment } from '@/domain/comment'
 import type { Page } from '@/domain/page'
 import { displayName, sameEmail } from '@/domain/person'
 import {
@@ -18,7 +26,7 @@ import { useI18n } from '@/ui/i18n/useI18n'
 import { PersonAvatar } from '@/ui/people/PersonAvatar'
 import { useSession } from '@/ui/session/SessionGate'
 import { localTime } from '@/ui/settings/zone'
-import { useComments, useWiki } from '@/ui/wiki/queries'
+import { useComments, useSharing, useWiki } from '@/ui/wiki/queries'
 
 /**
  * The comments of a page, below its content, where Twake Tasks shows a
@@ -53,6 +61,7 @@ function CommentFeed({ page }: { page: Page }): ReactElement {
   const { t } = useI18n()
   const comments = useComments(page.wikiId, page.id)
   const [replyingTo, setReplyingTo] = useState<string | null>(null)
+  const names = useMemberNames(page.wikiId)
 
   if (comments.isError) {
     return <Typography role="alert">{t('comments.loadFailed')}</Typography>
@@ -74,6 +83,7 @@ function CommentFeed({ page }: { page: Page }): ReactElement {
               key={comment.id}
               page={page}
               comment={comment}
+              names={names}
               onReply={
                 writable
                   ? () => {
@@ -90,6 +100,7 @@ function CommentFeed({ page }: { page: Page }): ReactElement {
                         key={reply.id}
                         page={page}
                         comment={reply}
+                        names={names}
                         onReply={null}
                       />
                     ))}
@@ -107,6 +118,24 @@ function CommentFeed({ page }: { page: Page }): ReactElement {
 }
 
 /**
+ * The name of each member of the wiki, by their email lowercased, as Twake
+ * Tasks names the people its comments mention. An invitee is no member yet,
+ * and the backend reads no mention of them.
+ */
+function useMemberNames(wikiId: string): ReadonlyMap<string, string> {
+  const members = useSharing(wikiId).data?.members
+  return useMemo(
+    () =>
+      new Map(
+        members?.map(
+          member => [member.email.toLowerCase(), displayName(member)] as const
+        )
+      ),
+    [members]
+  )
+}
+
+/**
  * A comment under its author's name and the time it was written. Its author
  * edits it in place and deletes it, and an admin of the wiki deletes anyone's,
  * as the backend lets them, though Twake Tasks keeps a comment as written.
@@ -116,11 +145,14 @@ function CommentFeed({ page }: { page: Page }): ReactElement {
 function CommentItem({
   page,
   comment,
+  names,
   onReply,
   children
 }: {
   page: Page
   comment: Comment
+  /** The name of each member, by their email lowercased. */
+  names: ReadonlyMap<string, string>
   /** Opens a reply to the comment, or null when it takes none. */
   onReply: (() => void) | null
   children?: ReactNode
@@ -164,7 +196,7 @@ function CommentItem({
           />
         ) : (
           <>
-            <PlainText>{comment.body}</PlainText>
+            <CommentBody body={comment.body} names={names} />
             {(onReply !== null || editable || deletable) && (
               <div className="u-mt-half">
                 {onReply && (
@@ -217,5 +249,32 @@ function CommentItem({
       </article>
       {children}
     </FeedItem>
+  )
+}
+
+/**
+ * The text of a comment, read as the backend reads its mentions: a member's
+ * shows by their name, and any other email as it was typed, as in Twake
+ * Tasks.
+ */
+function CommentBody({
+  body,
+  names
+}: {
+  body: string
+  names: ReadonlyMap<string, string>
+}): ReactElement {
+  return (
+    <PlainText>
+      {commentParts(body).map((part, index) => {
+        if ('text' in part) return <Fragment key={index}>{part.text}</Fragment>
+        const name = names.get(part.mention.toLowerCase())
+        return name === undefined ? (
+          <Fragment key={index}>{`@${part.mention}`}</Fragment>
+        ) : (
+          <Mention key={index} name={name} email={part.mention} />
+        )
+      })}
+    </PlainText>
   )
 }

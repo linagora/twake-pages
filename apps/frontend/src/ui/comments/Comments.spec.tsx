@@ -10,6 +10,8 @@ import { renderRoute } from '@/testing/renderWithProviders'
 import { followZone } from '@/ui/settings/zone'
 
 const BOB = 'bob@example.com'
+const ALBERT = 'albert@example.com'
+const JEAN = 'jean_dupont@example.com'
 
 /** Alice, signed in with her email written in capitals. */
 const aliceInCapitals = () =>
@@ -17,10 +19,18 @@ const aliceInCapitals = () =>
     Promise.resolve({ ...fakeUser(), email: 'ALICE@EXAMPLE.COM' })
   )
 
-/** Onboarding, in a wiki where Bob Durand is an editor. */
+/**
+ * Onboarding, in a wiki where Bob Durand is an editor, and Albert Roux and
+ * Jean Dupont, whose email has an underscore, are viewers.
+ */
 function onboarding(role: Role = 'admin') {
   const pagesApi = fakePagesApi()
-  const wiki = pagesApi.withWiki({ role, members: { [BOB]: 'editor' } })
+  const wiki = pagesApi.withWiki({
+    role,
+    members: { [BOB]: 'editor', [ALBERT]: 'viewer', [JEAN]: 'viewer' }
+  })
+  pagesApi.signedInAs(ALBERT, 'Albert Roux')
+  pagesApi.signedInAs(JEAN, 'Jean Dupont')
   const page = pagesApi.withPage(wiki.id, { title: 'Onboarding' })
   return { pagesApi, wiki, page, bob: pagesApi.signedInAs(BOB, 'Bob Durand') }
 }
@@ -760,5 +770,95 @@ describe('a deletion', () => {
       expect(dialog).not.toBeInTheDocument()
     })
     expect(comment).toHaveTextContent('Which laptop?')
+  })
+})
+
+describe('a mention', () => {
+  /** Bob's comment, as the page shows it. */
+  async function bobWrites(body: string): Promise<HTMLElement> {
+    const { pagesApi, wiki, page, bob } = onboarding()
+    await bob.addComment(page.id, { body })
+    renderRoute(`/wikis/${wiki.id}/pages/${page.id}`, { pagesApi })
+    return findCommentBy('Bob Durand')
+  }
+
+  it('shows the member by their name, with their email as its title', async () => {
+    const comment = await bobWrites('Thanks @alice@example.com, it is done.')
+
+    const mention = await within(comment).findByText('@Alice Martin')
+
+    expect(mention).toHaveAttribute('title', 'alice@example.com')
+    expect(comment).toHaveTextContent('Thanks @Alice Martin, it is done.')
+    expect(comment).not.toHaveTextContent('alice@example.com')
+  })
+
+  it('shows a member whose email has an underscore', async () => {
+    const comment = await bobWrites('cc @jean_dupont@example.com')
+
+    expect(await within(comment).findByText('@Jean Dupont')).toHaveAttribute(
+      'title',
+      'jean_dupont@example.com'
+    )
+  })
+
+  it('reads the email in any case, and titles it as written', async () => {
+    const comment = await bobWrites('@Albert@Example.com ok?')
+
+    expect(await within(comment).findByText('@Albert Roux')).toHaveAttribute(
+      'title',
+      'Albert@Example.com'
+    )
+  })
+
+  it('finds a member whose email the wiki gives in capitals', async () => {
+    const { pagesApi, wiki, page, bob } = onboarding()
+    const getMembers = pagesApi.getMembers.getMockImplementation()
+    if (!getMembers) throw new Error('The fake lists no members')
+    // The backend reads a member's email in any case, where the fake
+    // lowercases every email it is given.
+    pagesApi.getMembers.mockImplementation(async wikiId => {
+      const sharing = await getMembers(wikiId)
+      return {
+        ...sharing,
+        members: sharing.members.map(member =>
+          member.email === ALBERT
+            ? { ...member, email: 'Albert@Example.COM' }
+            : member
+        )
+      }
+    })
+    await bob.addComment(page.id, { body: 'cc @albert@example.com' })
+    renderRoute(`/wikis/${wiki.id}/pages/${page.id}`, { pagesApi })
+
+    const comment = await findCommentBy('Bob Durand')
+
+    expect(await within(comment).findByText('@Albert Roux')).toHaveAttribute(
+      'title',
+      'albert@example.com'
+    )
+  })
+
+  it('keeps the email of someone who is no member as it was typed', async () => {
+    const comment = await bobWrites(
+      'Ask @ghost@example.com or mail ghost@example.com, cc @alice@example.com'
+    )
+    await within(comment).findByText('@Alice Martin')
+
+    expect(comment).toHaveTextContent(
+      'Ask @ghost@example.com or mail ghost@example.com, cc @Alice Martin'
+    )
+    expect(
+      within(comment).queryByTitle('ghost@example.com')
+    ).not.toBeInTheDocument()
+  })
+
+  it('takes no address inside a word for a mention', async () => {
+    const comment = await bobWrites(
+      'write to bob@alice@example.com, cc @jean_dupont@example.com'
+    )
+    await within(comment).findByText('@Jean Dupont')
+
+    expect(comment).toHaveTextContent('write to bob@alice@example.com')
+    expect(within(comment).queryByText('@Alice Martin')).not.toBeInTheDocument()
   })
 })
