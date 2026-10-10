@@ -131,16 +131,12 @@ export function Tree<Entry extends TreeEntry<Entry>>({
     if (id) document.getElementById(itemId(id))?.focus()
   }
 
-  const moveEntry = (
+  const startMove = (
     entry: Entry,
-    event: KeyboardEvent<HTMLElement>,
+    at: TreePlace<Entry>,
+    to: TreePlace<Entry>,
     onMove: (entry: Entry, to: TreePlace<Entry>) => Promise<boolean>
   ) => {
-    if (!ARROWS.includes(event.key)) return
-    event.preventDefault()
-    const at = whereIs(entries, entry.id)
-    const to = at && placeFor(entries, at, event.key)
-    if (moving || !at || !to) return
     const started = { id: entry.id, from: at }
     setMoving(started)
     if (to.parent && !expanded.has(to.parent.id)) onExpand(to.parent.id, true)
@@ -151,6 +147,19 @@ export function Tree<Entry extends TreeEntry<Entry>>({
     void onMove(entry, to).then(shows => {
       if (!shows) letGo()
     }, letGo)
+  }
+
+  const moveEntry = (
+    entry: Entry,
+    event: KeyboardEvent<HTMLElement>,
+    onMove: (entry: Entry, to: TreePlace<Entry>) => Promise<boolean>
+  ) => {
+    if (!ARROWS.includes(event.key)) return
+    event.preventDefault()
+    const at = whereIs(entries, entry.id)
+    const to = at && placeFor(entries, at, event.key)
+    if (moving || !at || !to) return
+    startMove(entry, at, to, onMove)
   }
 
   const onKeyDown = (
