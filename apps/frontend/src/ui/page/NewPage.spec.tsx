@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 
 import { ApiError } from '@/application/pages'
 import type { Role } from '@/domain/wiki'
-import { fakePagesApi } from '@/testing/fakePagesApi'
+import { BUDGET, fakePagesApi, GRIST_ORIGIN } from '@/testing/fakePagesApi'
 import { chooseIn, typeIn } from '@/testing/forms'
 import { renderRoute, WIKI_BASES } from '@/testing/renderWithProviders'
 import type { SupportedLanguage } from '@/ui/i18n/languages'
@@ -23,6 +23,8 @@ interface Opening {
   parent?: 'live' | 'in the trash'
   /** The page opened at its own path, in place of the wiki on its home page. */
   open?: 'parent' | 'home page'
+  /** Where the pages frame Grist documents from. */
+  gristOrigins?: readonly string[]
 }
 
 /** The Engineering wiki, open on its home page or on the page asked for. */
@@ -31,7 +33,8 @@ async function engineering({
   role = 'admin',
   lang = 'en',
   parent: placed,
-  open
+  open,
+  gristOrigins = [GRIST_ORIGIN]
 }: Opening = {}) {
   const pagesApi = fakePagesApi()
   const wiki = pagesApi.withWiki({ name: 'Engineering', role })
@@ -44,7 +47,7 @@ async function engineering({
     pagesApi,
     wiki,
     parent,
-    ...renderRoute(path, { pagesApi, lang })
+    ...renderRoute(path, { pagesApi, lang, gristOrigins })
   }
 }
 
@@ -191,6 +194,115 @@ describe('the template of a new page', () => {
       'Étapes',
       'En cas de problème'
     ])
+  })
+})
+
+describe('a new database page', () => {
+  it('is one of the two types offered, a page unless another is chosen', async () => {
+    await engineering()
+
+    const dialog = await openNewPage()
+    const type = within(dialog).getByRole('combobox', { name: 'Type' })
+
+    expect(type).toHaveDisplayValue('Page')
+    expect(
+      within(type)
+        .getAllByRole('option')
+        .map(option => option.textContent)
+    ).toEqual(['Page', 'Database'])
+  })
+
+  it('opens once created at a Grist address, framing its document', async () => {
+    const { pagesApi, wiki } = await engineering()
+
+    const dialog = await openNewPage()
+    typeIn(dialog, 'Title', 'Budget')
+    chooseIn(dialog, 'Type', 'Database')
+    typeIn(dialog, 'Grist address', ` ${BUDGET} `)
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Create' }))
+
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Budget' })
+    ).toBeVisible()
+    expect(await screen.findByTitle('Grist document')).toHaveAttribute(
+      'src',
+      BUDGET
+    )
+    expect(pagesApi.createPage).toHaveBeenCalledWith(wiki.id, {
+      title: 'Budget',
+      kind: 'database',
+      parentId: null,
+      gristUrl: BUDGET
+    })
+  })
+
+  it('takes a Grist address in place of a template', async () => {
+    await engineering()
+
+    const dialog = await openNewPage()
+    chooseIn(dialog, 'Type', 'Database')
+
+    expect(
+      within(dialog).getByRole('textbox', { name: 'Grist address' })
+    ).toBeVisible()
+    expect(
+      within(dialog).queryByRole('combobox', { name: 'Template' })
+    ).not.toBeInTheDocument()
+  })
+
+  it('needs a Grist address', async () => {
+    await engineering()
+
+    const dialog = await openNewPage()
+    typeIn(dialog, 'Title', 'Budget')
+    chooseIn(dialog, 'Type', 'Database')
+    const create = within(dialog).getByRole('button', { name: 'Create' })
+    expect(create).toBeDisabled()
+
+    typeIn(dialog, 'Grist address', '   ')
+
+    expect(create).toBeDisabled()
+  })
+
+  it('is refused off the Grist origins, which its field names until the address changes', async () => {
+    await engineering()
+
+    const dialog = await openNewPage()
+    typeIn(dialog, 'Title', 'Budget')
+    chooseIn(dialog, 'Type', 'Database')
+    typeIn(dialog, 'Grist address', 'https://docs.example.com/o/docs/4kq2')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Create' }))
+
+    const address = within(dialog).getByRole('textbox', {
+      name: 'Grist address'
+    })
+    await waitFor(() => {
+      expect(address).toHaveAccessibleDescription(
+        'Twake Pages shows Grist documents from https://grist.example.com only.'
+      )
+    })
+    expect(address).toBeInvalid()
+    expect(within(dialog).queryByRole('alert')).not.toBeInTheDocument()
+
+    typeIn(dialog, 'Grist address', BUDGET)
+
+    expect(address).toHaveAccessibleDescription(
+      'The address of a Grist document, or of one of its pages'
+    )
+    expect(address).toBeValid()
+  })
+
+  it('is not offered where the pages frame no Grist', async () => {
+    await engineering({ gristOrigins: [] })
+
+    const dialog = await openNewPage()
+
+    expect(
+      within(dialog).getByRole('combobox', { name: 'Template' })
+    ).toBeVisible()
+    expect(
+      within(dialog).queryByRole('combobox', { name: 'Type' })
+    ).not.toBeInTheDocument()
   })
 })
 

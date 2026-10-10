@@ -131,10 +131,18 @@
     "title": "Nouvelle page",
     "under": "Nouvelle page sous %{title}",
     "pageTitle": "Titre",
+    "kind": "Type",
+    "kinds": {
+      "document": "Page",
+      "database": "Base de données"
+    },
     "template": "Modèle",
+    "gristUrl": "Adresse Grist",
+    "gristUrlHint": "L'adresse d'un document Grist, ou de l'une de ses pages",
     "cancel": "Annuler",
     "create": "Créer",
-    "failed": "La page n'a pas pu être créée."
+    "failed": "La page n'a pas pu être créée.",
+    "invalidGristUrl": "Twake Pages n'affiche que les documents Grist de %{origins}."
   },
   "movePage": {
     "title": "Déplacer %{title}",
