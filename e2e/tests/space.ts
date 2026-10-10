@@ -1,14 +1,10 @@
 import { randomUUID } from 'node:crypto'
 import { expect, type Page } from '@playwright/test'
 import { publishPlatformEvent, wikiOfSpace } from './platform.ts'
-import { signIn } from './signIn.ts'
+import { ALICE, signIn } from './signIn.ts'
 
-// As the mock SSO has them
+// As the mock SSO has it
 export const ORGANIZATION = 'acme.e2e.test'
-const ALICE = {
-  uuid: '0a11ce00-0000-4000-8000-000000000001',
-  email: 'alice@acme.e2e.test'
-}
 
 /**
  * A space created with alice as its admin, once its wiki is provisioned and
