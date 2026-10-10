@@ -39,7 +39,11 @@ export function useBlockOptions(): BlockOptions {
           offOrigins:
             origins.length > 0
               ? t('grist.offOrigins', { origins: listed(origins, lang) })
-              : t('grist.noOrigins')
+              : t('grist.noOrigins'),
+          insert: t('grist.insert'),
+          insertHint: t('grist.insertHint'),
+          add: t('grist.add'),
+          embed: t('grist.embed')
         }
       }
     }),

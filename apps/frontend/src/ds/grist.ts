@@ -8,6 +8,14 @@ export interface GristLabels {
   open: string
   /** Says that a document off the origins is not shown. */
   offOrigins: string
+  /** The item of the block menu that inserts a Grist embed. */
+  insert: string
+  /** What the item of the block menu says of a Grist embed. */
+  insertHint: string
+  /** The button of a Grist embed with no address, which asks for one. */
+  add: string
+  /** The button that gives a Grist embed the address written. */
+  embed: string
 }
 
 /** The origins of Grist the pages frame documents from, and what one says. */
@@ -97,5 +105,18 @@ export const gristStyles = {
     py: 1,
     typography: 'body2',
     color: 'text.secondary'
+  },
+  '& .twake-grist-add': {
+    width: '100%',
+    border: 0,
+    borderRadius: 1,
+    px: 1.5,
+    py: 1,
+    bgcolor: 'action.hover',
+    color: 'text.secondary',
+    typography: 'body2',
+    textAlign: 'left',
+    cursor: 'pointer',
+    '&:hover': { bgcolor: 'action.selected' }
   }
 } satisfies SxProps<Theme>

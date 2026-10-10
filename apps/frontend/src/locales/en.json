@@ -243,7 +243,11 @@
     "frame": "Grist document",
     "open": "Open in Grist",
     "offOrigins": "This Grist document is not shown, as Twake Pages shows Grist documents from %{origins} only.",
-    "noOrigins": "This Grist document is not shown, as Twake Pages shows no Grist documents."
+    "noOrigins": "This Grist document is not shown, as Twake Pages shows no Grist documents.",
+    "insert": "Grist document",
+    "insertHint": "Shows a Grist document, or one of its pages",
+    "add": "Add Grist document",
+    "embed": "Embed Grist document"
   },
   "history": {
     "title": "History of %{title}",

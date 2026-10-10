@@ -48,6 +48,67 @@ describe('a Grist embed of the page', () => {
   // As another client of the API may store one: with no id and no children.
   const GRIST_EMBED: Block = { type: 'gristEmbed', props: { url: BUDGET } }
 
+  /** Puts a Grist embed in the blocks at `url`, from the block menu. */
+  const embedGristDocument = (url: string) =>
+    embedFromMenu('Grist document', 'Embed Grist document', url)
+
+  it('is inserted from the block menu at the address given, then published', async () => {
+    const pagesApi = fakePagesApi()
+    renderRoute(aPage(pagesApi).editor, { pagesApi })
+
+    await embedGristDocument(BUDGET)
+
+    expect(await screen.findByTitle('Grist document')).toHaveAttribute(
+      'src',
+      BUDGET
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Publish' }))
+    await waitFor(() => {
+      expect(pagesApi.publish).toHaveBeenCalledOnce()
+    })
+    expect(publishedBlocks(pagesApi)).toContainEqual(
+      expect.objectContaining({ type: 'gristEmbed', props: { url: BUDGET } })
+    )
+  })
+
+  it('asks for its address until it is given one', async () => {
+    const pagesApi = fakePagesApi()
+    const { editor } = aPage(pagesApi, [
+      { type: 'gristEmbed', props: { url: '' } }
+    ])
+    renderRoute(editor, { pagesApi })
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Add Grist document' })
+    )
+    fireEvent.change(await screen.findByPlaceholderText('Enter URL'), {
+      target: { value: BUDGET }
+    })
+    fireEvent.click(screen.getByText('Embed Grist document'))
+
+    expect(await screen.findByTitle('Grist document')).toHaveAttribute(
+      'src',
+      BUDGET
+    )
+    expect(
+      screen.queryByRole('button', { name: 'Add Grist document' })
+    ).not.toBeInTheDocument()
+  })
+
+  it('frames no document off the Grist origins, and says so', async () => {
+    const pagesApi = fakePagesApi()
+    renderRoute(aPage(pagesApi).editor, { pagesApi })
+
+    await embedGristDocument(ELSEWHERE)
+
+    expect(
+      await screen.findByText(/^This Grist document is not shown/)
+    ).toHaveTextContent(
+      'This Grist document is not shown, as Twake Pages shows Grist documents from https://grist.example.com only.'
+    )
+    expect(screen.queryByTitle('Grist document')).not.toBeInTheDocument()
+  })
+
   it('is refused off the Grist origins, which the refusal names', async () => {
     const pagesApi = fakePagesApi()
     // As published before the origins changed.
@@ -62,6 +123,20 @@ describe('a Grist embed of the page', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'a Grist document that is not shown'
     )
+  })
+
+  it('is not offered where the pages frame no Grist', async () => {
+    const pagesApi = fakePagesApi()
+    renderRoute(aPage(pagesApi).editor, { pagesApi, gristOrigins: [] })
+
+    await typeInBlocks(
+      await screen.findByRole('textbox', { name: 'Content' }),
+      '/'
+    )
+
+    // By their text: hidden, the menu names nothing.
+    expect(await screen.findByText('Image')).toBeInTheDocument()
+    expect(screen.queryByText('Grist document')).not.toBeInTheDocument()
   })
 
   it('frames its document, with a link that opens it in Grist', async () => {

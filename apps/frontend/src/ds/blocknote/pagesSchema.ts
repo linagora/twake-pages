@@ -1,6 +1,7 @@
 import {
   BlockNoteSchema,
   defaultBlockSpecs,
+  type BlockNoteEditor,
   type BlockSpecs
 } from '@blocknote/core'
 
@@ -36,3 +37,12 @@ export const pagesSchema = (
       [KEPT_BLOCK]: keptBlockSpec({ kindOf })
     }
   })
+
+type PagesSchema = ReturnType<typeof pagesSchema>
+
+/** An editor of the blocks of the pages. */
+export type PagesEditor = BlockNoteEditor<
+  PagesSchema['blockSchema'],
+  PagesSchema['inlineContentSchema'],
+  PagesSchema['styleSchema']
+>
