@@ -50,7 +50,13 @@ export function useMoveTo(wikiId: string): {
         pageId: page.id,
         move: moveInto(to.parent?.id ?? null, ids, to.index)
       })
-      return { shown, said: moveAnnouncement(t, page.title, to) }
+      return {
+        shown,
+        said: moveAnnouncement(t, page.title, to, {
+          under: 'movePage.under',
+          toTop: 'movePage.toTop'
+        })
+      }
     },
     failure: move.error
       ? t(failureKey(move.error, REFUSALS, 'movePage.failed'))
@@ -68,13 +74,14 @@ export function MoveStatus({ said }: { said: string }): ReactElement {
 }
 
 /**
- * The sentence a screen reader hears once a page moved: its new parent, or
- * the top of the tree, and its place among its siblings.
+ * A sentence a screen reader hears of the place a page goes to, in `words`:
+ * its new parent, or the top of the tree, and its place among its siblings.
  */
-function moveAnnouncement(
+export function moveAnnouncement(
   t: I18nApi['t'],
   title: string,
-  to: TreePlace<{ title: string }>
+  to: TreePlace<{ title: string }>,
+  words: { under: TranslationKey; toTop: TranslationKey }
 ): string {
   const place = {
     title,
@@ -82,6 +89,6 @@ function moveAnnouncement(
     count: to.siblings.length + 1
   }
   return to.parent
-    ? t('movePage.under', { ...place, parent: to.parent.title })
-    : t('movePage.toTop', place)
+    ? t(words.under, { ...place, parent: to.parent.title })
+    : t(words.toTop, place)
 }
