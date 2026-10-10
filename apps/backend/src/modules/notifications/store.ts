@@ -1,12 +1,81 @@
-import { count, desc, eq, isNull } from 'drizzle-orm'
+import { and, count, desc, eq, isNull, ne, notInArray } from 'drizzle-orm'
 import { inTenant, type Db, type Tx } from '../../infra/db.ts'
 import type { Identity } from '../auth/index.ts'
 import { pages } from '../pages/schema.ts'
 import { accessibleWikis } from '../wikis/access.ts'
-import { wikis } from '../wikis/schema.ts'
-import { notifications } from './schema.ts'
+import { wikiMembers, wikis } from '../wikis/schema.ts'
+import {
+  notifications,
+  pageFollowers,
+  type NOTIFICATION_REASONS
+} from './schema.ts'
 
 const LISTED_NOTIFICATIONS = 100
+
+type NotificationReason = (typeof NOTIFICATION_REASONS)[number]
+
+/** The page a notification is about, as `tellFollowers` needs it. */
+interface NotifiedPage {
+  id: string
+  wikiId: string
+  organizationId: string | null
+}
+
+/**
+ * Tells the page's followers a change of it, one notification each, in the
+ * transaction that made it, as Twake Tasks writes its rows from triggers.
+ * The actor is never told, and neither is a follower who left the wiki: an
+ * insert without `returning`, whose rows the restrictive `own_select` would
+ * hide from the actor.
+ *
+ * `reason` is `published` for a new version, and `commented` for a comment,
+ * whose followers the members it mentions are told instead of: they are left
+ * out by who they are, not by the order of the writes, since the store has
+ * already made them follow by now.
+ */
+export async function tellFollowers(
+  tx: Tx,
+  page: NotifiedPage,
+  actor: Identity,
+  reason: NotificationReason,
+  fields: { version?: number; commentId?: string } = {},
+  excluded: readonly string[] = []
+): Promise<void> {
+  const followers = await tx
+    .select({ userId: pageFollowers.userId })
+    .from(pageFollowers)
+    .innerJoin(
+      wikiMembers,
+      and(
+        eq(wikiMembers.wikiId, page.wikiId),
+        eq(wikiMembers.userId, pageFollowers.userId)
+      )
+    )
+    .where(
+      and(
+        eq(pageFollowers.pageId, page.id),
+        ne(pageFollowers.userId, actor.userId),
+        ...(excluded.length > 0
+          ? [notInArray(pageFollowers.userId, [...excluded])]
+          : [])
+      )
+    )
+  if (followers.length === 0) return
+  await tx.insert(notifications).values(
+    followers.map(({ userId }) => ({
+      pageId: page.id,
+      wikiId: page.wikiId,
+      organizationId: page.organizationId,
+      userId,
+      reason,
+      actorId: actor.userId,
+      actorEmail: actor.email,
+      actorName: actor.name,
+      version: fields.version ?? null,
+      commentId: fields.commentId ?? null
+    }))
+  )
+}
 
 /**
  * The person's notifications about the pages of the wikis they can open, in

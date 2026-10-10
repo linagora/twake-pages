@@ -2,12 +2,16 @@ import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest'
 import { createDb } from '../../infra/db.ts'
 import {
   aColleagueOf,
+  aPage,
   aUser,
   aWikiOf,
   backIn,
+  follow,
   joinWiki,
   notificationsOf,
   personOf,
+  publish,
+  restoreVersion,
   someoneOfEachTenant,
   startApp,
   WAYS_TO_LEAVE,
@@ -113,6 +117,92 @@ describe('GET /notifications', () => {
           })
         }
       )
+    }
+  )
+})
+
+describe('publishing', () => {
+  const draft = (baseVersion: number, title = 'Onboarding') => ({
+    baseVersion,
+    title,
+    content: []
+  })
+
+  it('tells the page’s followers of a new version, never its author', async () => {
+    const alice = { ...aUser(), name: 'Alice Martin' }
+    const bob = aColleagueOf(alice, 'bob')
+    const wiki = await aWikiOf(api, alice)
+    await joinWiki(db, alice, wiki.id, bob, 'editor')
+    const page = await aPage(api, alice, wiki.id, { title: 'Onboarding' })
+    await follow(api, bob, page)
+
+    // Version 1 told no one.
+    expect(await notificationsOf(api, bob)).toEqual(nothing)
+
+    await publish(api, alice, page, draft(1))
+
+    const { notifications, unread } = await notificationsOf(api, bob)
+    expect(notifications).toEqual([
+      {
+        id: expect.any(String) as string,
+        reason: 'published',
+        page: { id: page, title: 'Onboarding' },
+        wiki: { id: wiki.id, name: 'Handbook', kind: 'shared' },
+        actor: personOf(alice),
+        version: 2,
+        commentId: null,
+        createdAt: expect.any(String) as string,
+        readAt: null
+      }
+    ])
+    expect(unread).toBe(1)
+    expect(await notificationsOf(api, alice)).toEqual(nothing)
+    // A member who follows nothing is told nothing.
+    const carol = aColleagueOf(alice, 'carol')
+    await joinWiki(db, alice, wiki.id, carol, 'viewer')
+    await publish(api, alice, page, draft(2))
+    expect(await notificationsOf(api, carol)).toEqual(nothing)
+  })
+
+  it('tells the followers again when a version is restored', async () => {
+    const alice = aUser()
+    const bob = aColleagueOf(alice, 'bob')
+    const wiki = await aWikiOf(api, alice)
+    await joinWiki(db, alice, wiki.id, bob, 'editor')
+    const page = await aPage(api, alice, wiki.id, { title: 'Onboarding' })
+    await follow(api, bob, page)
+    await publish(api, alice, page, draft(1))
+
+    await restoreVersion(api, alice, page, 1)
+
+    const listed = await notificationsOf(api, bob)
+    expect(listed.notifications).toMatchObject([
+      { reason: 'published', version: 3 },
+      { reason: 'published', version: 2 }
+    ])
+    expect(listed.unread).toBe(2)
+  })
+
+  it.each(WAYS_TO_LEAVE)(
+    'tells a follower who left %s nothing while they are out',
+    async (_case, takeOut) => {
+      const alice = aUser()
+      const bob = aColleagueOf(alice, 'bob')
+      const wiki = await aWikiOf(api, alice)
+      await joinWiki(db, alice, wiki.id, bob, 'editor')
+      const page = await aPage(api, alice, wiki.id, { title: 'Onboarding' })
+      await follow(api, bob, page)
+
+      await takeOut(api, alice, wiki.id, bob)
+      await publish(api, alice, page, draft(1))
+      await publish(api, alice, page, draft(2))
+
+      // No row was written while they were out, so they are told nothing
+      // once back either: a left wiki keeps their follows and notifications,
+      // not the versions published while they were away.
+      expect(await notificationsOf(api, bob)).toEqual(nothing)
+      await backIn(api, alice, bob, wiki.id)
+      expect(await notificationsOf(api, bob)).toEqual(nothing)
     }
   )
 })

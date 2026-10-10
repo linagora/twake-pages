@@ -4,6 +4,7 @@ import { positionBetween } from '../../infra/order.ts'
 import { Refused, writeOrRefuse } from '../../infra/refusals.ts'
 import type { Identity } from '../auth/index.ts'
 import { pageFollowers } from '../notifications/schema.ts'
+import { tellFollowers } from '../notifications/store.ts'
 import { checkRole, roleOn, type Role } from '../wikis/access.ts'
 import { bumpWiki } from '../wikis/live.ts'
 import { checkContent, type Blocks } from './blocks.ts'
@@ -410,6 +411,9 @@ export async function publishVersion(
     })
     .where(eq(pages.id, page.id))
   await follow(tx, page, identity.userId)
+  // The author follows before the followers are told, so that the followers
+  // read excludes them by who they are, never by the order of the writes.
+  await tellFollowers(tx, page, identity, 'published', { version: number })
   await queuePageEvent(
     tx,
     identity,
