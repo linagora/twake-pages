@@ -4,7 +4,7 @@ import { positionBetween } from '../../infra/order.ts'
 import { Refused, writeOrRefuse } from '../../infra/refusals.ts'
 import type { Identity } from '../auth/index.ts'
 import { pageFollowers } from '../notifications/schema.ts'
-import { checkRole, roleOn } from '../wikis/access.ts'
+import { checkRole, roleOn, type Role } from '../wikis/access.ts'
 import { bumpWiki } from '../wikis/live.ts'
 import { checkContent, type Blocks } from './blocks.ts'
 import { previewOf, queuePageEvent } from './events.ts'
@@ -335,20 +335,25 @@ async function pageAt(tx: Tx, pageId: string) {
 }
 
 /**
- * The page an editor changes, in the trash or not, read behind its wiki's
- * row lock, which every change to the wiki's pages takes, as the changes
- * before left it: `not_found` out of the person's reach, `forbidden` to a
- * viewer. Twake Tasks reads a task behind its board's lock the same way, but
- * its routes name the board, where a page's name the page alone, whose wiki
- * is read first.
+ * The page a member changes, in the trash or not, read behind its wiki's row
+ * lock, which every change to the wiki's pages takes, as the changes before
+ * left it: `not_found` out of the person's reach, `forbidden` below the role
+ * `needed`, the least the change takes. Twake Tasks reads a task behind its
+ * board's lock the same way, but its routes name the board, where a page's
+ * name the page alone, whose wiki is read first.
  */
-export async function pageToChange(tx: Tx, identity: Identity, pageId: string) {
+export async function pageToChange(
+  tx: Tx,
+  identity: Identity,
+  pageId: string,
+  needed: Role
+) {
   const [found] = await tx
     .select({ wikiId: pages.wikiId })
     .from(pages)
     .where(eq(pages.id, pageId))
   if (!found) throw new Refused('not_found')
-  await checkRole(tx, identity, found.wikiId, 'editor')
+  await checkRole(tx, identity, found.wikiId, needed)
   await bumpWiki(tx, found.wikiId)
   const page = await pageAt(tx, pageId)
   if (!page) throw new Refused('not_found')
@@ -365,7 +370,7 @@ export async function pageToPublish(
   identity: Identity,
   pageId: string
 ) {
-  const page = await pageToChange(tx, identity, pageId)
+  const page = await pageToChange(tx, identity, pageId, 'editor')
   if (page.deletedAt) throw new Refused('in_trash')
   return page
 }

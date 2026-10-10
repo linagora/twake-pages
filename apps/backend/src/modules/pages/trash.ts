@@ -179,7 +179,7 @@ function createTrashStore(db: Db) {
         // Read behind the wiki's row lock: of two deletes at the same time,
         // the later finds the page in the trash, and a child page created
         // just before goes with its parent.
-        const page = await pageToChange(tx, identity, pageId)
+        const page = await pageToChange(tx, identity, pageId, 'editor')
         if (page.deletedAt !== null) throw new Refused('in_trash')
         if (page.home) throw new Refused('home_page')
         const descendants = await putInTrash(tx, identity, page.id)
@@ -215,7 +215,7 @@ function createTrashStore(db: Db) {
         // Read behind the wiki's row lock: of two restores at the same time,
         // the later finds the page out of the trash, and a parent deleted
         // just before sends the page to the top.
-        const page = await pageToChange(tx, identity, pageId)
+        const page = await pageToChange(tx, identity, pageId, 'editor')
         if (page.trashRootId !== page.id) throw new Refused('not_in_trash')
         // Twake Tasks refuses to restore a task under a hidden parent. A page
         // goes to the top instead, so that any branch of the trash comes

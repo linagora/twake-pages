@@ -112,7 +112,7 @@ function createLabelStore(db: Db) {
      */
     setLabels(identity: Identity, pageId: string, names: string[]) {
       return writeOrRefuse(db, identity, async tx => {
-        const page = await pageToChange(tx, identity, pageId)
+        const page = await pageToChange(tx, identity, pageId, 'editor')
         if (page.deletedAt) throw new Refused('in_trash')
         // A page is of its wiki's tenant, which its labels take.
         const wiki = { id: page.wikiId, organizationId: page.organizationId }

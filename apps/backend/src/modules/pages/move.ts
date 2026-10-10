@@ -20,7 +20,7 @@ export function createMoveStore(db: Db) {
       return writeOrRefuse(db, identity, async tx => {
         // Read behind the wiki's row lock: of two moves at the same time, the
         // later sees the earlier, so they never make a page its own ancestor.
-        const page = await pageToChange(tx, identity, pageId)
+        const page = await pageToChange(tx, identity, pageId, 'editor')
         if (page.deletedAt !== null) throw new Refused('in_trash')
         if (page.home) throw new Refused('home_page')
         if (move.parentId !== null) {
