@@ -18,6 +18,16 @@ export async function typeInBlocks(
 }
 
 /**
+ * Publishes the draft of the editor open on `page`, and waits for the page to
+ * come back.
+ */
+export async function publishDraft(page: Page) {
+  await page.getByRole('button', { name: 'Publish' }).click()
+  // The editor leaves for the page once the version is published.
+  await expect(page.getByRole('link', { name: 'Edit page' })).toBeVisible()
+}
+
+/**
  * Publishes `text` from the editor of the page open on `page`, in place of
  * the block holding `replacing`, or else in blocks still empty, and waits for
  * the page to show it.
@@ -29,8 +39,6 @@ export async function publishText(
 ) {
   await page.getByRole('link', { name: 'Edit page' }).click()
   await typeInBlocks(page, text, replacing)
-  await page.getByRole('button', { name: 'Publish' }).click()
-  // The editor leaves for the page once the version is published.
-  await expect(page.getByRole('link', { name: 'Edit page' })).toBeVisible()
+  await publishDraft(page)
   await expect(page.getByRole('main').getByText(text)).toBeVisible()
 }
