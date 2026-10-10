@@ -440,10 +440,22 @@ export function usePage(wikiId: string, pageId: string): UseQueryResult<Page> {
   })
 }
 
+/** Changes the page shown in place: reading it again would count as a visit. */
+function changeShownPage(
+  queryClient: QueryClient,
+  page: Page,
+  change: Partial<Page>
+): void {
+  queryClient.setQueryData<ReadPage>(
+    pageKey(page.wikiId, page.id),
+    read => read && { ...read, page: { ...read.page, ...change } }
+  )
+}
+
 /**
- * The page shown changes in place: reading it again would count as a visit.
- * The favorites are read again, as Twake Tasks reads its boards again, but
- * only once the change went through: a refused one leaves them as they were.
+ * The page shown changes in place, and the favorites are read again, as
+ * Twake Tasks reads its boards again, but only once the change went through:
+ * a refused one leaves them as they were.
  */
 export function useSetFavorite(
   page: Page
@@ -453,10 +465,7 @@ export function useSetFavorite(
   return useMutation({
     mutationFn: (favorite: boolean) => api.setFavorite(page.id, favorite),
     onSuccess: (_answer, favorite) => {
-      queryClient.setQueryData<ReadPage>(
-        pageKey(page.wikiId, page.id),
-        read => read && { ...read, page: { ...read.page, favorite } }
-      )
+      changeShownPage(queryClient, page, { favorite })
       return queryClient.invalidateQueries({
         queryKey: favoritesKey,
         exact: true
@@ -536,10 +545,7 @@ export function useSetLabels(
   return useMutation({
     mutationFn: (names: string[]) => api.setLabels(page.id, names),
     onSuccess: labels => {
-      queryClient.setQueryData<ReadPage>(
-        pageKey(page.wikiId, page.id),
-        read => read && { ...read, page: { ...read.page, labels } }
-      )
+      changeShownPage(queryClient, page, { labels })
       return queryClient.invalidateQueries({
         queryKey: labelsKey(page.wikiId)
       })
