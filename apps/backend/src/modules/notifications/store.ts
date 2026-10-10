@@ -1,4 +1,14 @@
-import { and, count, desc, eq, isNull, ne, notInArray } from 'drizzle-orm'
+import {
+  and,
+  count,
+  desc,
+  eq,
+  inArray,
+  isNull,
+  ne,
+  notInArray,
+  sql
+} from 'drizzle-orm'
 import { inTenant, type Db, type Tx } from '../../infra/db.ts'
 import type { Identity } from '../auth/index.ts'
 import { pages } from '../pages/schema.ts'
@@ -12,7 +22,14 @@ import {
 
 const LISTED_NOTIFICATIONS = 100
 
+// At most 100 ids, as the list shows 100 at most.
+export const MAX_READ_IDS = 100
+
 type NotificationReason = (typeof NOTIFICATION_REASONS)[number]
+
+/** Some notifications by id, all of them, or those about a wiki's pages. */
+export type ReadSelection =
+  { ids: string[] } | { all: true } | { wikiId: string }
 
 /** The page a notification is about, as `tellFollowers` needs it. */
 interface NotifiedPage {
@@ -170,6 +187,31 @@ export function createNotificationStore(db: Db) {
           .from(seen)
           .where(isNull(seen.readAt))
         return { notifications: listed, unread: unread?.count ?? 0 }
+      })
+    },
+
+    /**
+     * Marks the selected notifications read, from what the person sees: an
+     * id that is no notification of theirs, or one about a wiki they left,
+     * marks nothing and still answers. An already read notification is left
+     * at its first read time, as the contract says. No version moves.
+     */
+    markRead(identity: Identity, selection: ReadSelection) {
+      return inTenant(db, identity, async tx => {
+        const seen = seenNotifications(tx, identity.userId)
+        const rows = tx.select({ id: seen.id }).from(seen).$dynamic()
+        if ('all' in selection) {
+          // Every row the person sees: no filter tells it from the others.
+        } else if ('wikiId' in selection) {
+          rows.where(eq(seen.wikiId, selection.wikiId))
+        } else {
+          if (selection.ids.length === 0) return
+          rows.where(inArray(seen.id, selection.ids))
+        }
+        await tx
+          .update(notifications)
+          .set({ readAt: sql`coalesce(${notifications.readAt}, now())` })
+          .where(inArray(notifications.id, rows))
       })
     }
   }

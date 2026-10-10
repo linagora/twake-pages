@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest'
 import { createDb } from '../../infra/db.ts'
 import {
@@ -10,6 +11,7 @@ import {
   editComment,
   follow,
   joinWiki,
+  markRead,
   notificationsOf,
   personOf,
   publish,
@@ -18,7 +20,8 @@ import {
   startApp,
   WAYS_TO_LEAVE,
   waysOutOfAWiki,
-  type Notifications
+  type Notifications,
+  type TestUser
 } from '../../testing/app.ts'
 import { notify, notifyOfVersions } from './testing.ts'
 
@@ -329,5 +332,147 @@ describe('commenting', () => {
       { reason: 'mentioned', commentId: expect.any(String) as string },
       { reason: 'published', version: 2 }
     ])
+  })
+})
+
+describe('POST /notifications/read', () => {
+  /** A person following a page of each of two wikis, one notification each. */
+  async function aPersonFollowingTwo() {
+    const alice = aUser()
+    const bob = aColleagueOf(alice, 'bob')
+    const handbook = await aWikiOf(api, alice, 'Handbook')
+    const guide = await aWikiOf(api, alice, 'Guide')
+    await joinWiki(db, alice, handbook.id, bob, 'editor')
+    await joinWiki(db, alice, guide.id, bob, 'editor')
+    const first = await aPage(api, alice, handbook.id, { title: 'Onboarding' })
+    const second = await aPage(api, alice, guide.id, { title: 'Setup' })
+    await follow(api, bob, first)
+    await follow(api, bob, second)
+    await notify(db, alice, handbook, bob)
+    await notify(db, alice, guide, bob)
+    return { alice, bob, handbook, guide }
+  }
+
+  const readAtOf = async (bob: TestUser, id: string) =>
+    (await notificationsOf(api, bob)).notifications.find(each => each.id === id)
+      ?.readAt
+
+  it('marks the notifications of the ids read, and no other', async () => {
+    const { bob } = await aPersonFollowingTwo()
+    const { notifications } = await notificationsOf(api, bob)
+    const [newest, oldest] = notifications
+    if (!newest || !oldest) throw new Error('two notifications are needed')
+
+    const response = await markRead(api, bob, { ids: [oldest.id] })
+
+    expect(response.statusCode).toBe(204)
+    expect(await readAtOf(bob, oldest.id)).toEqual(expect.any(String))
+    expect(await readAtOf(bob, newest.id)).toBeNull()
+    expect((await notificationsOf(api, bob)).unread).toBe(1)
+  })
+
+  it('marks every notification the person sees with { all: true }', async () => {
+    const { bob } = await aPersonFollowingTwo()
+
+    expect((await markRead(api, bob, { all: true })).statusCode).toBe(204)
+
+    expect((await notificationsOf(api, bob)).unread).toBe(0)
+  })
+
+  it('marks a wiki’s notifications with { wikiId }, and no other’s', async () => {
+    const { bob, handbook, guide } = await aPersonFollowingTwo()
+
+    expect((await markRead(api, bob, { wikiId: handbook.id })).statusCode).toBe(
+      204
+    )
+
+    const { notifications, unread } = await notificationsOf(api, bob)
+    expect(unread).toBe(1)
+    expect(
+      notifications.map(each => [each.wiki.id, each.readAt === null])
+    ).toEqual([
+      [guide.id, true],
+      [handbook.id, false]
+    ])
+  })
+
+  it('marks nothing for an id that is no notification of the person’s', async () => {
+    const { alice, bob, handbook } = await aPersonFollowingTwo()
+    const aliceNotification = (await notificationsOf(api, alice)).notifications
+    // alice follows no page, so she has none: write her one, as a test.
+    expect(aliceNotification).toEqual([])
+    await notify(db, bob, handbook, alice)
+    const hers = (await notificationsOf(api, alice)).notifications
+    const other = hers[0]
+    if (!other) throw new Error('alice needs a notification')
+    const before = await notificationsOf(api, bob)
+
+    const response = await markRead(api, bob, {
+      ids: [randomUUID(), other.id]
+    })
+
+    expect(response.statusCode).toBe(204)
+    expect(await notificationsOf(api, bob)).toEqual(before)
+    expect(await readAtOf(alice, other.id)).toBeNull()
+  })
+
+  it('marks nothing for a wiki the person does not belong to', async () => {
+    const { alice, bob } = await aPersonFollowingTwo()
+    const aside = await aWikiOf(api, alice, 'Aside')
+    const before = await notificationsOf(api, bob)
+
+    const response = await markRead(api, bob, { wikiId: aside.id })
+
+    expect(response.statusCode).toBe(204)
+    expect(await notificationsOf(api, bob)).toEqual(before)
+  })
+
+  it('leaves an already read notification at its first read time', async () => {
+    const { bob } = await aPersonFollowingTwo()
+    const first = (await notificationsOf(api, bob)).notifications[0]
+    if (!first) throw new Error('a notification is needed')
+    await markRead(api, bob, { ids: [first.id] })
+    const readAt = await readAtOf(bob, first.id)
+
+    await markRead(api, bob, { all: true })
+
+    expect(await readAtOf(bob, first.id)).toEqual(readAt)
+  })
+
+  const MALFORMED_SELECTIONS: [string, object][] = [
+    ['without a selection', {}],
+    ['with no id', { ids: [] }],
+    ['whose id is malformed', { ids: ['not-an-id'] }],
+    [
+      'with more than 100 ids',
+      { ids: Array.from({ length: 101 }, randomUUID) }
+    ],
+    ['whose all is false', { all: false }],
+    ['whose wikiId is malformed', { wikiId: 'not-an-id' }],
+    ['with two selections at once', { ids: [randomUUID()], all: true }]
+  ]
+
+  it.each(MALFORMED_SELECTIONS)(
+    'refuses a selection %s',
+    async (_case, selection) => {
+      const { bob } = await aPersonFollowingTwo()
+      const before = await notificationsOf(api, bob)
+
+      const response = await markRead(api, bob, selection)
+
+      expect(response.statusCode).toBe(400)
+      expect(response.json()).toEqual({ error: 'invalid_request' })
+      expect(await notificationsOf(api, bob)).toEqual(before)
+    }
+  )
+
+  it('answers 204 for a wikiId that names no wiki, marking nothing', async () => {
+    const { bob } = await aPersonFollowingTwo()
+    const before = await notificationsOf(api, bob)
+
+    const response = await markRead(api, bob, { wikiId: randomUUID() })
+
+    expect(response.statusCode).toBe(204)
+    expect(await notificationsOf(api, bob)).toEqual(before)
   })
 })

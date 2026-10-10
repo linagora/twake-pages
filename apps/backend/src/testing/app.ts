@@ -431,6 +431,15 @@ export interface Notifications {
   unread: number
 }
 
+/** `POST /notifications/read` by the person. */
+export function markRead(
+  app: Awaited<ReturnType<typeof startApp>>,
+  user: TestUser,
+  selection: object
+) {
+  return app.as(user).post('/notifications/read', selection)
+}
+
 /** The job planned to purge the deleted wiki. */
 export async function purgeJobOf(db: Db, wikiId: string) {
   const job = await jobOf(db, `${PURGE_WIKI_JOB}:${wikiId}`)

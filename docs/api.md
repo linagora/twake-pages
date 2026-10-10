@@ -246,16 +246,18 @@ Writing a comment refuses in this order: a malformed body (`invalid_request`); t
 
 ## Following and notifications
 
-Notifications are never sent to the person who acted, nor to people who are no longer members. Those about a wiki the person is no longer a member of are left out of the list, the unread counts and the badges.
+Notifications are never sent to the person who acted, nor to people who are no longer members. Those about a wiki the person is no longer a member of are left out of the list, the unread counts and the badges, and wait for them to be a member again. A notification about a page in the trash stays in the list, the counts and the badges, as it does in Twake Tasks.
 
-- Publishing (version 2 and later, restores included): `published` to followers.
-- A comment: `commented` to followers, and `mentioned` instead to the people it mentions.
+- Publishing (version 2 and later, restores included): `published` to followers, one per follower who is a member now. A version published while a follower was out of the wiki writes nothing: only the notifications the person was told while they were a member wait for them.
+- A comment: `commented` to followers, and `mentioned` instead to the people it mentions, one each. An edit tells only the members it mentions anew, a mention that counts once.
 
-| Method and path | Body | Answer |
-|---|---|---|
-| `GET /notifications` | | `{ notifications: Notification[], unread: number }`, newest first, at most 100 |
-| `POST /notifications/read` | `{ ids: string[] }` or `{ all: true }` or `{ wikiId }` | `204` |
-| `GET /badges` | | `{ badges: { wikiId: string; count: number }[] }`, unread per wiki, only counts above 0 |
+| Method and path | Body | Answer | Who |
+|---|---|---|---|
+| `GET /notifications` | | `{ notifications: Notification[], unread: number }`, newest first by `createdAt` then `id`, at most 100; `unread` counts every unread one the person sees, listed or not | member |
+| `POST /notifications/read` | `{ ids: string[] }` or `{ all: true }` or `{ wikiId }` | `204` | member |
+| `GET /badges` | | `{ badges: { wikiId: string; count: number }[] }`, unread per wiki, only counts above 0 | member |
+
+`POST /notifications/read` takes an exclusive selection: `{ ids }` of 1 to 100 ids, `{ all: true }` for every notification the person sees, or `{ wikiId }` for those about a wiki's pages; anything else, a second key beside the first or none, is `invalid_request`. An id that is no notification of the person's, or one about a wiki they left, and a `wikiId` that names no wiki they belong to, mark nothing and still answer `204`. A notification read already keeps its first read time.
 
 ## Finding
 
