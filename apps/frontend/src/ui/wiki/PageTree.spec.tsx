@@ -61,6 +61,41 @@ function chevronOf(treeitem: HTMLElement): HTMLElement {
   return chevron
 }
 
+/** The handbook, open on its home page for a person of `role`. */
+async function renderTree(role?: Role) {
+  const { pagesApi, wiki, engineering } = handbook(role)
+  const { router } = renderRoute(`/wikis/${wiki.id}`, { pagesApi })
+  const tree = await screen.findByRole('tree', { name: 'Pages' })
+  return { pagesApi, tree, router, wiki, engineering }
+}
+
+// What the tree, in the wiki's navigation, says to screen readers, found by
+// its words, as the navigation may hold other statuses.
+const saying = (sentence: string) =>
+  within(screen.getByRole('navigation', { name: 'Wiki' })).findByText(sentence)
+
+// What the tree says went wrong, as the page beside it may say more.
+const treeAlert = () =>
+  within(screen.getByRole('navigation', { name: 'Wiki' })).findByRole('alert')
+
+// Engineering, open on Laptop setup, with live updates down: the wiki shows
+// as it was before what Bob does, until it is read again.
+async function engineeringWithoutLiveUpdates() {
+  const opened = engineering()
+  opened.pagesApi.watchWiki.mockImplementation(() => () => undefined)
+  await screen.findByRole('treeitem', { name: 'Laptop setup' })
+  return opened
+}
+
+// Lets a move the keys would have started reach the API.
+const settle = () =>
+  act(
+    () =>
+      new Promise<void>(resolve => {
+        setTimeout(resolve, 0)
+      })
+  )
+
 describe('the tree of a wiki', () => {
   it('shows the pages beside the home page, in their order', async () => {
     const { pagesApi, wiki } = handbook()
@@ -172,13 +207,6 @@ describe('the tree of a wiki', () => {
 })
 
 describe('the tree of a wiki, from the keyboard', () => {
-  async function renderTree() {
-    const { pagesApi, wiki, engineering } = handbook()
-    const { router } = renderRoute(`/wikis/${wiki.id}`, { pagesApi })
-    const tree = await screen.findByRole('tree', { name: 'Pages' })
-    return { tree, router, wiki, engineering }
-  }
-
   const tabIndexesIn = (tree: HTMLElement) =>
     within(tree)
       .getAllByRole('treeitem')
@@ -260,46 +288,10 @@ describe('the tree of a wiki, from the keyboard', () => {
 })
 
 describe('a page moved from the keyboard, in the tree', () => {
-  async function renderTree(role?: Role) {
-    const { pagesApi, wiki } = handbook(role)
-    renderRoute(`/wikis/${wiki.id}`, { pagesApi })
-    const tree = await screen.findByRole('tree', { name: 'Pages' })
-    return { pagesApi, tree }
-  }
-
   // Alt+Shift and an arrow, on the page that has the focus.
   const move = (arrow: string) => {
     press(arrow, { altKey: true, shiftKey: true })
   }
-
-  // What the tree, in the wiki's navigation, says to screen readers, found
-  // by its words, as the navigation may hold other statuses.
-  const saying = (sentence: string) =>
-    within(screen.getByRole('navigation', { name: 'Wiki' })).findByText(
-      sentence
-    )
-
-  // What the tree says went wrong, as the page beside it may say more.
-  const treeAlert = () =>
-    within(screen.getByRole('navigation', { name: 'Wiki' })).findByRole('alert')
-
-  // Engineering, open on Laptop setup, with live updates down: the wiki
-  // shows as it was before what Bob does, until it is read again.
-  async function engineeringWithoutLiveUpdates() {
-    const opened = engineering()
-    opened.pagesApi.watchWiki.mockImplementation(() => () => undefined)
-    await screen.findByRole('treeitem', { name: 'Laptop setup' })
-    return opened
-  }
-
-  // Lets a move the keys would have started reach the API.
-  const settle = () =>
-    act(
-      () =>
-        new Promise<void>(resolve => {
-          setTimeout(resolve, 0)
-        })
-    )
 
   it('goes down and up among its siblings, keeping the focus', async () => {
     const { tree } = await renderTree()
