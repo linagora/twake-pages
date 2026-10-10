@@ -61,10 +61,9 @@ interface Shown<Entry> {
 }
 
 /** An entry a key moved, and where it was until the move shows. */
-interface Moving {
+interface Moving<Entry> {
   id: string
-  parent: string | null
-  index: number
+  from: TreePlace<Entry>
 }
 
 const LIST = { m: 0, p: 0, listStyle: 'none' } as const
@@ -119,11 +118,11 @@ export function Tree<Entry extends TreeEntry<Entry>>({
   const labelId = (id: string) => `${base}label-${id}`
   const groupId = (id: string) => `${base}group-${id}`
   const [focused, setFocused] = useState<string | null>(null)
-  const [moving, setMoving] = useState<Moving | null>(null)
+  const [moving, setMoving] = useState<Moving<Entry> | null>(null)
   // Drawn in its new place, the row of a moved entry is a new element, or one
   // moved in the page: it lost the focus on the way, and takes it back.
   const [moved, setMoved] = useState<{ id: string } | null>(null)
-  if (moving && !isAt(entries, moving)) {
+  if (moving && !samePlace(whereIs(entries, moving.id), moving.from)) {
     setMoving(null)
     setMoved({ id: moving.id })
   }
@@ -152,11 +151,7 @@ export function Tree<Entry extends TreeEntry<Entry>>({
     const at = whereIs(entries, entry.id)
     const to = at && placeFor(entries, at, event.key)
     if (moving || !at || !to) return
-    const started = {
-      id: entry.id,
-      parent: at.parent?.id ?? null,
-      index: at.index
-    }
+    const started = { id: entry.id, from: at }
     setMoving(started)
     if (to.parent && !expanded.has(to.parent.id)) onExpand(to.parent.id, true)
     // Refused, or never to show: the tree takes the next move.
@@ -321,15 +316,16 @@ function whereIs<Entry extends TreeEntry<Entry>>(
   return undefined
 }
 
-function isAt<Entry extends TreeEntry<Entry>>(
-  entries: Entry[],
-  { id, parent, index }: Moving
+function samePlace<Entry extends TreeEntry<Entry>>(
+  one: TreePlace<Entry> | undefined,
+  other: TreePlace<Entry> | undefined
 ): boolean {
-  const place = whereIs(entries, id)
   return (
-    place !== undefined &&
-    (place.parent?.id ?? null) === parent &&
-    place.index === index
+    one === other ||
+    (one !== undefined &&
+      other !== undefined &&
+      (one.parent?.id ?? null) === (other.parent?.id ?? null) &&
+      one.index === other.index)
   )
 }
 
