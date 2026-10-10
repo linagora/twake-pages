@@ -19,18 +19,17 @@ import {
   invite,
   joinWiki,
   personalWikiOf,
+  publishHome,
   purgeJobOf,
   removeMember,
   startApp,
   versionOf,
   wikiRowsOf,
   wikisOf,
-  type Page,
   type TestUser,
   type WikiSummary
 } from '../../testing/app.ts'
 import { notifications, pageFollowers } from '../notifications/schema.ts'
-import { notify } from '../notifications/testing.ts'
 import { pageFavorites, pageVersions, pageVisits } from '../pages/schema.ts'
 import { keepSettings } from '../settings/events.ts'
 import type { Role } from './access.ts'
@@ -108,7 +107,8 @@ const favoriteOpenAndFollow = async (user: TestUser, pageId: string) => {
 
 /**
  * What Pages keeps for the person about pages: their favorites, recent pages,
- * follows and notifications, which no route lists yet.
+ * follows and notifications, read below the policies so that a deletion is
+ * seen whatever the routes list.
  */
 const keptFor = (user: TestUser) =>
   inTenant(db, user, async tx => ({
@@ -413,12 +413,9 @@ describe.each(deletions)(
       // A wiki the person created, once handed on, still shows its pages to them
       // in B2C, so what they kept on those pages can be read as them.
       const handedOn = await aWiki(gone, 'Handbook', [[editor, 'editor']])
-      const pageId = await aPageIn(db, editor, handedOn.id, {
-        title: 'Onboarding',
-        position: 'a0'
-      })
-      await favoriteOpenAndFollow(gone, pageId)
-      await notify(db, editor, handedOn, gone)
+      await favoriteOpenAndFollow(gone, handedOn.homePageId)
+      // The home page is told, through publishing, as the product tells it.
+      await publishHome(api, editor, handedOn)
 
       await deliver(routingKey, body(gone))
 
@@ -433,15 +430,16 @@ describe.each(deletions)(
       // Signed in, so a deletion by email finds it once out of the wiki.
       await wikisOf(api, gone)
       const wiki = await aWiki(admin, 'Roadmap', [[gone, 'editor']])
-      const notes = await createPage(api, gone, wiki.id, { title: 'Notes' })
-      await notify(db, admin, wiki, gone)
+      await createPage(api, gone, wiki.id, { title: 'Notes' })
+      await follow(api, gone, wiki.homePageId)
+      await publishHome(api, admin, wiki)
       await removeMember(api, gone, wiki.id, gone.userId)
 
       await deliver(routingKey, body(gone))
 
       await backIn(api, admin, gone, wiki.id)
       expect(
-        await followingAndUnreadOf(api, gone, wiki.id, notes.json<Page>().id)
+        await followingAndUnreadOf(api, gone, wiki.id, wiki.homePageId)
       ).toEqual({ following: false, unread: 0 })
     })
 
@@ -449,7 +447,8 @@ describe.each(deletions)(
       const gone = makeUser()
       const editor = aPeerOf(gone)
       const handedOn = await aWiki(gone, 'Handbook', [[editor, 'editor']])
-      await notify(db, gone, handedOn, editor)
+      await follow(api, editor, handedOn.homePageId)
+      await publishHome(api, gone, handedOn)
 
       await deliver(routingKey, body(gone))
 

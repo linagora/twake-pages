@@ -992,6 +992,41 @@ export function publish(
   return app.as(user).post(`/pages/${pageId}/versions`, draft)
 }
 
+/** The draft that publishes the wiki's home page as its next version. */
+export const homeDraft = (
+  wiki: WikiSummary,
+  title = wiki.name,
+  baseVersion = 1
+): DraftToPublish => ({
+  baseVersion,
+  title,
+  content: []
+})
+
+/**
+ * Has the actor publish the wiki's home page, through the route, so that its
+ * followers are told `published` as they are in the product.
+ */
+export async function publishHome(
+  app: Awaited<ReturnType<typeof startApp>>,
+  actor: TestUser,
+  wiki: WikiSummary,
+  title = wiki.name,
+  baseVersion = 1
+) {
+  const response = await publish(
+    app,
+    actor,
+    wiki.homePageId,
+    homeDraft(wiki, title, baseVersion)
+  )
+  if (response.statusCode !== 201) {
+    throw new Error(
+      `publishing the home page answered ${String(response.statusCode)}`
+    )
+  }
+}
+
 /** `PUT /pages/:pageId/labels` by the person. */
 export function setLabels(
   app: Awaited<ReturnType<typeof startApp>>,

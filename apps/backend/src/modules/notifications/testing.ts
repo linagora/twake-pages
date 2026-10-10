@@ -23,8 +23,10 @@ const versionNotification = (
 })
 
 /**
- * Tells the person of a version the actor published of the wiki's home page,
- * as publishing will notify its followers.
+ * Writes the person a notification of a version the actor published of the
+ * wiki's home page, as the publisher writes its followers'. Seed it only
+ * where no route can make the row: a read time to choose, or a row the
+ * routes would never write.
  */
 export function notify(
   db: Db,

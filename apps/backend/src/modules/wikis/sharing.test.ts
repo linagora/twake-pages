@@ -13,11 +13,13 @@ import {
   cancelInvitation,
   createPage,
   favoritesAndRecentOf,
+  follow,
   followingAndUnreadOf,
   invite,
   joinWiki,
   pageOf,
   personalWikiOf,
+  publishHome,
   removeMember,
   sharingOf,
   someoneOfEachTenant,
@@ -25,10 +27,8 @@ import {
   versionOf,
   WAYS_TO_LEAVE,
   wikisOf,
-  type Page,
   type TestUser
 } from '../../testing/app.ts'
-import { notify } from '../notifications/testing.ts'
 import type { Role } from './access.ts'
 import { behindAChange } from './testing.ts'
 
@@ -822,14 +822,16 @@ describe.each(someoneOfEachTenant)(
         const bob = aColleagueOf(alice)
         const wiki = await aWikiOf(api, alice)
         await joinWiki(db, alice, wiki.id, bob, 'editor')
-        const notes = await createPage(api, bob, wiki.id, { title: 'Notes' })
-        await notify(db, alice, wiki, bob)
+        await follow(api, bob, wiki.homePageId)
+        await createPage(api, bob, wiki.id, { title: 'Notes' })
+        // The home page is told, through publishing, as the product tells it.
+        await publishHome(api, alice, wiki)
 
         await leave(api, alice, wiki.id, bob)
 
         await backIn(api, alice, bob, wiki.id)
         expect(
-          await followingAndUnreadOf(api, bob, wiki.id, notes.json<Page>().id)
+          await followingAndUnreadOf(api, bob, wiki.id, wiki.homePageId)
         ).toEqual({ following: true, unread: 1 })
       }
     )

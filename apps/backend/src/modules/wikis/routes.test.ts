@@ -7,8 +7,11 @@ import {
   aSpaceWiki,
   aUser,
   aWikiOf,
+  follow,
   invite,
   joinWiki,
+  markRead,
+  publishHome,
   purgeJobOf,
   sharingOf,
   someoneOfEachTenant,
@@ -18,7 +21,6 @@ import {
   wikisOf,
   type TestUser
 } from '../../testing/app.ts'
-import { notify } from '../notifications/testing.ts'
 import { purgeWiki } from './store.ts'
 import { behindAChange } from './testing.ts'
 
@@ -58,10 +60,13 @@ describe('GET /wikis', () => {
     const wiki = await aWikiOf(api, alice)
     await joinWiki(db, alice, wiki.id, bob, 'editor')
     await joinWiki(db, alice, wiki.id, carol, 'editor')
-    await notify(db, alice, wiki, bob)
-    await notify(db, alice, wiki, bob)
-    await notify(db, alice, wiki, bob, new Date())
-    await notify(db, alice, wiki, carol)
+    await follow(api, bob, wiki.homePageId)
+    await follow(api, carol, wiki.homePageId)
+    // Three versions told each of them; carol's are read already.
+    await publishHome(api, alice, wiki)
+    await publishHome(api, alice, wiki, wiki.name, 2)
+    await publishHome(api, alice, wiki, wiki.name, 3)
+    await markRead(api, carol, { all: true })
 
     const unread = (await wikisOf(api, bob)).map(listed => [
       listed.name,
@@ -70,8 +75,11 @@ describe('GET /wikis', () => {
 
     expect(unread).toEqual([
       ['Personal', 0],
-      ['Handbook', 2]
+      ['Handbook', 3]
     ])
+    expect(
+      (await wikisOf(api, carol)).find(each => each.id === wiki.id)?.unread
+    ).toBe(0)
   })
 
   it.each([

@@ -17,6 +17,7 @@ import {
   notificationsOf,
   personOf,
   publish,
+  publishHome,
   restoreVersion,
   someoneOfEachTenant,
   startApp,
@@ -48,8 +49,11 @@ describe('GET /notifications', () => {
     const bob = aColleagueOf(alice, 'bob')
     const wiki = await aWikiOf(api, alice)
     await joinWiki(db, alice, wiki.id, bob, 'editor')
+    await follow(api, bob, wiki.homePageId)
+    // A read time to choose, and a newer version through the route:
+    // the pair proves `unread` counts only the unread one.
     await notify(db, alice, wiki, bob, new Date())
-    await notify(db, alice, wiki, bob)
+    await publishHome(api, alice, wiki)
 
     const response = await api.as(bob).get('/notifications')
 
@@ -96,7 +100,8 @@ describe('GET /notifications', () => {
       const bob = aColleagueOf(alice, 'bob')
       const wiki = await aWikiOf(api, alice)
       await joinWiki(db, alice, wiki.id, bob, 'editor')
-      await notify(db, alice, wiki, bob)
+      await follow(api, bob, wiki.homePageId)
+      await publishHome(api, alice, wiki)
 
       await takeOut(api, alice, wiki.id, bob)
 
@@ -114,7 +119,8 @@ describe('GET /notifications', () => {
           const bob = aColleagueOf(alice, 'bob')
           const wiki = await aWikiOf(api, alice)
           await joinWiki(db, alice, wiki.id, bob, 'editor')
-          await notify(db, alice, wiki, bob)
+          await follow(api, bob, wiki.homePageId)
+          await publishHome(api, alice, wiki)
           await leave(api, alice, wiki.id, bob)
 
           await backIn(api, alice, bob, wiki.id)
@@ -351,8 +357,16 @@ describe('POST /notifications/read', () => {
     const second = await aPage(api, alice, guide.id, { title: 'Setup' })
     await follow(api, bob, first)
     await follow(api, bob, second)
-    await notify(db, alice, handbook, bob)
-    await notify(db, alice, guide, bob)
+    await publish(api, alice, first, {
+      baseVersion: 1,
+      title: 'Onboarding',
+      content: []
+    })
+    await publish(api, alice, second, {
+      baseVersion: 1,
+      title: 'Setup',
+      content: []
+    })
     return { alice, bob, handbook, guide }
   }
 
@@ -488,9 +502,11 @@ describe('GET /badges', () => {
     const guide = await aWikiOf(api, alice, 'Guide')
     await joinWiki(db, alice, handbook.id, bob, 'editor')
     await joinWiki(db, alice, guide.id, bob, 'editor')
-    await notify(db, alice, handbook, bob)
-    await notify(db, alice, handbook, bob)
-    await notify(db, alice, guide, bob)
+    await follow(api, bob, handbook.homePageId)
+    await follow(api, bob, guide.homePageId)
+    await publishHome(api, alice, handbook)
+    await publishHome(api, alice, handbook, 'Handbook', 2)
+    await publishHome(api, alice, guide)
 
     expect(await badgesOf(api, bob)).toEqual([
       { wikiId: handbook.id, count: 2 },
