@@ -1,8 +1,10 @@
 import { randomUUID } from 'node:crypto'
 import { createServer } from 'node:http'
 import { expect, test, type Page } from '@playwright/test'
-import { signOutOfTheSso } from './signIn.ts'
-import { aliceSpaceWiki } from './space.ts'
+import { publishPlatformEvent } from './platform.ts'
+import { publishText } from './editor.ts'
+import { asPerson, BOB, signOutOfTheSso } from './signIn.ts'
+import { aliceSpaceWiki, ORGANIZATION } from './space.ts'
 
 const APP = 'http://localhost:3500'
 
@@ -32,6 +34,7 @@ const SILENT_SIGN_IN = 'twake-pages-silent-sign-in'
 interface PostedMessage {
   type: string
   path?: string
+  badges?: { resourceId: string; count: number }[]
 }
 
 // A stand-in for TwakeSpace that frames the embed as it does: a named frame,
@@ -95,6 +98,10 @@ const postedOfType = async (page: Page, type: string) =>
 
 const lastPath = async (page: Page) =>
   (await postedOfType(page, 'twake-embed:path')).at(-1)?.path
+
+// The last snapshot of badges the frame reported, which replaces the one before
+const lastBadges = async (page: Page) =>
+  (await postedOfType(page, 'twake-embed:badges')).at(-1)?.badges
 
 // Sends the frame to a path of its wiki, as TwakeSpace's Back does
 const sendNavigate = (page: Page, path: string) =>
@@ -249,6 +256,54 @@ test('says the session expired, telling TwakeSpace once, when the person signs o
     await expect
       .poll(() => postedOfType(page, LOGIN_REQUIRED))
       .toEqual([{ type: LOGIN_REQUIRED }])
+  } finally {
+    host.close()
+  }
+})
+
+test("reports the wiki's badge to TwakeSpace once someone else acts in it", async ({
+  page,
+  browser
+}) => {
+  const { spaceId, wikiId, name } = await aliceSpaceWiki(page)
+  // Alice's personal wiki, which no one else acts in: its home page follows
+  // her, so nothing ever makes it unread, and it shows no badge.
+  const personal = await page
+    .getByRole('list', { name: 'Wikis' })
+    .getByRole('link', { name: 'Personal' })
+    .getAttribute('href')
+  const personalId = personal?.split('/')[2] ?? ''
+
+  // A second member of the space, as ldap-rest adds one: the actor is never
+  // told, so someone other than alice has to act in her wiki.
+  publishPlatformEvent('twake.space.member.added', {
+    organizationId: ORGANIZATION,
+    id: spaceId,
+    members: [{ ...BOB, role: 'editor' }]
+  })
+
+  const bob = await asPerson(browser, 'bob')
+  const wikis = bob.getByRole('list', { name: 'Wikis' })
+  await expect(async () => {
+    await bob.reload()
+    await expect(wikis.getByText(name, { exact: true })).toBeVisible({
+      timeout: 1000
+    })
+  }).toPass()
+  await wikis.getByText(name, { exact: true }).click()
+  await publishText(bob, 'Sprint goals')
+
+  // Alice, framed by TwakeSpace: the frame tells it the wiki's unread as its
+  // badge, the personal wiki left out since it has none.
+  const host = await twakeSpace(wikiId, TRUSTED_PORT)
+  try {
+    await page.goto(host.url)
+    await expect
+      .poll(() => lastBadges(page), { timeout: 15_000 })
+      .toContainEqual({ resourceId: wikiId, count: 1 })
+    expect(await lastBadges(page)).not.toContainEqual(
+      expect.objectContaining({ resourceId: personalId })
+    )
   } finally {
     host.close()
   }
