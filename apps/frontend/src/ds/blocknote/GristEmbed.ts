@@ -61,18 +61,18 @@ const withGrist = (words: Record<string, string>, word: string) => ({
 })
 
 /**
- * `dictionary` with the words of BlockNote's panel of files for a Grist
- * embed, which it takes from those of a file otherwise.
+ * `dictionary` with the words of BlockNote's panel of files and of its
+ * toolbar for a Grist embed, which it takes from those of a file otherwise.
  * Twake Tasks asks for the address of a link in a popover of its own, given
  * its labels as props; a Grist embed asks for its own in BlockNote's panel,
- * as an image does, and that panel takes its words from BlockNote's
- * dictionary.
+ * as an image does, and BlockNote's panel and toolbar take their words from
+ * its dictionary.
  */
 export function withGristWords(
   dictionary: Dictionary,
   labels: GristLabels
 ): Dictionary {
-  const panel = dictionary.file_panel
+  const { file_panel: panel, formatting_toolbar: toolbar } = dictionary
   return {
     ...dictionary,
     file_panel: {
@@ -80,6 +80,17 @@ export function withGristWords(
       embed: {
         ...panel.embed,
         embed_button: withGrist(panel.embed.embed_button, labels.embed)
+      }
+    },
+    formatting_toolbar: {
+      ...toolbar,
+      file_replace: {
+        ...toolbar.file_replace,
+        tooltip: withGrist(toolbar.file_replace.tooltip, labels.replace)
+      },
+      file_delete: {
+        ...toolbar.file_delete,
+        tooltip: withGrist(toolbar.file_delete.tooltip, labels.remove)
       }
     }
   }

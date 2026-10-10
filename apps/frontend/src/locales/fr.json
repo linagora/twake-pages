@@ -247,7 +247,9 @@
     "insert": "Document Grist",
     "insertHint": "Affiche un document Grist, ou l'une de ses pages",
     "add": "Ajouter un document Grist",
-    "embed": "Intégrer le document Grist"
+    "embed": "Intégrer le document Grist",
+    "replace": "Remplacer le document Grist",
+    "remove": "Retirer de la page"
   },
   "history": {
     "title": "Historique de la page %{title}",

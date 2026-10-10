@@ -43,7 +43,9 @@ export function useBlockOptions(): BlockOptions {
           insert: t('grist.insert'),
           insertHint: t('grist.insertHint'),
           add: t('grist.add'),
-          embed: t('grist.embed')
+          embed: t('grist.embed'),
+          replace: t('grist.replace'),
+          remove: t('grist.remove')
         }
       }
     }),

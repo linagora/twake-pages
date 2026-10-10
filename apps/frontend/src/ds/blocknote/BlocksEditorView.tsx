@@ -13,6 +13,7 @@ import { en, fr } from '@blocknote/core/locales'
 // Ariakit one, the docs offer without recommending it.
 import { BlockNoteView } from '@blocknote/mantine'
 import {
+  FormattingToolbarController,
   getDefaultReactSlashMenuItems,
   SuggestionMenuController,
   useCreateBlockNote,
@@ -28,6 +29,7 @@ import {
   pastesWithoutKeptBlocks
 } from '@/ds/blocknote/KeptBlock'
 import { pagesSchema, type PagesEditor } from '@/ds/blocknote/pagesSchema'
+import { PagesToolbar } from '@/ds/blocknote/PagesToolbar'
 import {
   EDITOR_BLOCKS,
   fromEditor,
@@ -116,11 +118,13 @@ export function BlocksEditorView({
       <BlockNoteView
         editor={editor}
         theme={dark ? 'dark' : 'light'}
+        formattingToolbar={false}
         slashMenu={false}
         onChange={() => {
           onChange(fromEditor(editor.document))
         }}
       >
+        <FormattingToolbarController formattingToolbar={PagesToolbar} />
         <SuggestionMenuController
           triggerCharacter="/"
           shouldOpen={outOfTables}

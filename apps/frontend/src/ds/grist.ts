@@ -16,6 +16,10 @@ export interface GristLabels {
   add: string
   /** The button that gives a Grist embed the address written. */
   embed: string
+  /** The button of the editor that asks for another address. */
+  replace: string
+  /** The button of the editor that removes a Grist embed from the page. */
+  remove: string
 }
 
 /** The origins of Grist the pages frame documents from, and what one says. */
