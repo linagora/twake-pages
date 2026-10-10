@@ -12,13 +12,22 @@ export async function aliceWiki(page: Page, name = 'Engineering') {
 }
 
 /**
+ * The new page dialog of the wiki open on `page`, opened from its New page
+ * button, with `title` written in.
+ */
+export async function newPageDialog(page: Page, title: string) {
+  await page.getByRole('button', { name: 'New page' }).click()
+  const dialog = page.getByRole('dialog', { name: 'New page' })
+  await dialog.getByRole('textbox', { name: 'Title' }).fill(title)
+  return dialog
+}
+
+/**
  * A new page at the top of the tree of the wiki open on `page`, from the
  * template named, open once created.
  */
 export async function newPage(page: Page, title: string, template?: string) {
-  await page.getByRole('button', { name: 'New page' }).click()
-  const dialog = page.getByRole('dialog', { name: 'New page' })
-  await dialog.getByRole('textbox', { name: 'Title' }).fill(title)
+  const dialog = await newPageDialog(page, title)
   if (template !== undefined) {
     await dialog
       .getByRole('combobox', { name: 'Template' })
