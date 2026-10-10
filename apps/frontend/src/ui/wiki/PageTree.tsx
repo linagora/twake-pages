@@ -9,7 +9,7 @@ import type { TreePage } from '@/domain/page'
 import { ancestorsOf, buildTree } from '@/domain/tree'
 import { useI18n } from '@/ui/i18n/useI18n'
 import { NewPageDialog } from '@/ui/page/NewPageDialog'
-import { MoveStatus, useMoveTo } from '@/ui/page/useMoveTo'
+import { moveAnnouncement, MoveStatus, useMoveTo } from '@/ui/page/useMoveTo'
 import { useTree, useWiki } from '@/ui/wiki/queries'
 
 export function PageTree({ wikiId }: { wikiId: string }): ReactElement {
@@ -87,6 +87,17 @@ export function PageTree({ wikiId }: { wikiId: string }): ReactElement {
                 }
               : undefined
           }
+          dragWords={{
+            picked: page => t('drag.picked', { title: page.title }),
+            over: (page, to) =>
+              to
+                ? moveAnnouncement(t, page.title, to, {
+                    under: 'drag.under',
+                    toTop: 'drag.toTop'
+                  })
+                : t('drag.nowhere', { title: page.title }),
+            canceled: page => t('drag.canceled', { title: page.title })
+          }}
         />
       )}
       {failure !== null && (

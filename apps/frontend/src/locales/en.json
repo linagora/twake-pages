@@ -107,6 +107,13 @@
     "empty": "No pages yet",
     "loadFailed": "The pages could not be loaded."
   },
+  "drag": {
+    "picked": "Picked up %{title}.",
+    "under": "%{title} would go under %{parent}, position %{position} of %{count}.",
+    "toTop": "%{title} would go to the top of the tree, position %{position} of %{count}.",
+    "nowhere": "%{title} would stay where it is.",
+    "canceled": "Moving %{title} was canceled."
+  },
   "page": {
     "path": "Path to this page",
     "notFound": "This page doesn't exist, or you can't open it.",

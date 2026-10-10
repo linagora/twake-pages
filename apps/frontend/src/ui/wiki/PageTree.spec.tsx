@@ -1,11 +1,11 @@
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError } from '@/application/pages'
 import type { Role } from '@/domain/wiki'
 import { findEmptyState } from '@/testing/emptyState'
 import { engineering } from '@/testing/engineering'
-import { fakePagesApi } from '@/testing/fakePagesApi'
+import { fakePagesApi, type FakePagesApi } from '@/testing/fakePagesApi'
 import { renderRoute, WIKI_BASES } from '@/testing/renderWithProviders'
 
 /**
@@ -87,7 +87,8 @@ async function engineeringWithoutLiveUpdates() {
   return opened
 }
 
-// Lets a move the keys would have started reach the API.
+// Waits a turn of the event loop, by which a move started, by the keys or a
+// drop, would have reached the API.
 const settle = () =>
   act(
     () =>
@@ -520,5 +521,239 @@ describe('a page moved from the keyboard, in the tree', () => {
     await settle()
 
     expect(pagesApi.movePage).not.toHaveBeenCalled()
+  })
+})
+
+describe('a page dragged in the tree', () => {
+  // jsdom lays nothing out: each row of the tree comes right under the one
+  // before it, 32 pixels high and 240 wide, from the top of the page.
+  const ROW = 32
+  const rows = () =>
+    [...document.querySelectorAll('[role="tree"] [role="treeitem"]')].map(
+      each => each.parentElement
+    )
+
+  beforeEach(() => {
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(
+      function (this: Element) {
+        const all = rows()
+        if (this.matches('[role="tree"]')) {
+          return new DOMRect(0, 0, 240, all.length * ROW)
+        }
+        const index = all.findIndex(row => row === this)
+        return index < 0 ? new DOMRect() : new DOMRect(0, index * ROW, 240, ROW)
+      }
+    )
+  })
+
+  const topOf = (title: string) =>
+    rows().indexOf(item(title).parentElement) * ROW
+
+  // Presses the mouse on the row of `title`, then carries it past the six
+  // pixels that pick the page up.
+  const pickUp = (title: string) => {
+    const y = topOf(title) + 8
+    fireEvent.mouseDown(item(title), { button: 0, clientX: 20, clientY: y })
+    fireEvent.mouseMove(document, { clientX: 20, clientY: y + 10 })
+  }
+
+  const carry = (y: number) => {
+    fireEvent.mouseMove(document, { clientX: 20, clientY: y })
+  }
+
+  const letGo = () => {
+    fireEvent.mouseUp(document)
+  }
+
+  // The API's answer to the next move, held back until called.
+  const answerToNextMove = (pagesApi: FakePagesApi) => {
+    const movePage = pagesApi.movePage.getMockImplementation()
+    if (!movePage) throw new Error('The fake moves no page')
+    let answer = (): void => undefined
+    pagesApi.movePage.mockImplementationOnce(async (pageId, move) => {
+      await new Promise<void>(resolve => {
+        answer = resolve
+      })
+      return movePage(pageId, move)
+    })
+    return () => {
+      act(() => {
+        answer()
+      })
+    }
+  }
+
+  it('goes last to the top of the tree, dropped below the last row', async () => {
+    const { tree } = await renderTree()
+
+    pickUp('Onboarding')
+    expect(await saying('Picked up Onboarding.')).toBeInTheDocument()
+    carry(2 * ROW + ROW / 2)
+    expect(
+      await saying(
+        'Onboarding would go to the top of the tree, position 2 of 2.'
+      )
+    ).toBeInTheDocument()
+    letGo()
+
+    await waitFor(() => {
+      expect(titlesIn(tree)).toEqual(['Engineering', 'Onboarding'])
+    })
+    expect(
+      await saying('Onboarding moved to the top of the tree, position 2 of 2.')
+    ).toHaveAttribute('role', 'status')
+  })
+
+  it('goes last under the page dropped on the middle of its row, which expands', async () => {
+    await renderTree()
+
+    pickUp('Onboarding')
+    carry(ROW + ROW / 2)
+    expect(
+      await saying('Onboarding would go under Engineering, position 2 of 2.')
+    ).toBeInTheDocument()
+    letGo()
+
+    await waitFor(() => {
+      expect(
+        titlesIn(screen.getByRole('group', { name: 'Engineering' }))
+      ).toEqual(['Releases', 'Onboarding'])
+    })
+    expect(item('Onboarding')).toHaveAttribute('aria-level', '2')
+    expect(
+      await saying('Onboarding moved under Engineering, position 2 of 2.')
+    ).toHaveAttribute('role', 'status')
+  })
+
+  it('shows where it was dropped until the tree has it there', async () => {
+    const { pagesApi, tree } = await renderTree()
+    const answer = answerToNextMove(pagesApi)
+
+    pickUp('Onboarding')
+    carry(2 * ROW + ROW / 2)
+    letGo()
+
+    expect(titlesIn(tree)).toEqual(['Engineering', 'Onboarding'])
+    expect(tree).toHaveAttribute('aria-busy', 'true')
+    await waitFor(() => {
+      expect(pagesApi.movePage).toHaveBeenCalledTimes(1)
+    })
+    answer()
+
+    await waitFor(() => {
+      expect(tree).toHaveAttribute('aria-busy', 'false')
+    })
+    expect(titlesIn(tree)).toEqual(['Engineering', 'Onboarding'])
+  })
+
+  it('takes one move at a time, though the next drag focuses another row', async () => {
+    const { pagesApi, tree } = await renderTree()
+    const answer = answerToNextMove(pagesApi)
+    pickUp('Onboarding')
+    carry(2 * ROW + ROW / 2)
+    letGo()
+    await waitFor(() => {
+      expect(pagesApi.movePage).toHaveBeenCalledTimes(1)
+    })
+
+    // As the press does in a browser, before the drag starts.
+    focus('Engineering')
+    pickUp('Engineering')
+    // The middle of the row of Onboarding, were it back where it was.
+    carry(ROW / 2)
+    letGo()
+
+    expect(await saying('Moving Engineering was canceled.')).toBeInTheDocument()
+    await settle()
+    expect(pagesApi.movePage).toHaveBeenCalledTimes(1)
+    expect(titlesIn(tree)).toEqual(['Engineering', 'Onboarding'])
+    answer()
+
+    await waitFor(() => {
+      expect(tree).toHaveAttribute('aria-busy', 'false')
+    })
+    expect(titlesIn(tree)).toEqual(['Engineering', 'Onboarding'])
+  })
+
+  it('shows a page whose drop was refused where it was, saying why', async () => {
+    const { bob, releases } = await engineeringWithoutLiveUpdates()
+    await bob.deletePage(releases.id)
+
+    // Last at the top of the tree, after Releases.
+    pickUp('Laptop setup')
+    carry(4 * ROW + ROW / 2)
+    letGo()
+
+    expect(await treeAlert()).toHaveTextContent(
+      'The tree changed meanwhile: the page stays where it was.'
+    )
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('treeitem', { name: 'Releases' })
+      ).not.toBeInTheDocument()
+    })
+    expect(item('Laptop setup')).toHaveAttribute('aria-level', '2')
+  })
+
+  it('moves nothing dropped where it is', async () => {
+    const { pagesApi } = await renderTree()
+
+    pickUp('Onboarding')
+    // The top quarter of the next row: right after Onboarding.
+    carry(ROW + 4)
+    expect(
+      await saying('Onboarding would stay where it is.')
+    ).toBeInTheDocument()
+    letGo()
+
+    expect(await saying('Moving Onboarding was canceled.')).toBeInTheDocument()
+    await settle()
+    expect(pagesApi.movePage).not.toHaveBeenCalled()
+  })
+
+  it('moves nothing let go with Escape', async () => {
+    const { pagesApi, tree } = await renderTree()
+
+    pickUp('Onboarding')
+    carry(2 * ROW + ROW / 2)
+    fireEvent.keyDown(document, { code: 'Escape' })
+
+    expect(await saying('Moving Onboarding was canceled.')).toBeInTheDocument()
+    letGo()
+    await settle()
+    expect(pagesApi.movePage).not.toHaveBeenCalled()
+    expect(titlesIn(tree)).toEqual(['Onboarding', 'Engineering'])
+  })
+
+  it('still opens the page clicked on its row', async () => {
+    const { router, wiki, engineering } = await renderTree()
+    const y = topOf('Engineering') + 8
+
+    fireEvent.mouseDown(item('Engineering'), {
+      button: 0,
+      clientX: 20,
+      clientY: y
+    })
+    // Short of the six pixels that pick the page up.
+    fireEvent.mouseMove(document, { clientX: 23, clientY: y + 3 })
+    fireEvent.mouseUp(item('Engineering'))
+    fireEvent.click(item('Engineering'))
+
+    expect(router.state.location.pathname).toBe(
+      `/wikis/${wiki.id}/pages/${engineering.id}`
+    )
+  })
+
+  it('stays put for a viewer of the wiki', async () => {
+    const { pagesApi, tree } = await renderTree('viewer')
+
+    pickUp('Onboarding')
+    expect(screen.queryByText('Picked up Onboarding.')).not.toBeInTheDocument()
+    carry(2 * ROW + ROW / 2)
+    letGo()
+    await settle()
+
+    expect(pagesApi.movePage).not.toHaveBeenCalled()
+    expect(titlesIn(tree)).toEqual(['Onboarding', 'Engineering'])
   })
 })
