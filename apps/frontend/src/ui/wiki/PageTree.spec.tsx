@@ -87,13 +87,13 @@ async function engineeringWithoutLiveUpdates() {
   return opened
 }
 
-// Waits a turn of the event loop, by which a move started, by the keys or a
-// drop, would have reached the API.
-const settle = () =>
+// Waits `ms`, else a turn of the event loop, by which a move started, by the
+// keys or a drop, would have reached the API.
+const settle = (ms = 0) =>
   act(
     () =>
       new Promise<void>(resolve => {
-        setTimeout(resolve, 0)
+        setTimeout(resolve, ms)
       })
   )
 
@@ -623,6 +623,46 @@ describe('a page dragged in the tree', () => {
     expect(
       await saying('Onboarding moved under Engineering, position 2 of 2.')
     ).toHaveAttribute('role', 'status')
+  })
+
+  it('expands the page it is held over, then goes last under it', async () => {
+    await renderTree()
+
+    pickUp('Onboarding')
+    carry(ROW + ROW / 2)
+    expect(
+      screen.queryByRole('group', { name: 'Engineering' })
+    ).not.toBeInTheDocument()
+
+    // About half a second later.
+    const group = await screen.findByRole(
+      'group',
+      { name: 'Engineering' },
+      { timeout: 2000 }
+    )
+    expect(titlesIn(group)).toEqual(['Releases'])
+    letGo()
+
+    await waitFor(() => {
+      expect(
+        titlesIn(screen.getByRole('group', { name: 'Engineering' }))
+      ).toEqual(['Releases', 'Onboarding'])
+    })
+  })
+
+  it('leaves collapsed a page it only passes over', async () => {
+    await renderTree()
+
+    pickUp('Onboarding')
+    carry(ROW + ROW / 2)
+    carry(2 * ROW + ROW / 2)
+    // Past the half second that expands a page held over.
+    await settle(700)
+
+    expect(
+      screen.queryByRole('group', { name: 'Engineering' })
+    ).not.toBeInTheDocument()
+    fireEvent.keyDown(document, { code: 'Escape' })
   })
 
   it('shows where it was dropped until the tree has it there', async () => {

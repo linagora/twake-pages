@@ -14,6 +14,8 @@ import { Bottom, Icon, Plus, Right } from '@linagora/twake-icons'
 import { Box } from '@linagora/twake-mui'
 import {
   useCallback,
+  useEffect,
+  useEffectEvent,
   useId,
   useLayoutEffect,
   useRef,
@@ -100,6 +102,10 @@ const LIST = { m: 0, p: 0, listStyle: 'none' } as const
 
 const ARROWS = ['ArrowUp', 'ArrowDown', 'ArrowRight', 'ArrowLeft']
 
+// Long enough for a dragged entry to pass over a collapsed one without
+// expanding it.
+const EXPAND_AFTER_MS = 500
+
 const itemIdOf = (base: string, id: string) => `${base}item-${id}`
 
 // Twake Tasks' sensors: the left button after 6 pixels, one finger after a
@@ -131,12 +137,13 @@ class RowMouseSensor extends MouseSensor {
  * place, dimmed with the entries under it, while a copy follows the pointer.
  * The row under the pointer places the entry by the height there: before it
  * from its top quarter, after it from its bottom quarter, last under it from
- * between; below the last row, last at the top of the tree. A line shows the
- * place at the level the entry would land at, and the entry it would go under
- * is highlighted. Unlike the cards of Twake Tasks, which make room as one
- * passes, no other row moves until the drop: a row also takes an entry under
- * it, and the line shows at which level. The drop moves the entry as a key
- * does, and `dragWords` say the drag to screen readers.
+ * between, which expands a collapsed entry once held there half a second;
+ * below the last row, last at the top of the tree. A line shows the place at
+ * the level the entry would land at, and the entry it would go under is
+ * highlighted. Unlike the cards of Twake Tasks, which make room as one passes,
+ * no other row moves until the drop: a row also takes an entry under it, and
+ * the line shows at which level. The drop moves the entry as a key does, and
+ * `dragWords` say the drag to screen readers.
  *
  * Unlike Twake Tasks, whose cards move from the keyboard with dnd-kit's
  * keyboard sensor (Space or Enter picks a card up, the arrows carry it, Space
@@ -212,6 +219,24 @@ export function Tree<Entry extends TreeEntry<Entry>>({
       ? undefined
       : placeForDrop(entries, expanded, id, over)
   const landing = drag ? landingFor(drag.id, drag.over) : undefined
+  const expanding =
+    landing?.parent &&
+    landing.parent.children.length > 0 &&
+    !expanded.has(landing.parent.id)
+      ? landing.parent.id
+      : null
+  const expand = useEffectEvent((id: string) => {
+    onExpand(id, true)
+  })
+  useEffect(() => {
+    if (expanding === null) return
+    const timer = setTimeout(() => {
+      expand(expanding)
+    }, EXPAND_AFTER_MS)
+    return () => {
+      clearTimeout(timer)
+    }
+  }, [expanding])
   const dragged = drag && shown.find(({ entry }) => entry.id === drag.id)
   const entryOf = (id: UniqueIdentifier) =>
     entryAt(whereIs(entries, String(id)))
