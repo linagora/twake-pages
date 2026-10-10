@@ -138,7 +138,13 @@ export function VersionScreen(): ReactElement {
           {t('version.restoreFailed')}
         </Typography>
       )}
-      <PageContent page={{ kind: shown.kind, content: shownVersion.content }} />
+      <PageContent
+        page={{
+          kind: shown.kind,
+          content: shownVersion.content,
+          gristUrl: shownVersion.gristUrl
+        }}
+      />
     </main>
   )
 }

@@ -106,6 +106,44 @@ describe('a Grist embed of a page', () => {
   })
 })
 
+describe('a database page', () => {
+  /** Opens Budget, a database page at the Grist address `gristUrl`. */
+  function openBudgetAt(gristUrl: string) {
+    const pagesApi = fakePagesApi()
+    const wiki = pagesApi.withWiki()
+    const budget = pagesApi.withPage(wiki.id, {
+      title: 'Budget',
+      kind: 'database',
+      gristUrl
+    })
+    renderRoute(`/wikis/${wiki.id}/pages/${budget.id}`, { pagesApi })
+  }
+
+  it('frames its Grist document, with a link that opens it in Grist', async () => {
+    openBudgetAt(BUDGET)
+
+    expect(await screen.findByTitle('Grist document')).toHaveAttribute(
+      'src',
+      BUDGET
+    )
+    const open = screen.getByRole('link', { name: 'Open in Grist' })
+    expect(open).toHaveAttribute('href', BUDGET)
+    expect(open).toHaveAttribute('target', '_blank')
+  })
+
+  it('frames no document off the Grist origins, and says so', async () => {
+    // Taken on an origin the deployment has dropped since.
+    openBudgetAt('https://docs.example.com/o/docs/4kq2')
+
+    expect(
+      await screen.findByText(
+        'This Grist document is not shown, as Twake Pages shows Grist documents from https://grist.example.com only.'
+      )
+    ).toBeVisible()
+    expect(screen.queryByTitle('Grist document')).not.toBeInTheDocument()
+  })
+})
+
 describe('a page', () => {
   it('shows its title', async () => {
     const { pagesApi, wiki, checklist } = handbook()

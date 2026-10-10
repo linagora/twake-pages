@@ -246,6 +246,28 @@ describe('a version of a page', () => {
     expect(screen.queryByText('This page is empty.')).not.toBeInTheDocument()
   })
 
+  it('frames the Grist document a database page was published at', async () => {
+    const pagesApi = fakePagesApi()
+    const wiki = pagesApi.withWiki()
+    const first = `${GRIST_ORIGIN}/o/docs/4kq2/Budget`
+    const budget = pagesApi.withPage(wiki.id, {
+      title: 'Budget',
+      kind: 'database',
+      gristUrl: first
+    })
+    await pagesApi.publish(budget.id, {
+      baseVersion: 1,
+      title: 'Budget',
+      gristUrl: `${GRIST_ORIGIN}/o/docs/9mz3/Budget`
+    })
+    renderRoute(`/wikis/${wiki.id}/pages/${budget.id}/history/1`, { pagesApi })
+
+    expect(await screen.findByTitle('Grist document')).toHaveAttribute(
+      'src',
+      first
+    )
+  })
+
   it.each(WIKI_BASES)(
     'leads from %s/<wiki>/pages/<page>/history/<number> back to the history',
     async base => {
