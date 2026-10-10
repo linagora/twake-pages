@@ -42,3 +42,35 @@ test('moves a page to the top of the tree from its menu, then back under its par
     page.getByText('Laptop setup moved under Onboarding, position 1 of 1.')
   ).toHaveAttribute('role', 'status')
 })
+
+test('drags a page from under its parent to the top of the tree, where it stays after a reload', async ({
+  page
+}) => {
+  await engineering(page)
+  const tree = page.getByRole('tree', { name: 'Pages' })
+  const laptopSetup = tree.getByRole('treeitem', { name: 'Laptop setup' })
+  await expect(laptopSetup).toHaveAttribute('aria-level', '2')
+
+  const from = await laptopSetup.boundingBox()
+  const to = await tree.boundingBox()
+  if (!from || !to) throw new Error('The tree is not laid out')
+  // Past the 6 pixels that pick the page up, then below the last row: the
+  // last place at the top of the tree.
+  await page.mouse.move(from.x + 40, from.y + 20)
+  await page.mouse.down()
+  await page.mouse.move(from.x + 60, from.y + 30, { steps: 4 })
+  await page.mouse.move(to.x + to.width / 2, to.y + to.height + 10, {
+    steps: 15
+  })
+  await page.mouse.up()
+
+  await expect(laptopSetup).toHaveAttribute('aria-level', '1')
+  await expect(
+    page.getByText(
+      'Laptop setup moved to the top of the tree, position 2 of 2.'
+    )
+  ).toHaveAttribute('role', 'status')
+
+  await page.reload()
+  await expect(laptopSetup).toHaveAttribute('aria-level', '1')
+})
