@@ -440,6 +440,20 @@ export function markRead(
   return app.as(user).post('/notifications/read', selection)
 }
 
+/** A wiki and how many unread notifications are about its pages. */
+export interface Badge {
+  wikiId: string
+  count: number
+}
+
+/** The person's unread notifications about each wiki, as `GET /badges` counts. */
+export async function badgesOf(
+  app: Awaited<ReturnType<typeof startApp>>,
+  user: TestUser
+) {
+  return (await app.as(user).get('/badges')).json<{ badges: Badge[] }>().badges
+}
+
 /** The job planned to purge the deleted wiki. */
 export async function purgeJobOf(db: Db, wikiId: string) {
   const job = await jobOf(db, `${PURGE_WIKI_JOB}:${wikiId}`)

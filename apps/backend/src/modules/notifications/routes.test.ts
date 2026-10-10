@@ -8,6 +8,8 @@ import {
   aUser,
   aWikiOf,
   backIn,
+  badgesOf,
+  deletePage,
   editComment,
   follow,
   joinWiki,
@@ -20,6 +22,7 @@ import {
   startApp,
   WAYS_TO_LEAVE,
   waysOutOfAWiki,
+  wikisOf,
   type Notifications,
   type TestUser
 } from '../../testing/app.ts'
@@ -474,5 +477,63 @@ describe('POST /notifications/read', () => {
 
     expect(response.statusCode).toBe(204)
     expect(await notificationsOf(api, bob)).toEqual(before)
+  })
+})
+
+describe('GET /badges', () => {
+  it('counts the unread of each wiki, only above 0', async () => {
+    const alice = aUser()
+    const bob = aColleagueOf(alice, 'bob')
+    const handbook = await aWikiOf(api, alice, 'Handbook')
+    const guide = await aWikiOf(api, alice, 'Guide')
+    await joinWiki(db, alice, handbook.id, bob, 'editor')
+    await joinWiki(db, alice, guide.id, bob, 'editor')
+    await notify(db, alice, handbook, bob)
+    await notify(db, alice, handbook, bob)
+    await notify(db, alice, guide, bob)
+
+    expect(await badgesOf(api, bob)).toEqual([
+      { wikiId: handbook.id, count: 2 },
+      { wikiId: guide.id, count: 1 }
+    ])
+
+    await markRead(api, bob, { wikiId: guide.id })
+
+    // A wiki with nothing unread shows no badge.
+    expect(await badgesOf(api, bob)).toEqual([
+      { wikiId: handbook.id, count: 2 }
+    ])
+  })
+
+  it('agrees with the list’s unread and the wikis’ own, a trashed page and a left wiki included', async () => {
+    const alice = aUser()
+    const bob = aColleagueOf(alice, 'bob')
+    const wiki = await aWikiOf(api, alice)
+    await joinWiki(db, alice, wiki.id, bob, 'editor')
+    const page = await aPage(api, alice, wiki.id, { title: 'Onboarding' })
+    await follow(api, bob, page)
+    await publish(api, alice, page, {
+      baseVersion: 1,
+      title: 'Onboarding',
+      content: []
+    })
+    // A page in the trash stays in the list, the counts and the badges.
+    await deletePage(api, alice, page)
+
+    const { notifications, unread } = await notificationsOf(api, bob)
+    expect(notifications).toMatchObject([{ version: 2, readAt: null }])
+    expect(unread).toBe(1)
+    expect(await badgesOf(api, bob)).toEqual([{ wikiId: wiki.id, count: 1 }])
+    expect(
+      (await wikisOf(api, bob)).find(listed => listed.id === wiki.id)?.unread
+    ).toBe(1)
+
+    // A wiki the person leaves is out of all three, their notification kept.
+    await api.as(alice).delete(`/wikis/${wiki.id}/members/${bob.userId}`)
+    expect(await notificationsOf(api, bob)).toEqual(nothing)
+    expect(await badgesOf(api, bob)).toEqual([])
+    expect(
+      (await wikisOf(api, bob)).find(listed => listed.id === wiki.id)
+    ).toBeUndefined()
   })
 })

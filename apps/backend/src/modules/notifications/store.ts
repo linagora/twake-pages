@@ -213,6 +213,23 @@ export function createNotificationStore(db: Db) {
           .set({ readAt: sql`coalesce(${notifications.readAt}, now())` })
           .where(inArray(notifications.id, rows))
       })
+    },
+
+    /**
+     * The person's unread notifications about each wiki they belong to, one
+     * badge each, only counts above 0, as the contract answers. TwakeSpace's
+     * own limits on a snapshot are kept where the badges are sent, as Twake
+     * Tasks caps them in its frontend.
+     */
+    badges(identity: Identity) {
+      return inTenant(db, identity, async tx => {
+        const seen = seenNotifications(tx, identity.userId)
+        return tx
+          .select({ wikiId: seen.wikiId, count: count() })
+          .from(seen)
+          .where(isNull(seen.readAt))
+          .groupBy(seen.wikiId)
+      })
     }
   }
 }

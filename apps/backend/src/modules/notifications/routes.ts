@@ -53,4 +53,14 @@ export function registerNotifications(
       return reply.code(204).send()
     }
   )
+
+  app.get(
+    '/badges',
+    { preHandler: deps.requireIdentity },
+    async (request, reply) => {
+      const identity = request.identity
+      if (!identity) return reply.code(401).send()
+      return { badges: await store.badges(identity) }
+    }
+  )
 }
