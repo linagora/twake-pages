@@ -1812,6 +1812,63 @@ describe('fakePagesApi', () => {
       await expect(dan.listNotifications()).resolves.toEqual(nothing)
     })
 
+    it('tells the members an edit mentions anew, never those it mentioned before', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki({
+        members: { 'bob@example.com': 'viewer', 'carol@example.com': 'viewer' }
+      })
+      const page = api.withPage(wiki.id)
+      const bob = api.signedInAs('bob@example.com')
+      const carol = api.signedInAs('carol@example.com')
+      const comment = await api.addComment(page.id, {
+        body: 'Ask @bob@example.com'
+      })
+
+      await api.editComment(
+        comment.id,
+        'Ask @Bob@example.com, @carol@example.com'
+      )
+
+      await expect(carol.listNotifications()).resolves.toMatchObject({
+        notifications: [
+          { reason: 'mentioned', commentId: comment.id, readAt: null }
+        ]
+      })
+      await expect(bob.listNotifications()).resolves.toMatchObject({
+        notifications: [{ reason: 'mentioned', commentId: comment.id }],
+        unread: 1
+      })
+      await expect(carol.listNotifications()).resolves.toMatchObject({
+        unread: 1
+      })
+    })
+
+    it('refuses a read selection that is no exclusive union, or too many ids', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki()
+      const page = api.withPage(wiki.id)
+      const invalid = new ApiError(400, 'invalid_request')
+
+      await expect(api.markRead({ ids: [] })).rejects.toEqual(invalid)
+      await expect(
+        api.markRead({ ids: Array.from({ length: 101 }, (_, i) => String(i)) })
+      ).rejects.toEqual(invalid)
+      await expect(api.markRead({ ids: [page.id], all: true })).rejects.toEqual(
+        invalid
+      )
+      await expect(api.markRead({} as never)).rejects.toEqual(invalid)
+      await expect(api.markRead({ ids: ['not-an-id'] })).rejects.toEqual(
+        invalid
+      )
+      await expect(api.markRead({ all: false } as never)).rejects.toEqual(
+        invalid
+      )
+      await expect(api.markRead({ wikiId: 'not-an-id' })).rejects.toEqual(
+        invalid
+      )
+      await expect(api.listNotifications()).resolves.toEqual(nothing)
+    })
+
     it('stops telling people who are no longer members', async () => {
       const api = fakePagesApi()
       const wiki = api.withWiki({ members: { 'bob@example.com': 'editor' } })

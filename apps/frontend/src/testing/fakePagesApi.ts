@@ -6,6 +6,7 @@ import {
   EditConflict,
   type Move,
   type PagesApi,
+  type ReadSelection,
   type Refusal,
   type UserSettings
 } from '@/application/pages'
@@ -410,6 +411,43 @@ function checkComment(value: string) {
   const body = checkText(value, 10_000)
   if (!storable(body)) throw refuse('invalid_request')
   return body
+}
+
+// At most 100 ids, as the list shows 100 at most.
+const MAX_READ_IDS = 100
+
+// A uuid as the route takes one, versions 1 to 8 or the all-zero and
+// all-ones ids.
+const UUID =
+  /^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$/
+
+/**
+ * The read's exclusive selection as the route takes it: `{ ids }` of 1 to
+ * 100 uuids, `{ all: true }` or `{ wikiId }` of a uuid, a second key beside
+ * the first or none refused as `invalid_request`.
+ */
+function checkReadSelection(selection: ReadSelection): ReadSelection {
+  // A caller may send a body off the type: read it as the route does.
+  const body: Record<string, unknown> = selection
+  if (Object.keys(body).length !== 1) throw refuse('invalid_request')
+  const { ids, all, wikiId } = body
+  if (ids !== undefined) {
+    if (
+      !Array.isArray(ids) ||
+      ids.length < 1 ||
+      ids.length > MAX_READ_IDS ||
+      !ids.every(id => typeof id === 'string' && UUID.test(id))
+    ) {
+      throw refuse('invalid_request')
+    }
+  }
+  if (all !== undefined && all !== true) throw refuse('invalid_request')
+  if (wikiId !== undefined) {
+    if (typeof wikiId !== 'string' || !UUID.test(wikiId)) {
+      throw refuse('invalid_request')
+    }
+  }
+  return selection
 }
 
 // A block's address is its `url` prop, empty until the block is given one.
@@ -1418,9 +1456,20 @@ function signedIn(world: World, person: Person): FakePagesApi {
         const { comment, page, wiki } = commentAccess(commentId)
         if (comment.author.id !== person.id) throw refuse('forbidden')
         if (page.deletion) throw refuse('in_trash')
-        for (const member of mentionedIn(wiki, edited, comment.body)) {
-          page.followers.add(member.id)
-        }
+        const mentioned = mentionedIn(wiki, edited, comment.body)
+        for (const member of mentioned) page.followers.add(member.id)
+        // An edit is no new comment: only the members it mentions anew are
+        // told, as the backend tells them.
+        notify(
+          page,
+          wiki,
+          mentioned.map(member => member.id),
+          {
+            reason: 'mentioned',
+            version: null,
+            commentId: comment.id
+          }
+        )
         comment.body = edited
         comment.editedAt = now()
         bump(wiki)
@@ -1456,6 +1505,7 @@ function signedIn(world: World, person: Person): FakePagesApi {
     ),
     markRead: vi.fn<PagesApi['markRead']>(selection =>
       answer(() => {
+        checkReadSelection(selection)
         const readAt = now()
         for (const { stored, wiki } of myNotifications()) {
           const selected =
