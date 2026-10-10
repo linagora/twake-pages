@@ -20,10 +20,11 @@ import {
 import { useId, useState, type ReactElement } from 'react'
 import { useNavigate } from 'react-router'
 
-import { ApiError } from '@/application/pages'
+import type { Refusal } from '@/application/pages'
 import { InviteRow, PersonRow } from '@/ds/PeopleList'
 import { displayName } from '@/domain/person'
 import { ROLES, type Role, type Wiki } from '@/domain/wiki'
+import { failureKey } from '@/ui/failureKey'
 import { useI18n, type TranslationKey } from '@/ui/i18n/useI18n'
 import { PersonAvatar } from '@/ui/people/PersonAvatar'
 import {
@@ -36,7 +37,7 @@ import { useWikiName } from '@/ui/wiki/useWikiName'
 
 // Unlike Twake Tasks, which says only that the change failed: these two the
 // admin meets in plain use, and can do something about.
-const REFUSALS: Partial<Record<string, TranslationKey>> = {
+const REFUSALS: Partial<Record<Refusal, TranslationKey>> = {
   last_admin: 'sharing.lastAdmin',
   not_same_organization: 'sharing.notSameOrganization'
 }
@@ -44,12 +45,9 @@ const REFUSALS: Partial<Record<string, TranslationKey>> = {
 /** Why the last change of the members was not made. */
 function SharingFailure({ error }: { error: Error }): ReactElement {
   const { t } = useI18n()
-  const refused = error instanceof ApiError ? error.code : null
   return (
     <Typography role="alert" color="error" className="u-mt-1">
-      {t(
-        (refused === null ? undefined : REFUSALS[refused]) ?? 'sharing.failed'
-      )}
+      {t(failureKey(error, REFUSALS, 'sharing.failed'))}
     </Typography>
   )
 }
