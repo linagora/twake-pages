@@ -296,6 +296,16 @@ function shownOf<Entry extends TreeEntry<Entry>>(
   ])
 }
 
+const indentOf = (level: number) => 1 + (level - 1) * 2
+
+const ROW_LABEL = {
+  flex: 1,
+  minWidth: 0,
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap'
+} as const
+
 function Row({
   level,
   current,
@@ -310,22 +320,18 @@ function Row({
       sx={theme => ({
         display: 'flex',
         alignItems: 'center',
-        pl: 1 + (level - 1) * 2,
+        pl: indentOf(level),
         pr: 1,
         mx: 1,
         borderRadius: 1,
         bgcolor: current ? 'action.selected' : 'transparent',
         '&:hover': { bgcolor: current ? 'action.selected' : 'action.hover' },
         '& > a': {
-          flex: 1,
-          minWidth: 0,
+          ...ROW_LABEL,
           py: 0.75,
           color: 'text.primary',
           fontWeight: current ? 600 : 400,
           textDecoration: 'none',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
           borderRadius: 1,
           '&:focus-visible': {
             outline: `2px solid ${theme.vars.palette.primary.main}`
