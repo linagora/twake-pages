@@ -1,4 +1,4 @@
-import { Home, Icon, Logout } from '@linagora/twake-icons'
+import { Bell, Home, Icon, Logout } from '@linagora/twake-icons'
 import {
   Divider,
   IconButton,
@@ -25,6 +25,7 @@ import {
   AccountCard,
   AppFrame,
   BrandMark,
+  CountBadge,
   TopBar,
   TopBarSearch,
   TopBarSpacer
@@ -38,6 +39,7 @@ import { useSettings } from '@/ui/settings/useSettings'
 import { PlatformBar } from '@/ui/shell/PlatformBar'
 import { ShortcutsHelp, useShortcuts } from '@/ui/shell/Shortcuts'
 import { SidebarLink } from '@/ui/shell/SidebarLink'
+import { useNotifications } from '@/ui/wiki/queries'
 
 export function AppShell(): ReactElement {
   const [help, setHelp] = useState(false)
@@ -173,10 +175,18 @@ function AccountMenu(): ReactElement {
 
 function AppNav(): ReactElement {
   const { t } = useI18n()
+  const unread = useNotifications().data?.unread ?? 0
 
   return (
     <Nav>
       <AppNavLink to="/" end icon={Home} label={t('wikis.title')} />
+      <AppNavLink
+        to="/notifications"
+        icon={Bell}
+        label={t('notifications.title')}
+        count={unread}
+        countLabel={t('notifications.unread', { count: unread })}
+      />
     </Nav>
   )
 }
@@ -185,17 +195,23 @@ function AppNavLink({
   to,
   end = false,
   icon,
-  label
+  label,
+  count = 0,
+  countLabel
 }: {
   to: string
   end?: boolean
   icon: ElementType
   label: string
+  count?: number
+  countLabel?: string
 }): ReactElement {
   return (
     <NavItem>
-      <SidebarLink to={to} end={end}>
-        <NavIcon icon={icon} />
+      <SidebarLink to={to} end={end} label={count > 0 ? countLabel : undefined}>
+        <CountBadge count={count}>
+          <NavIcon icon={icon} />
+        </CountBadge>
         <NavText>{label}</NavText>
       </SidebarLink>
     </NavItem>

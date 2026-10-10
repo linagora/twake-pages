@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { findAppSearch } from '@/testing/appSearch'
 import { fakePagesApi } from '@/testing/fakePagesApi'
 import { fakeSession, fakeUser } from '@/testing/fakeSession'
+import { toldAboutAVersion } from '@/testing/notifications'
 import { renderRoute } from '@/testing/renderWithProviders'
 
 const createSdk = vi.hoisted(() => vi.fn(() => ({ status: 'ready' })))
@@ -150,11 +151,28 @@ describe('AppShell', () => {
     const nav = within(await screen.findByRole('navigation'))
     expect(
       nav.getAllByRole('link').map(link => link.getAttribute('href'))
-    ).toEqual(['/'])
+    ).toEqual(['/', '/notifications'])
     expect(nav.getByRole('link', { name: 'Wikis' })).toHaveAttribute(
       'aria-current',
       'page'
     )
+  })
+
+  it('shows the unread count on the notifications link, for a screen reader too', async () => {
+    const pagesApi = fakePagesApi()
+    const wiki = pagesApi.withWiki({ members: { 'bob@example.com': 'editor' } })
+    const page = pagesApi.withPage(wiki.id)
+    await toldAboutAVersion(
+      pagesApi.signedInAs('bob@example.com'),
+      page.id,
+      'New'
+    )
+    renderRoute('/', { pagesApi })
+
+    const nav = within(await screen.findByRole('navigation'))
+    expect(
+      await nav.findByRole('link', { name: 'Notifications, 1 unread' })
+    ).toHaveTextContent('1')
   })
 
   it('marks no view as current elsewhere', async () => {

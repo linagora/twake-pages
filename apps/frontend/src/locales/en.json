@@ -381,7 +381,18 @@
     "failed": "The trash could not be emptied."
   },
   "notifications": {
-    "title": "Notifications"
+    "title": "Notifications",
+    "markAllRead": "Mark all as read",
+    "unread": "Notifications, %{count} unread",
+    "unreadItem": "%{title}, unread",
+    "empty": "No notifications",
+    "emptyHint": "Follow a page, or be mentioned in a comment, to hear about its changes here.",
+    "loadFailed": "The notifications could not be loaded.",
+    "reason": {
+      "published": "%{actor} published a new version",
+      "commented": "%{actor} commented",
+      "mentioned": "%{actor} mentioned you"
+    }
   },
   "shortcuts": {
     "title": "Keyboard shortcuts",

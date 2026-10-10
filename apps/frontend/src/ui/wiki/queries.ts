@@ -11,14 +11,17 @@ import {
 import { useEffect } from 'react'
 
 import type {
+  Badge,
   Label,
   LabelledPage,
   Move,
   NewPage,
   NewVersion,
   NewWiki,
+  Notifications,
   PagesApi,
   PersonMatch,
+  ReadSelection,
   RecentPage,
   Sharing,
   Tree,
@@ -66,6 +69,13 @@ const versionKey = (wikiId: string, pageId: string, number: number | null) =>
 // reloads them: writing, editing or deleting one moves the wiki's version.
 const commentsKey = (wikiId: string, pageId: string) =>
   [...wikiKey(wikiId), 'comments', pageId] as const
+// What the person is told belongs to no wiki: it spans the wikis they belong
+// to, so it sits below no wiki's key. Neither a notification nor a read moves
+// a wiki's version, so no stream reloads these: they are read again on a poll.
+const notificationsKey = ['notifications'] as const
+const badgesKey = ['badges'] as const
+// As Twake Tasks polls its unread count.
+const POLL_MS = 60_000
 // Below the wiki, so a change of its members elsewhere reloads them too.
 const sharingKey = (wikiId: string) => [...wikiKey(wikiId), 'sharing'] as const
 // The people of an organization belong to no wiki, so they sit below no
@@ -708,5 +718,50 @@ export function useSetFollowing(
     onSuccess: (_answer, following) => {
       changeShownPage(queryClient, page, { following })
     }
+  })
+}
+
+/**
+ * The person's notifications, newest first, with the number unread. Nothing
+ * moves a wiki's version when one is written or read, so no stream reloads
+ * them: they are read again every minute, as Twake Tasks reads its unread
+ * count. Opening the list does not mark them read, where Twake Tasks marks
+ * them all as it opens: here the person chooses one, a wiki's, or all.
+ */
+export function useNotifications(): UseQueryResult<Notifications> {
+  const api = usePagesApi()
+  return useQuery({
+    queryKey: notificationsKey,
+    queryFn: () => api.listNotifications(),
+    refetchInterval: POLL_MS
+  })
+}
+
+/** The wikis with unread notifications, and how many, read again every minute. */
+export function useBadges(): UseQueryResult<Badge[]> {
+  const api = usePagesApi()
+  return useQuery({
+    queryKey: badgesKey,
+    queryFn: () => api.badges(),
+    refetchInterval: POLL_MS
+  })
+}
+
+/**
+ * Marks the selected notifications read. The list, the badges and each wiki's
+ * unread count are read again once the read went through, though the screen
+ * that marked them is gone: the count in the bar and the badges follow.
+ */
+export function useMarkRead(): UseMutationResult<void, Error, ReadSelection> {
+  const api = usePagesApi()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (selection: ReadSelection) => api.markRead(selection),
+    onSuccess: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: notificationsKey }),
+        queryClient.invalidateQueries({ queryKey: badgesKey }),
+        queryClient.invalidateQueries({ queryKey: wikisKey, exact: true })
+      ])
   })
 }

@@ -381,7 +381,18 @@
     "failed": "La corbeille n'a pas pu être vidée."
   },
   "notifications": {
-    "title": "Notifications"
+    "title": "Notifications",
+    "markAllRead": "Tout marquer comme lu",
+    "unread": "Notifications, %{count} non lues",
+    "unreadItem": "%{title}, non lue",
+    "empty": "Aucune notification",
+    "emptyHint": "Suivez une page, ou soyez mentionné dans un commentaire, pour être informé de ses changements ici.",
+    "loadFailed": "Les notifications n'ont pas pu être chargées.",
+    "reason": {
+      "published": "%{actor} a publié une nouvelle version",
+      "commented": "%{actor} a commenté",
+      "mentioned": "%{actor} vous a mentionné"
+    }
   },
   "shortcuts": {
     "title": "Raccourcis clavier",
