@@ -591,3 +591,174 @@ describe('an edit', () => {
     expect(comment).toHaveTextContent('Which laptop?')
   })
 })
+
+describe('a deletion', () => {
+  /** Asks to delete the comment, and finds the dialog that makes sure. */
+  async function askToDelete(comment: HTMLElement): Promise<HTMLElement> {
+    fireEvent.click(within(comment).getByRole('button', { name: 'Delete' }))
+    return screen.findByRole('dialog', { name: 'Delete this comment?' })
+  }
+
+  it("is offered on the person's own comments, and on no one else's to an editor", async () => {
+    const { pagesApi, wiki, page, bob } = onboarding('editor')
+    await bob.addComment(page.id, { body: 'Which laptop?' })
+    await pagesApi.addComment(page.id, { body: 'Welcome, Bob.' })
+    renderRoute(`/wikis/${wiki.id}/pages/${page.id}`, { pagesApi })
+
+    const asked = await findCommentBy('Bob Durand')
+    const welcome = await findCommentBy('Alice Martin')
+
+    expect(
+      within(welcome).getByRole('button', { name: 'Delete' })
+    ).toBeVisible()
+    expect(
+      within(asked).queryByRole('button', { name: 'Delete' })
+    ).not.toBeInTheDocument()
+  })
+
+  it("is offered on anyone's comment to an admin, replies among them", async () => {
+    const { pagesApi, wiki, page, bob } = onboarding()
+    const question = await pagesApi.addComment(page.id, {
+      body: 'Which laptop?'
+    })
+    await bob.addComment(page.id, {
+      body: 'The one on the desk.',
+      parentId: question.id
+    })
+    renderRoute(`/wikis/${wiki.id}/pages/${page.id}`, { pagesApi })
+
+    const answer = await findCommentBy('Bob Durand')
+
+    expect(within(answer).getByRole('button', { name: 'Delete' })).toBeVisible()
+  })
+
+  it('takes the comment and its replies, once sure', async () => {
+    const { pagesApi, wiki, page, bob } = onboarding()
+    const question = await bob.addComment(page.id, { body: 'Which laptop?' })
+    await pagesApi.addComment(page.id, {
+      body: 'The one on the desk.',
+      parentId: question.id
+    })
+    await pagesApi.addComment(page.id, { body: 'Welcome, Bob.' })
+    silenceStream(pagesApi)
+    renderRoute(`/wikis/${wiki.id}/pages/${page.id}`, { pagesApi })
+    const asked = await findCommentBy('Bob Durand')
+
+    const dialog = await askToDelete(asked)
+    expect(dialog).toHaveTextContent(
+      'Its replies go with it. This cannot be undone.'
+    )
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }))
+
+    await waitFor(() => {
+      expect(asked).not.toBeInTheDocument()
+    })
+    expect((await findComments()).map(comment => comment.textContent)).toEqual([
+      expect.stringContaining('Welcome, Bob.')
+    ])
+    expect(pagesApi.deleteComment).toHaveBeenCalledWith(question.id)
+  })
+
+  it('warns only that it cannot be undone, for a comment no one answered', async () => {
+    const { pagesApi, wiki, page } = onboarding()
+    await pagesApi.addComment(page.id, { body: 'Which laptop?' })
+    renderRoute(`/wikis/${wiki.id}/pages/${page.id}`, { pagesApi })
+
+    const dialog = await askToDelete(await findCommentBy('Alice Martin'))
+
+    expect(dialog).toHaveTextContent('This cannot be undone.')
+    expect(dialog).not.toHaveTextContent('Its replies go with it.')
+  })
+
+  it('keeps the comment when not sure', async () => {
+    const { pagesApi, wiki, page } = onboarding()
+    await pagesApi.addComment(page.id, { body: 'Which laptop?' })
+    renderRoute(`/wikis/${wiki.id}/pages/${page.id}`, { pagesApi })
+    const comment = await findCommentBy('Alice Martin')
+
+    const dialog = await askToDelete(comment)
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+    await aMoment()
+
+    expect(dialog).not.toBeInTheDocument()
+    expect(comment).toHaveTextContent('Which laptop?')
+    expect(pagesApi.deleteComment).not.toHaveBeenCalled()
+  })
+
+  it('says so when the comment cannot be deleted', async () => {
+    const { pagesApi, wiki, page, bob } = onboarding()
+    await pagesApi.addComment(page.id, { body: 'Which laptop?' })
+    silenceStream(pagesApi)
+    renderRoute(`/wikis/${wiki.id}/pages/${page.id}`, { pagesApi })
+    const comment = await findCommentBy('Alice Martin')
+    // Sent to the trash elsewhere, which the open page does not hear of.
+    await bob.deletePage(page.id)
+
+    const dialog = await askToDelete(comment)
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }))
+
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+      'The comment could not be deleted.'
+    )
+    expect(comment).toHaveTextContent('Which laptop?')
+  })
+
+  it('is asked once, though confirmed again while the backend answers', async () => {
+    const { pagesApi, wiki, page } = onboarding()
+    await pagesApi.addComment(page.id, { body: 'Which laptop?' })
+    const deleteComment = pagesApi.deleteComment.getMockImplementation()
+    if (!deleteComment) throw new Error('The fake deletes no comment')
+    let answer = (): void => undefined
+    pagesApi.deleteComment.mockImplementationOnce(async commentId => {
+      await new Promise<void>(resolve => {
+        answer = resolve
+      })
+      return deleteComment(commentId)
+    })
+    renderRoute(`/wikis/${wiki.id}/pages/${page.id}`, { pagesApi })
+    const comment = await findCommentBy('Alice Martin')
+
+    const dialog = await askToDelete(comment)
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }))
+    // Confirmed again in a later task, once the deletion shows as pending.
+    await aMoment()
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }))
+    act(() => {
+      answer()
+    })
+
+    await waitFor(() => {
+      expect(comment).not.toBeInTheDocument()
+    })
+    expect(pagesApi.deleteComment).toHaveBeenCalledTimes(1)
+  })
+
+  it('is not offered on a page in the trash', async () => {
+    const { pagesApi, wiki, page, bob } = onboarding()
+    await pagesApi.addComment(page.id, { body: 'Which laptop?' })
+    await bob.deletePage(page.id)
+    renderRoute(`/wikis/${wiki.id}/pages/${page.id}`, { pagesApi })
+
+    const comment = await findCommentBy('Alice Martin')
+
+    expect(comment).toHaveTextContent('Which laptop?')
+    expect(
+      within(comment).queryByRole('button', { name: 'Delete' })
+    ).not.toBeInTheDocument()
+  })
+
+  it('is closed when the page goes to the trash elsewhere', async () => {
+    const { pagesApi, wiki, page, bob } = onboarding()
+    await pagesApi.addComment(page.id, { body: 'Which laptop?' })
+    renderRoute(`/wikis/${wiki.id}/pages/${page.id}`, { pagesApi })
+    const comment = await findCommentBy('Alice Martin')
+    const dialog = await askToDelete(comment)
+
+    await act(() => bob.deletePage(page.id))
+
+    await waitFor(() => {
+      expect(dialog).not.toBeInTheDocument()
+    })
+    expect(comment).toHaveTextContent('Which laptop?')
+  })
+})

@@ -299,7 +299,16 @@
     "editLabel": "Modifier le commentaire",
     "save": "Enregistrer",
     "saveHint": "Ctrl+Entrée pour enregistrer",
-    "saveFailed": "Le commentaire n'a pas pu être enregistré."
+    "saveFailed": "Le commentaire n'a pas pu être enregistré.",
+    "delete": "Supprimer"
+  },
+  "deleteComment": {
+    "title": "Supprimer ce commentaire ?",
+    "text": "Cette action est irréversible.",
+    "withReplies": "Ses réponses partent avec lui. Cette action est irréversible.",
+    "confirm": "Supprimer",
+    "cancel": "Annuler",
+    "failed": "Le commentaire n'a pas pu être supprimé."
   },
   "labels": {
     "title": "Pages avec l'étiquette %{name}",

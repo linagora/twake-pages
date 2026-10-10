@@ -1,4 +1,4 @@
-import { Icon, Pen, Reply } from '@linagora/twake-icons'
+import { Icon, Pen, Reply, Trash } from '@linagora/twake-icons'
 import { Button, Typography } from '@linagora/twake-mui'
 import { useId, useState, type ReactElement, type ReactNode } from 'react'
 
@@ -13,11 +13,12 @@ import {
   NewCommentForm,
   ReplyForm
 } from '@/ui/comments/CommentForm'
+import { DeleteCommentDialog } from '@/ui/comments/DeleteCommentDialog'
 import { useI18n } from '@/ui/i18n/useI18n'
 import { PersonAvatar } from '@/ui/people/PersonAvatar'
 import { useSession } from '@/ui/session/SessionGate'
 import { localTime } from '@/ui/settings/zone'
-import { useComments } from '@/ui/wiki/queries'
+import { useComments, useWiki } from '@/ui/wiki/queries'
 
 /**
  * The comments of a page, below its content, where Twake Tasks shows a
@@ -106,9 +107,11 @@ function CommentFeed({ page }: { page: Page }): ReactElement {
 }
 
 /**
- * A comment under its author's name and the time it was written. Its author,
- * told by their email as the session has no id, edits it in place, but not
- * on a page in the trash.
+ * A comment under its author's name and the time it was written. Its author
+ * edits it in place and deletes it, and an admin of the wiki deletes anyone's,
+ * as the backend lets them, though Twake Tasks keeps a comment as written.
+ * The author is told by their email, as the session has no id. A page in the
+ * trash refuses both.
  */
 function CommentItem({
   page,
@@ -124,10 +127,14 @@ function CommentItem({
 }): ReactElement {
   const { t, lang } = useI18n()
   const { user } = useSession()
+  const role = useWiki(page.wikiId).data?.role
   const [editing, setEditing] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const author = displayName(comment.author)
-  const editable =
-    page.deletedAt === null && sameEmail(comment.author.email, user.email)
+  const writable = page.deletedAt === null
+  const mine = sameEmail(comment.author.email, user.email)
+  const editable = writable && mine
+  const deletable = writable && (mine || role === 'admin')
 
   return (
     <FeedItem
@@ -158,7 +165,7 @@ function CommentItem({
         ) : (
           <>
             <PlainText>{comment.body}</PlainText>
-            {(onReply !== null || editable) && (
+            {(onReply !== null || editable || deletable) && (
               <div className="u-mt-half">
                 {onReply && (
                   <Button
@@ -182,9 +189,30 @@ function CommentItem({
                     {t('comments.edit')}
                   </Button>
                 )}
+                {deletable && (
+                  <Button
+                    variant="text"
+                    size="small"
+                    startIcon={<Icon icon={Trash} />}
+                    onClick={() => {
+                      setDeleting(true)
+                    }}
+                  >
+                    {t('comments.delete')}
+                  </Button>
+                )}
               </div>
             )}
           </>
+        )}
+        {deletable && deleting && (
+          <DeleteCommentDialog
+            page={page}
+            comment={comment}
+            onClose={() => {
+              setDeleting(false)
+            }}
+          />
         )}
       </article>
       {children}

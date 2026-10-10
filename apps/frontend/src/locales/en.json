@@ -299,7 +299,16 @@
     "editLabel": "Edit comment",
     "save": "Save",
     "saveHint": "Ctrl+Enter to save",
-    "saveFailed": "The comment could not be saved."
+    "saveFailed": "The comment could not be saved.",
+    "delete": "Delete"
+  },
+  "deleteComment": {
+    "title": "Delete this comment?",
+    "text": "This cannot be undone.",
+    "withReplies": "Its replies go with it. This cannot be undone.",
+    "confirm": "Delete",
+    "cancel": "Cancel",
+    "failed": "The comment could not be deleted."
   },
   "labels": {
     "title": "Pages labelled %{name}",

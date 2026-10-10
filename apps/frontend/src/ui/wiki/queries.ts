@@ -675,6 +675,26 @@ export function useEditComment(
 }
 
 /**
+ * Reads again what a deletion changes alone, rather than the whole wiki: the
+ * comments, once one is deleted, as its replies go too. A refused deletion
+ * changes nothing.
+ */
+export function useDeleteComment(
+  page: Page,
+  commentId: string
+): UseMutationResult<void, Error, void> {
+  const api = usePagesApi()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: () => api.deleteComment(commentId),
+    onSuccess: () =>
+      queryClient.invalidateQueries({
+        queryKey: commentsKey(page.wikiId, page.id)
+      })
+  })
+}
+
+/**
  * Unlike Twake Tasks, which reads whether the person follows a task through
  * a route of its own, the page tells it, and changes in place.
  */
