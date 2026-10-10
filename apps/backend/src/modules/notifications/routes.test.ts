@@ -264,6 +264,30 @@ describe('commenting', () => {
     ])
   })
 
+  it('tells an edit’s new mention once, and never one it made before', async () => {
+    const { bob, carol, page } = await aWikiWithThree()
+    const comment = await aCommentOn(api, bob, page, { body: 'Draft ready' })
+
+    await editComment(api, bob, comment.id, {
+      body: `@${carol.email}, draft ready`
+    })
+    await editComment(api, bob, comment.id, {
+      body: `@${carol.email}, @${bob.email}, draft ready`
+    })
+
+    expect((await notificationsOf(api, carol)).notifications).toMatchObject([
+      { reason: 'mentioned', commentId: comment.id }
+    ])
+    // An edit tells only the members it mentions anew: bob is its author, and
+    // is never told, not even of his own mention.
+    expect(await notificationsOf(api, bob)).toEqual(nothing)
+    // A second edit mentioning carol again tells her nothing more.
+    await editComment(api, bob, comment.id, {
+      body: `@${carol.email}, once more`
+    })
+    expect((await notificationsOf(api, carol)).notifications).toHaveLength(1)
+  })
+
   it('tells a mentioned member out of the wiki nothing', async () => {
     const { alice, bob, carol, wiki, page } = await aWikiWithThree()
     await api.as(alice).delete(`/wikis/${wiki.id}/members/${carol.userId}`)

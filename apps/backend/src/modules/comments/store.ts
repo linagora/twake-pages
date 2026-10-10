@@ -203,6 +203,9 @@ export function createCommentStore(db: Db) {
           comment.body
         )
         for (const member of mentioned) await follow(tx, page, member.userId)
+        // An edit is no new comment: only the members it mentions anew are
+        // told, and the page's other followers are told nothing.
+        await tellMentioned(tx, page, identity, commentId, mentioned)
         return commentOf(edited)
       })
     },
