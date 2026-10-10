@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
-import { aliceWiki, newPageDialog } from './wiki.ts'
+import { publishDraft, typeInBlocks } from './editor.ts'
+import { aliceWiki, newPage, newPageDialog } from './wiki.ts'
 
 // The stand-in Grist of the stack, on the Grist origin the deployment names
 const GRIST = 'http://localhost:3504'
@@ -39,4 +40,20 @@ test('alice creates a database page at a Grist address, refused on another origi
   await expect(
     page.getByRole('link', { name: 'Open in Grist' })
   ).toHaveAttribute('href', BUDGET)
+})
+
+test('alice inserts a Grist embed in "Onboarding" and publishes: the page frames its Grist document', async ({
+  page
+}) => {
+  await aliceWiki(page)
+  await newPage(page, 'Onboarding')
+  await page.getByRole('link', { name: 'Edit page' }).click()
+
+  await typeInBlocks(page, '/')
+  await page.getByRole('option', { name: 'Grist document' }).click()
+  await page.getByPlaceholder('Enter URL').fill(BUDGET)
+  await page.getByRole('button', { name: 'Embed Grist document' }).click()
+  await publishDraft(page)
+
+  await expect(framedBudget(page)).toBeVisible()
 })
