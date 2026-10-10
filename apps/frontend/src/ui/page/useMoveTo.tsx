@@ -3,7 +3,7 @@ import type { ReactElement } from 'react'
 
 import { moveInto } from '@/application/movePage'
 import type { Refusal } from '@/application/pages'
-import type { TreePlace } from '@/ds/Tree'
+import type { TreePlace } from '@/ds/treeMoves'
 import { failureKey } from '@/ui/failureKey'
 import { useI18n, type I18nApi, type TranslationKey } from '@/ui/i18n/useI18n'
 import { useMovePage } from '@/ui/wiki/queries'
