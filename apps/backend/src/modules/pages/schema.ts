@@ -195,6 +195,10 @@ export const pageLabels = pgTable.withRLS(
   },
   table => [
     primaryKey({ columns: [table.pageId, table.labelId] }),
+    // Listing a wiki's labels and its pages by label, and dropping the labels
+    // no page carries, read page_labels by label_id: the primary key starts at
+    // page_id, so those queries need this index.
+    index().on(table.labelId),
     foreignKey({
       columns: [table.tenant, table.pageId],
       foreignColumns: [pages.tenant, pages.id]

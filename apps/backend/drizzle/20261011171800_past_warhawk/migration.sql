@@ -1,0 +1,1 @@
+CREATE INDEX "page_labels_label_id_index" ON "page_labels" ("label_id");
