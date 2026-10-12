@@ -472,6 +472,34 @@ describe('POST /pages/:pageId/versions/:number/restore', () => {
     expect(await versionOf(api, alice, wiki.id)).toBe(before)
   })
 
+  it('answers invalid_content for a version with a Grist embed at a blob: address of a Grist origin, and leaves the wiki as it was', async () => {
+    const alice = aUser()
+    const wiki = await aWikiOf(api, alice)
+    // Written straight into the wiki, as published while such an address was
+    // still taken.
+    const pageId = await aPageIn(db, alice, wiki.id, {
+      title: 'Budget',
+      position: 'a0',
+      content: [
+        aBlock('gristEmbed', {
+          props: { url: `blob:${GRIST_ORIGIN}/4kq2` }
+        })
+      ]
+    })
+    await publish(api, alice, pageId, {
+      baseVersion: 1,
+      title: 'Budget',
+      content: []
+    })
+    const before = await versionOf(api, alice, wiki.id)
+
+    const response = await restoreVersion(api, alice, pageId, 1)
+
+    expect(response.statusCode).toBe(400)
+    expect(response.json()).toEqual({ error: 'invalid_content' })
+    expect(await versionOf(api, alice, wiki.id)).toBe(before)
+  })
+
   // Two checks apply to each: the version's address, checked as a draft's,
   // comes first (api.md).
   it.each([

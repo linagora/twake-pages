@@ -293,6 +293,14 @@ describe('POST /pages/:pageId/versions', () => {
     [
       'blocks in a body over the size of any request',
       [paragraph('a'.repeat(2 * MAX_BLOCKS_BYTES))]
+    ],
+    [
+      'a Grist embed at a blob: address of a Grist origin',
+      [
+        aBlock('gristEmbed', {
+          props: { url: `blob:${GRIST_ORIGIN}/4kq2` }
+        })
+      ]
     ]
   ])('answers invalid_content for %s', async (_case, content) => {
     const alice = aUser()
