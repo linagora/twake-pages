@@ -66,6 +66,27 @@ describe('SuggestionField', () => {
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 
+  it('opens its list again as the field takes the focus back', async () => {
+    renderWithProviders(<Field />)
+    const field = await typeInField('@al')
+    // React tells where the caret is as the last key typed is released.
+    fireEvent.keyUp(field, { key: 'l' })
+    expect(
+      screen.getByRole('listbox', { name: 'People to mention' })
+    ).toBeVisible()
+
+    fireEvent.blur(field)
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+
+    // The text area keeps its caret while away, after the `@`: taking the
+    // focus back finds the options where they were left.
+    fireEvent.focus(field)
+
+    expect(
+      screen.getByRole('listbox', { name: 'People to mention' })
+    ).toBeVisible()
+  })
+
   it('stays closed by Escape, though the caret is told after the key', async () => {
     renderWithProviders(<Field />)
     // Nothing told where the caret is since the field took the focus, so
