@@ -144,7 +144,7 @@ describe('SearchScreen', () => {
     }
   )
 
-  it("highlights the title of a home page only when it is its wiki's name", async () => {
+  it("highlights the title of a home page under its wiki's name only when it is that name", async () => {
     const pagesApi = fakePagesApi()
     pagesApi.withWiki({ name: 'Badges' })
     const wiki = pagesApi.withWiki({ name: 'Handbook' })
@@ -159,9 +159,15 @@ describe('SearchScreen', () => {
     expect(
       results.getByRole('link', { name: 'Badges' }).querySelector('mark')
     ).toHaveTextContent('Badges')
+    // The home page's own title holds the word, but the row shows its wiki's
+    // name, which does not: the marked title shows instead, since the text
+    // holds none of the words to quote.
     expect(
-      results.getByRole('link', { name: 'Handbook' }).querySelector('mark')
-    ).toBeNull()
+      results.getByRole('link', { name: 'Badge office' }).querySelector('mark')
+    ).toHaveTextContent('Badge')
+    expect(
+      results.getByRole('listitem', { name: 'Handbook' })
+    ).toHaveTextContent('Badge office')
   })
 
   it('names the personal wiki of a page in the language of the person', async () => {

@@ -124,15 +124,17 @@ function Results({
       {results.map(({ page, markedTitle, excerpt }) => {
         const { title, path, place } = entryOf(page)
         // A home page shows under its wiki's name, which the backend marks
-        // only where it is the page's own title.
-        const ownTitle = title === page.title
+        // only where it is the page's own title. When its text holds none of
+        // the words, the page's own title is the only place they show: it is
+        // shown marked, rather than the wiki's name that stays bare.
+        const showsItsTitle = title === page.title || excerpt === ''
         return (
           <ResultRow
             key={page.id}
             label={title}
             title={
               <Link component={RouterLink} to={path}>
-                {ownTitle ? (
+                {showsItsTitle ? (
                   <Highlight parts={excerptParts(markedTitle)} />
                 ) : (
                   title
