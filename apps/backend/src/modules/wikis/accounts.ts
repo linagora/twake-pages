@@ -209,10 +209,14 @@ const onOrganizationDeleted: Handler<PlatformEvent> = async (event, tx) => {
   )
   if (!organizationId) throw new RejectedEventError('no organizationId')
   await asOrganization(tx, organizationId)
-  await tx.delete(wikis)
+  // The jobs go first, the order the routes take: a due purge job holds its
+  // own row, then waits for its wiki's, so deleting the wikis first would
+  // leave this waiting for that job's wiki while the job waits for its row,
+  // which Postgres aborts as a deadlock.
   await tx
     .delete(jobs)
     .where(sql`${jobs.payload}->>'organizationId' = ${organizationId}`)
+  await tx.delete(wikis)
 }
 
 export const accountRoutes: ReadonlyMap<
