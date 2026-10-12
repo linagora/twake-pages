@@ -5,6 +5,7 @@ import type { Block } from '@/domain/page'
 import { FOUND_END, FOUND_START } from '@/domain/search'
 import { buildTree, byPosition, type TreeNode } from '@/domain/tree'
 import {
+  BUDGET,
   fakePagesApi,
   GRIST_ORIGIN,
   OFF_GRIST_ORIGINS,
@@ -510,11 +511,11 @@ describe('fakePagesApi', () => {
       await expect(
         api.createPage(wiki.id, {
           ...database,
-          gristUrl: `${GRIST_ORIGIN}/o/docs/budget`
+          gristUrl: BUDGET
         })
       ).resolves.toMatchObject({
         content: [],
-        gristUrl: `${GRIST_ORIGIN}/o/docs/budget`
+        gristUrl: BUDGET
       })
     })
 
@@ -524,7 +525,7 @@ describe('fakePagesApi', () => {
         kind: 'database' as const,
         parentId: null
       }
-      const gristUrl = `${GRIST_ORIGIN}/o/docs/budget`
+      const gristUrl = BUDGET
       const offOrigin = 'https://docs.example.com/o/docs/budget'
       const invalidRequest = new ApiError(400, 'invalid_request')
       const invalidGristUrl = new ApiError(400, 'invalid_grist_url')
@@ -533,7 +534,7 @@ describe('fakePagesApi', () => {
         const api = fakePagesApi()
         const wiki = api.withWiki()
         const page = api.withPage(wiki.id, { ...budget, gristUrl })
-        const next = `${GRIST_ORIGIN}/o/docs/budget-2027`
+        const next = `${BUDGET}-2027`
 
         await expect(
           api.publish(page.id, {
@@ -1867,6 +1868,27 @@ describe('fakePagesApi', () => {
         invalid
       )
       await expect(api.listNotifications()).resolves.toEqual(nothing)
+    })
+
+    it('strips a key the union does not know, as the route does', async () => {
+      const api = fakePagesApi()
+      const wiki = api.withWiki({ members: { 'bob@example.com': 'editor' } })
+      const page = api.withPage(wiki.id, { title: 'Onboarding' })
+      const bob = api.signedInAs('bob@example.com')
+      await bob.publish(page.id, { baseVersion: 1, title: 'New', content: [] })
+      const { notifications } = await api.listNotifications()
+      const ids = notifications.map(each => each.id)
+
+      // The route's zod object strips the keys it does not declare, so a
+      // body with an extra key beside its one key passes and reads.
+      await expect(
+        api.markRead({ ids, extra: true } as never)
+      ).resolves.toBeUndefined()
+      const read = await api.listNotifications()
+      expect(read.notifications.map(each => each.readAt === null)).toEqual([
+        false
+      ])
+      expect(read.unread).toBe(0)
     })
 
     it('stops telling people who are no longer members', async () => {

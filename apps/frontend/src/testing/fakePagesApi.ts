@@ -421,15 +421,24 @@ const MAX_READ_IDS = 100
 const UUID =
   /^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$/
 
+// The three keys the route's union knows. The route reads the body with a
+// zod object per branch, which strips the keys it does not know and holds
+// the other two keys to `z.never`: a body with an extra key beside its one
+// key passes the route, where counting the keys refused it. Nothing but
+// these three may be given, and exactly one of them.
+const READ_KEYS = ['ids', 'all', 'wikiId'] as const
+
 /**
  * The read's exclusive selection as the route takes it: `{ ids }` of 1 to
- * 100 uuids, `{ all: true }` or `{ wikiId }` of a uuid, a second key beside
- * the first or none refused as `invalid_request`.
+ * 100 uuids, `{ all: true }` or `{ wikiId }` of a uuid, exactly one of the
+ * three given, none or two refused as `invalid_request`, and any other key
+ * stripped and accepted.
  */
 function checkReadSelection(selection: ReadSelection): ReadSelection {
   // A caller may send a body off the type: read it as the route does.
   const body: Record<string, unknown> = selection
-  if (Object.keys(body).length !== 1) throw refuse('invalid_request')
+  const given = READ_KEYS.filter(key => body[key] !== undefined)
+  if (given.length !== 1) throw refuse('invalid_request')
   const { ids, all, wikiId } = body
   if (ids !== undefined) {
     if (
