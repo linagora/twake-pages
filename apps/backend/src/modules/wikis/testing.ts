@@ -6,7 +6,18 @@ import type { TestUser } from '../../testing/app.ts'
 import { accountRoutes } from './accounts.ts'
 import { wikis } from './schema.ts'
 
-/** Waits until `count` transactions wait their turn, one behind the other. */
+/**
+ * Waits until `count` requests wait their turn, one behind the other, at the
+ * change's row of `wikis`. The chain the requests make counts only while it
+ * waits on that row: the first request waits on the change's transaction id
+ * (the tuple lock on its `wikis` row), the next on the first's, and so on,
+ * while a statement another test file runs may wait behind a request on a
+ * table of its own. `db.test.ts`'s `ALTER TABLE wiki_members ... row level
+ * security` does, so counting every statement in the chain would see it as
+ * one more request and let the wiki go before the last one waits: the filter
+ * keeps the waits that are the wiki's, the change's transaction id or a lock
+ * on `wikis`.
+ */
 async function waitingBehind(db: Db, pid: number, count: number) {
   for (;;) {
     const [behind] = await db.execute<{ count: number }>(sql`
@@ -17,7 +28,12 @@ async function waitingBehind(db: Db, pid: number, count: number) {
         select activity.pid from pg_stat_activity activity
         join behind on behind.pid = any(pg_blocking_pids(activity.pid))
       )
-      select count(*)::int as count from behind`)
+      select count(*)::int as count from behind
+      where exists (
+        select 1 from pg_locks held
+        where held.pid = behind.pid and not held.granted
+          and (held.transactionid is not null
+            or held.relation = 'wikis'::regclass))`)
     if (behind && behind.count >= count) return
     await new Promise(resolve => setTimeout(resolve, 10))
   }

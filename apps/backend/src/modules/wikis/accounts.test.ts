@@ -300,9 +300,7 @@ describe.each(deletions)(
       const gone = makeUser()
       const admin = aPeerOf(gone)
       // Their personal wiki keeps them a member, so the deletion finds them by
-      // their email even when the removal is done before it starts: another
-      // file's ALTER TABLE on wiki_members, as db.test.ts runs, can wait
-      // behind the removal, and behindAChange counts it as the deletion.
+      // their email even when the removal is done before it starts.
       await personalWikiOf(api, gone)
       const wiki = await aWiki(admin, 'Roadmap', [[gone, 'editor']])
       await favoriteOpenAndFollow(gone, wiki.homePageId)
