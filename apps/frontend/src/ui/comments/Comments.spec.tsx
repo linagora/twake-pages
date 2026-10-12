@@ -441,6 +441,27 @@ describe('a reply', () => {
       screen.queryByRole('textbox', { name: 'Comment' })
     ).not.toBeInTheDocument()
   })
+
+  it('does not open again once the page comes back from the trash', async () => {
+    const { pagesApi, wiki, page, bob } = onboarding()
+    await bob.addComment(page.id, { body: 'Which laptop?' })
+    renderRoute(`/wikis/${wiki.id}/pages/${page.id}`, { pagesApi })
+    const asked = await findCommentBy('Bob Durand')
+    fireEvent.click(within(asked).getByRole('button', { name: 'Reply' }))
+    await act(() => bob.deletePage(page.id))
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('form', { name: 'Reply to Bob Durand' })
+      ).not.toBeInTheDocument()
+    })
+
+    await act(() => pagesApi.restorePage(page.id))
+
+    await findCommentBy('Bob Durand')
+    expect(
+      screen.queryByRole('form', { name: 'Reply to Bob Durand' })
+    ).not.toBeInTheDocument()
+  })
 })
 
 describe('an edit', () => {

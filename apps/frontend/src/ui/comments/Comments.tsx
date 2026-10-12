@@ -46,7 +46,14 @@ export function Comments({ page }: { page: Page }): ReactElement {
       >
         {t('comments.title')}
       </Typography>
-      <CommentFeed page={page} />
+      {/* Keyed on the page being writable: a page sent to the trash hides the
+          reply, edit and delete states without closing them, so a fresh feed
+          as it goes keeps them from opening again once it comes back from the
+          trash. */}
+      <CommentFeed
+        key={page.deletedAt === null ? 'live' : 'trashed'}
+        page={page}
+      />
       {page.deletedAt === null && <NewCommentForm page={page} />}
     </section>
   )
