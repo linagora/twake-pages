@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  entryAt,
+  placeFor,
   placeForDrop,
   pointedAt,
   rowUnderPointer,
+  samePlace,
+  whereIs,
   withDrop
 } from '@/ds/treeMoves'
 
@@ -22,6 +26,133 @@ const releases = entry('releases', checklist)
 const entries = [onboarding, releases]
 // Onboarding shows its child pages, Releases does not.
 const expanded = new Set(['onboarding'])
+
+describe('whereIs', () => {
+  it("finds an entry's place among its siblings, and its parent", () => {
+    expect(whereIs(entries, 'onboarding')).toEqual({
+      parent: null,
+      siblings: entries,
+      index: 0
+    })
+    expect(whereIs(entries, 'releases')).toEqual({
+      parent: null,
+      siblings: entries,
+      index: 1
+    })
+    expect(whereIs(entries, 'first-week')).toEqual({
+      parent: onboarding,
+      siblings: [laptop, firstWeek],
+      index: 1
+    })
+  })
+
+  it('finds nothing for an entry the tree does not hold', () => {
+    expect(whereIs(entries, 'gone')).toBeUndefined()
+    expect(whereIs([], 'onboarding')).toBeUndefined()
+  })
+})
+
+describe('entryAt', () => {
+  it('reads the entry a place holds', () => {
+    expect(entryAt(whereIs(entries, 'onboarding'))).toBe(onboarding)
+    expect(entryAt(whereIs(entries, 'laptop'))).toBe(laptop)
+  })
+
+  it('reads nothing where there is no place, or no entry there', () => {
+    expect(entryAt(undefined)).toBeUndefined()
+    expect(entryAt(whereIs(entries, 'gone'))).toBeUndefined()
+  })
+})
+
+/** The place of an entry the fixture holds, which every case names. */
+const placeOf = (id: string) => {
+  const place = whereIs(entries, id)
+  if (!place) throw new Error(`no place for ${id}`)
+  return place
+}
+
+describe('placeFor', () => {
+  it('moves the entry up and down among its siblings', () => {
+    expect(placeFor(entries, placeOf('releases'), 'ArrowUp')).toEqual({
+      parent: null,
+      siblings: [onboarding],
+      index: 0
+    })
+    expect(placeFor(entries, placeOf('laptop'), 'ArrowDown')).toEqual({
+      parent: onboarding,
+      siblings: [firstWeek],
+      index: 1
+    })
+  })
+
+  it('moves the entry nowhere past the first or the last of its siblings', () => {
+    expect(placeFor(entries, placeOf('laptop'), 'ArrowUp')).toBeUndefined()
+    expect(placeFor(entries, placeOf('releases'), 'ArrowDown')).toBeUndefined()
+    expect(
+      placeFor(entries, placeOf('first-week'), 'ArrowDown')
+    ).toBeUndefined()
+  })
+
+  it('moves the entry under the sibling before it, last among its entries', () => {
+    expect(placeFor(entries, placeOf('releases'), 'ArrowRight')).toEqual({
+      parent: onboarding,
+      siblings: [laptop, firstWeek],
+      index: 2
+    })
+    expect(placeFor(entries, placeOf('first-week'), 'ArrowRight')).toEqual({
+      parent: laptop,
+      siblings: [],
+      index: 0
+    })
+  })
+
+  it('moves the entry under nothing when no sibling precedes it', () => {
+    expect(
+      placeFor(entries, placeOf('onboarding'), 'ArrowRight')
+    ).toBeUndefined()
+    expect(placeFor(entries, placeOf('laptop'), 'ArrowRight')).toBeUndefined()
+  })
+
+  it("moves the entry out to the parent's level, right after the parent", () => {
+    expect(placeFor(entries, placeOf('laptop'), 'ArrowLeft')).toEqual({
+      parent: null,
+      siblings: entries,
+      index: 1
+    })
+    expect(placeFor(entries, placeOf('first-week'), 'ArrowLeft')).toEqual({
+      parent: null,
+      siblings: entries,
+      index: 1
+    })
+  })
+
+  it('moves the entry out of nothing at the top of the tree', () => {
+    expect(placeFor(entries, placeOf('releases'), 'ArrowLeft')).toBeUndefined()
+  })
+})
+
+describe('samePlace', () => {
+  it('holds for two places of the same parent and index', () => {
+    expect(
+      samePlace(whereIs(entries, 'laptop'), whereIs(entries, 'laptop'))
+    ).toBe(true)
+    expect(samePlace(undefined, undefined)).toBe(true)
+    expect(samePlace(whereIs(entries, 'gone'), whereIs(entries, 'gone'))).toBe(
+      true
+    )
+  })
+
+  it('tells apart places of another index, another parent, or none', () => {
+    expect(
+      samePlace(whereIs(entries, 'laptop'), whereIs(entries, 'first-week'))
+    ).toBe(false)
+    expect(
+      samePlace(whereIs(entries, 'laptop'), whereIs(entries, 'releases'))
+    ).toBe(false)
+    expect(samePlace(whereIs(entries, 'laptop'), undefined)).toBe(false)
+    expect(samePlace(undefined, whereIs(entries, 'laptop'))).toBe(false)
+  })
+})
 
 describe('placeForDrop', () => {
   it('puts the entry before the row whose top quarter it is dropped on', () => {
