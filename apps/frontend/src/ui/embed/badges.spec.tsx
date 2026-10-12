@@ -8,11 +8,18 @@ import { toldAboutAVersion } from '@/testing/notifications'
 import { renderWithProviders } from '@/testing/renderWithProviders'
 import { useReportBadges } from '@/ui/embed/badges'
 
-/** A TwakeSpace connection that keeps the badges it is told. */
-function fakeSpace(): TwakeSpaceConnection & { reported: Badge[][] } {
+/**
+ * A TwakeSpace connection that keeps the badges it is told, each call as it
+ * came, so a test can tell a repeated snapshot from one sent again.
+ */
+function fakeSpace(): TwakeSpaceConnection & {
+  reported: Badge[][]
+  sends: () => number
+} {
   const reported: Badge[][] = []
   return {
     reported,
+    sends: () => reported.length,
     location: () => null,
     hostOrigin: () => null,
     notifyLoginRequired: vi.fn(),
@@ -85,6 +92,27 @@ describe('reporting badges to TwakeSpace', () => {
     ])
   })
 
+  it('replaces the last snapshot with the newest, as a read empties it', async () => {
+    const { pagesApi, handbook, onboarding, bob } = twoWikis()
+    await toldAboutAVersion(bob, onboarding.id, 'New')
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const space = fakeSpace()
+    renderWithProviders(<Reporter space={space} />, { pagesApi })
+    await waitFor(() => {
+      expect(space.reported.at(-1)).toEqual([
+        { resourceId: handbook.id, count: 1 }
+      ])
+    })
+
+    // The person reads it elsewhere: the poll now finds no unread wiki, and
+    // the frame is told the empty list. TwakeSpace shows the last snapshot it
+    // was given, so the wiki's badge has to go, not sit beside the old one.
+    pagesApi.badges.mockImplementation(() => Promise.resolve([]))
+    await act(() => vi.advanceTimersByTimeAsync(60_000))
+
+    expect(space.reported.at(-1)).toEqual([])
+  })
+
   it('sends nothing when a poll fails after a success', async () => {
     const { pagesApi, handbook, onboarding, bob } = twoWikis()
     await toldAboutAVersion(bob, onboarding.id, 'New')
@@ -96,15 +124,21 @@ describe('reporting badges to TwakeSpace', () => {
         { resourceId: handbook.id, count: 1 }
       ])
     })
-    const reported = space.reported.length
+    const sent = space.sends()
     pagesApi.badges.mockImplementation(() =>
       Promise.reject(new ApiError(500, 'server_error'))
     )
 
+    // The rejected poll retries, so the query reaches its error state only
+    // once the retries are done: two minutes, not one. The dedup alone does
+    // not stop a send here, since a failed poll that dropped the data would
+    // report a different snapshot, an empty one.
+    await act(() => vi.advanceTimersByTimeAsync(60_000))
     await act(() => vi.advanceTimersByTimeAsync(60_000))
 
     // A failed poll keeps the last data, which is not reported again
-    expect(space.reported.length).toBe(reported)
+    expect(pagesApi.badges.mock.calls.length).toBeGreaterThan(2)
+    expect(space.sends()).toBe(sent)
   })
 })
 
