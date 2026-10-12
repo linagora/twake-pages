@@ -92,11 +92,12 @@ export function PickerPopover({
               inputProps: {
                 'aria-label': searchLabel,
                 // The backend takes 50 code points once a name is normalized
-                // (LABEL_NAME in labels.ts), where maxLength counts UTF-16
+                // (LABEL_NAME in labels.ts), while maxLength counts UTF-16
                 // units: a letter outside the Basic Multilingual Plane takes
-                // two, so a cap of 50 would refuse names the backend accepts.
-                // 200 leaves room for 50 such letters, and for the composing
-                // marks NFC may still take away, while still bounding a paste.
+                // two, so a cap of 50 would refuse a name of 50 such letters,
+                // which needs 100 units and which the backend accepts. 200 is
+                // the field bound the rest of the app uses; it still bounds a
+                // paste without being stricter than the rule.
                 maxLength: 200,
                 onKeyDown: onSearchKeyDown
               }
