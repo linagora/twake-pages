@@ -1,14 +1,6 @@
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test } from '@playwright/test'
 import { aliceOnboardingSharedWithBob, bobOnOnboarding } from './sharing.ts'
 import { ALICE } from './signIn.ts'
-
-/** The unread count the bar shows for the notifications, 0 when it shows none. */
-async function unread(page: Page): Promise<number> {
-  const label = await page
-    .locator('a[href="/notifications"]')
-    .getAttribute('aria-label')
-  return Number(label?.match(/\d+/)?.[0] ?? 0)
-}
 
 test('tells alice of bob\'s mention of her on "Onboarding", counted in her bar and read as she opens it', async ({
   page,
@@ -42,7 +34,6 @@ test('tells alice of bob\'s mention of her on "Onboarding", counted in her bar a
     name: /^Notifications, [1-9]\d* unread$/
   })
   await expect(counted).toBeVisible()
-  const before = await unread(page)
 
   await counted.click()
   // The mention, not a publish another spec made of the same page
@@ -62,6 +53,14 @@ test('tells alice of bob\'s mention of her on "Onboarding", counted in her bar a
       .getByRole('article', { name: 'Bob Durand' })
   ).toContainText('Welcome @Alice Martin your laptop is ready.')
 
-  // Opening it marked it read: the bar counts one fewer, live, not a minute later
-  await expect.poll(() => unread(page)).toBe(before - 1)
+  // Opening it marked it read, live, not a minute later: the person's own
+  // mention loses its "unread" label. Not the bar's count, which another spec
+  // publishing for alice in parallel can move between the read and the poll.
+  await page.getByRole('link', { name: /^Notifications/ }).click()
+  await expect(
+    page
+      .getByRole('list', { name: 'Notifications' })
+      .getByRole('listitem', { name: 'Onboarding, unread' })
+      .filter({ hasText: 'mentioned you' })
+  ).toHaveCount(0)
 })
