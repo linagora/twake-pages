@@ -161,6 +161,9 @@ export function createNotificationStore(db: Db) {
     notifications(identity: Identity) {
       return inTenant(db, identity, async tx => {
         const seen = seenNotifications(tx, identity.userId)
+        // The unread total comes beside the rows, as a window count over all
+        // the person sees: it counts every unread one, not only the listed
+        // ones, in the same query rather than a second.
         const listed = await tx
           .select({
             id: seen.id,
@@ -175,18 +178,28 @@ export function createNotificationStore(db: Db) {
             version: seen.version,
             commentId: seen.commentId,
             createdAt: seen.createdAt,
-            readAt: seen.readAt
+            readAt: seen.readAt,
+            unread: sql<number>`(count(*) filter (where ${seen.readAt} is null) over ())::int`
           })
           .from(seen)
           .innerJoin(pages, eq(pages.id, seen.pageId))
           .innerJoin(wikis, eq(wikis.id, seen.wikiId))
           .orderBy(desc(seen.createdAt), desc(seen.id))
           .limit(LISTED_NOTIFICATIONS)
-        const [unread] = await tx
-          .select({ count: count() })
-          .from(seen)
-          .where(isNull(seen.readAt))
-        return { notifications: listed, unread: unread?.count ?? 0 }
+        return {
+          notifications: listed.map(row => ({
+            id: row.id,
+            reason: row.reason,
+            page: row.page,
+            wiki: row.wiki,
+            actor: row.actor,
+            version: row.version,
+            commentId: row.commentId,
+            createdAt: row.createdAt,
+            readAt: row.readAt
+          })),
+          unread: listed[0]?.unread ?? 0
+        }
       })
     },
 
