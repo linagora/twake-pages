@@ -59,7 +59,8 @@ async function mayEmail(tx: Tx, wikiId: string, email: string, by: string) {
   // The day-old rows go, forgotten: the sweep takes them itself, rather than
   // wait for a deletion that holds a few (FOR UPDATE SKIP LOCKED), which
   // would make the two wait on each other, the invitation answering 500. A
-  // row skipped here is taken by a later invitation's sweep.
+  // row skipped here is taken by a later invitation's sweep. Raw SQL, as the
+  // builder has no skip-locked delete.
   await tx.execute(sql`
     delete from invite_emails
     where id in (
