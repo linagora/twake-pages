@@ -136,6 +136,28 @@ describe('a page moved from its menu', () => {
     )
   })
 
+  it('says the person can no longer move pages when the wiki reloads without them, rather than close', async () => {
+    const { pagesApi, bob, wiki } = engineering()
+    // The move is what tells the person they lost the editor role: their own
+    // wiki reloads without them, and the tree goes with the menu, but the
+    // dialog must say why before, or instead of, closing. Bob, an admin here,
+    // is who takes the role away.
+    pagesApi.movePage.mockRejectedValue(new ApiError(403, 'forbidden'))
+    const dialog = await openMove('Laptop setup')
+    chooseIn(dialog, 'Parent', 'Top of the tree')
+
+    await act(() => pagesApi.setMemberRole(wiki.id, bob.person.id, 'admin'))
+    await act(() =>
+      pagesApi.setMemberRole(wiki.id, pagesApi.person.id, 'viewer')
+    )
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Move' }))
+
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+      'You can no longer move pages in this wiki.'
+    )
+    expect(dialog).toBeInTheDocument()
+  })
+
   it('stays put when the dialog is closed', async () => {
     const { pagesApi } = engineering()
     const dialog = await openMove('Laptop setup')

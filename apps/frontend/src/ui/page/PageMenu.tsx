@@ -33,61 +33,69 @@ export function PageMenu({ page }: { page: Page }): ReactElement | null {
   // page in the trash takes none, stays put and is deleted already: with
   // nothing else to offer, the menu does not show.
   const editable = wiki.data !== undefined && wiki.data.role !== 'viewer'
-  if (!editable || page.home || page.deletedAt !== null) return null
+  const offered = editable && !page.home && page.deletedAt === null
 
+  // The menu goes, but an open dialog stays: a refused move reloads the wiki,
+  // which may show the person lost the editor role, and the dialog is where
+  // that refusal is said. Keep the dialogs mounted outside the menu, so the
+  // message shows before, or instead of, the dialog closing.
   return (
     <>
-      <IconButton
-        aria-label={t('page.menu')}
-        aria-haspopup="menu"
-        aria-expanded={anchor !== null}
-        onClick={event => {
-          setAnchor(event.currentTarget)
-        }}
-      >
-        <Icon icon={Dots} />
-      </IconButton>
-      <Menu
-        anchorEl={anchor}
-        open={anchor !== null}
-        onClose={close}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-      >
-        <MenuItem
-          onClick={() => {
-            close()
-            setCreating(true)
-          }}
-        >
-          <ListItemIcon>
-            <Icon icon={Plus} />
-          </ListItemIcon>
-          <ListItemText>{t('page.newChild')}</ListItemText>
-        </MenuItem>
-        <MenuItem
-          onClick={() => {
-            close()
-            setMoving(true)
-          }}
-        >
-          <ListItemIcon>
-            <Icon icon={Moveto} />
-          </ListItemIcon>
-          <ListItemText>{t('page.move')}</ListItemText>
-        </MenuItem>
-        <MenuItem
-          onClick={() => {
-            close()
-            setDeleting(true)
-          }}
-        >
-          <ListItemIcon>
-            <Icon icon={Trash} />
-          </ListItemIcon>
-          <ListItemText>{t('page.delete')}</ListItemText>
-        </MenuItem>
-      </Menu>
+      {offered && (
+        <>
+          <IconButton
+            aria-label={t('page.menu')}
+            aria-haspopup="menu"
+            aria-expanded={anchor !== null}
+            onClick={event => {
+              setAnchor(event.currentTarget)
+            }}
+          >
+            <Icon icon={Dots} />
+          </IconButton>
+          <Menu
+            anchorEl={anchor}
+            open={anchor !== null}
+            onClose={close}
+            anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+            transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+          >
+            <MenuItem
+              onClick={() => {
+                close()
+                setCreating(true)
+              }}
+            >
+              <ListItemIcon>
+                <Icon icon={Plus} />
+              </ListItemIcon>
+              <ListItemText>{t('page.newChild')}</ListItemText>
+            </MenuItem>
+            <MenuItem
+              onClick={() => {
+                close()
+                setMoving(true)
+              }}
+            >
+              <ListItemIcon>
+                <Icon icon={Moveto} />
+              </ListItemIcon>
+              <ListItemText>{t('page.move')}</ListItemText>
+            </MenuItem>
+            <MenuItem
+              onClick={() => {
+                close()
+                setDeleting(true)
+              }}
+            >
+              <ListItemIcon>
+                <Icon icon={Trash} />
+              </ListItemIcon>
+              <ListItemText>{t('page.delete')}</ListItemText>
+            </MenuItem>
+          </Menu>
+        </>
+      )}
       {creating && (
         <NewPageDialog
           wikiId={page.wikiId}
