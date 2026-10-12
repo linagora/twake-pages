@@ -2,13 +2,9 @@ import { randomUUID } from 'node:crypto'
 import { sql } from 'drizzle-orm'
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest'
 import type { PlatformEvent } from '../../events/envelope.ts'
-import { asTenant, createDb, type Tx } from '../../infra/db.ts'
-import {
-  aUser,
-  purgeJobOf,
-  startApp,
-  type TestUser
-} from '../../testing/app.ts'
+import { createDb } from '../../infra/db.ts'
+import { aUser, aWikiOf, purgeJobOf, startApp } from '../../testing/app.ts'
+import { aGate, asPerson, aWhile } from '../../testing/concurrency.ts'
 import { accountRoutes } from './accounts.ts'
 
 let api: Awaited<ReturnType<typeof startApp>>
@@ -22,21 +18,6 @@ afterAll(async () => {
   await api.close()
   await client.end()
 })
-
-/** A promise, and the two ends that reach and open its gate. */
-function aGate() {
-  let open!: () => void
-  const opened = new Promise<void>(resolve => {
-    open = resolve
-  })
-  let reached!: () => void
-  const arrived = new Promise<void>(resolve => {
-    reached = resolve
-  })
-  return { opened, arrived, open, reached }
-}
-
-const aWhile = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
 /** Waits until the transaction `pid` reports waits its turn for a lock. */
 async function waitingOnALock(pid: () => number): Promise<void> {
@@ -55,20 +36,6 @@ async function waitingOnALock(pid: () => number): Promise<void> {
   throw new Error('the request never waited for a lock')
 }
 
-/** Runs the person's work under the tenant their rows need. */
-async function asPerson(tx: Tx, person: TestUser) {
-  await asTenant(tx, {
-    organizationId: person.organizationId,
-    userId: person.userId,
-    email: person.email
-  })
-}
-
-/** A shared wiki, made through the API by its admin. */
-async function aWiki(admin: TestUser, name: string) {
-  return (await api.as(admin).post('/wikis', { name })).json<{ id: string }>()
-}
-
 const anOrganizationDeleted = (organizationId: string): PlatformEvent => ({
   routingKey: 'domain.organization.deleted',
   messageId: randomUUID(),
@@ -80,7 +47,7 @@ describe('an organization deleted while a wiki waits to be purged', () => {
     const admin = aUser()
     const organizationId = admin.organizationId
     if (!organizationId) throw new Error('the test needs an organization')
-    const wiki = await aWiki(admin, 'Minutes')
+    const wiki = await aWikiOf(api, admin, 'Minutes')
     await api.as(admin).delete(`/wikis/${wiki.id}`)
     const job = await purgeJobOf(db, wiki.id)
     const deleted = accountRoutes.get('domain.organization.deleted')

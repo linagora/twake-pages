@@ -1,13 +1,15 @@
 import { sql } from 'drizzle-orm'
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest'
-import { asTenant, createDb, type Tx } from '../../infra/db.ts'
+import { createDb } from '../../infra/db.ts'
 import {
   anEmail,
   aUser,
+  aWikiOf,
   invite,
   startApp,
   type TestUser
 } from '../../testing/app.ts'
+import { aGate, asPerson, aWhile } from '../../testing/concurrency.ts'
 import { inviteEmails } from './schema.ts'
 
 let api: Awaited<ReturnType<typeof startApp>>
@@ -21,35 +23,6 @@ afterAll(async () => {
   await api.close()
   await client.end()
 })
-
-/** A promise, and the two ends that reach and open its gate. */
-function aGate() {
-  let open!: () => void
-  const opened = new Promise<void>(resolve => {
-    open = resolve
-  })
-  let reached!: () => void
-  const arrived = new Promise<void>(resolve => {
-    reached = resolve
-  })
-  return { opened, arrived, open, reached }
-}
-
-const aWhile = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
-
-/** Runs the person's work under the tenant their rows need. */
-async function asPerson(tx: Tx, person: TestUser) {
-  await asTenant(tx, {
-    organizationId: person.organizationId,
-    userId: person.userId,
-    email: person.email
-  })
-}
-
-/** A shared wiki, made through the API by its admin. */
-async function aWiki(admin: TestUser, name: string) {
-  return (await api.as(admin).post('/wikis', { name })).json<{ id: string }>()
-}
 
 /**
  * An invitation email the person sent from the wiki, backdated so the sweep
@@ -71,16 +44,23 @@ function anOldEmail(by: TestUser, wikiId: string, email: string) {
 describe('an invitation sent while a deleted account holds its old emails', () => {
   it('sweeps the day-old emails without waiting for the one the deletion holds', async () => {
     const alice = aUser()
-    const wiki = await aWiki(alice, 'Roadmap')
+    const wiki = await aWikiOf(api, alice, 'Roadmap')
     await anOldEmail(alice, wiki.id, anEmail('old'))
 
-    // The deletion, holding the wiki's day-old emails while it runs its other
-    // work, as app_forget_user's delete does.
+    // The deletion, holding the emails app_forget_user takes — the ones the
+    // person sent, or that hold a member's address — while it runs its other
+    // work.
     const held = aGate()
     const deletion = db.transaction(async tx => {
       await asPerson(tx, alice)
       await tx.execute(sql`
-        select 1 from invite_emails where wiki_id = ${wiki.id} for update`)
+        select 1 from invite_emails
+        where invited_by = ${alice.userId}
+           or email in (
+             select lower(email) from wiki_members
+             where user_id = ${alice.userId}
+           )
+        for update`)
       held.reached()
       await held.opened
     })
