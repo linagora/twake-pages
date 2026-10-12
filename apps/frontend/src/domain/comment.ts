@@ -13,16 +13,15 @@ export interface Comment {
 
 export type CommentPart = { text: string } | { mention: string }
 
+/** The characters a mention may follow, unless it starts the text. */
+export const BEFORE_MENTION = /[\s([{"']/u
+
 // As the backend reads a mention (docs/api.md): @ and an email, at the start
 // of the text or after a space, an opening bracket or a quote, so that the
 // address in "bob@example.com" alone mentions no one. The email takes the
 // characters Twake Tasks takes, though Tasks reads a mention after a space
 // alone: plain text has no editor to set a mention apart, and prose writes
 // brackets and quotes around one.
-
-/** The characters a mention may follow, unless it starts the text. */
-export const BEFORE_MENTION = /[\s([{"']/u
-
 const MENTION = new RegExp(
   `(?<=^|${BEFORE_MENTION.source})@([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]*[A-Za-z0-9])`,
   'u'
