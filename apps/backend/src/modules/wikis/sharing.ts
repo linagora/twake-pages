@@ -1,4 +1,4 @@
-import { and, asc, count, eq, gt, ilike, lte, ne, or, sql } from 'drizzle-orm'
+import { and, asc, count, eq, gt, ilike, ne, or, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import { inTenant, type Db, type Tx } from '../../infra/db.ts'
 import type { HttpServer } from '../../infra/http.ts'
@@ -56,9 +56,17 @@ const EMAILS_AN_HOUR = 20
 // older than a day counts no more: forgotten. Unlike Twake Tasks, the windows
 // run on the database's clock, which stamps sent_at.
 async function mayEmail(tx: Tx, wikiId: string, email: string, by: string) {
-  await tx
-    .delete(inviteEmails)
-    .where(lte(inviteEmails.sentAt, sql`now() - interval '1 day'`))
+  // The day-old rows go, forgotten: the sweep takes them itself, rather than
+  // wait for a deletion that holds a few (FOR UPDATE SKIP LOCKED), which
+  // would make the two wait on each other, the invitation answering 500. A
+  // row skipped here is taken by a later invitation's sweep.
+  await tx.execute(sql`
+    delete from invite_emails
+    where id in (
+      select id from invite_emails
+      where sent_at <= now() - interval '1 day'
+      for update skip locked
+    )`)
   const [sameAddress] = await tx
     .select({ id: inviteEmails.id })
     .from(inviteEmails)
