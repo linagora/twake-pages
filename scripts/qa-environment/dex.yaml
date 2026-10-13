@@ -1,0 +1,58 @@
+# Dex, the OIDC provider of the QA environment, as in Twake Calendar's e2e
+# stack. The browser and the backend reach it through the claims shim of
+# sso/server.ts, which serves https on the issuer's address and adds to its
+# userinfo the claims of Twake Workplace's SSO that Dex has no way to send.
+issuer: https://sso:18933
+
+storage:
+  type: memory
+
+web:
+  # Plain http, inside the network only: the shim terminates TLS
+  http: 0.0.0.0:5556
+  allowedOrigins:
+    - '*'
+
+staticClients:
+  # The frontend: public, PKCE
+  - id: twakepages
+    name: Twake Pages
+    public: true
+    redirectURIs:
+      - http://localhost:18930/auth/callback
+  # The backend introspects the tokens with it; its audience is twakepages
+  - id: twakepages-backend
+    name: Twake Pages backend
+    secret: qa-backend-secret
+    redirectURIs:
+      - http://localhost:18930/
+
+# Every password is "secret". The userID is the person's uuid (LDAP's
+# entryUUID on Twake Workplace), which the shim reads back from the subject.
+# Their organizations are in sso/people.json.
+enablePasswordDB: true
+staticPasswords:
+  - email: alice@acme.test
+    username: Alice Martin
+    userID: 0a11ce00-0000-4000-8000-000000000001
+    hash: $2b$10$Heo7W0Kph0Gw5a1JhlBgsuJxr.32lazW0d.pR3DQE7qNnQJIioP/K
+  - email: bob@acme.test
+    username: Bob Durand
+    userID: 0b0b0000-0000-4000-8000-000000000002
+    hash: $2b$10$Heo7W0Kph0Gw5a1JhlBgsuJxr.32lazW0d.pR3DQE7qNnQJIioP/K
+  - email: charlie@acme.test
+    username: Charlie Petit
+    userID: 0c0c0000-0000-4000-8000-000000000003
+    hash: $2b$10$Heo7W0Kph0Gw5a1JhlBgsuJxr.32lazW0d.pR3DQE7qNnQJIioP/K
+  - email: dave@globex.test
+    username: Dave Moreau
+    userID: 0d0d0000-0000-4000-8000-000000000004
+    hash: $2b$10$Heo7W0Kph0Gw5a1JhlBgsuJxr.32lazW0d.pR3DQE7qNnQJIioP/K
+  - email: erin@mail.test
+    username: Erin Leroy
+    userID: 0e0e0000-0000-4000-8000-000000000005
+    hash: $2b$10$Heo7W0Kph0Gw5a1JhlBgsuJxr.32lazW0d.pR3DQE7qNnQJIioP/K
+
+oauth2:
+  skipApprovalScreen: true
+  responseTypes: ['code']
