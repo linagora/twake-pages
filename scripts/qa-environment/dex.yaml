@@ -2,7 +2,7 @@
 # stack. The browser and the backend reach it through the claims shim of
 # sso/server.ts, which serves https on the issuer's address and adds to its
 # userinfo the claims of Twake Workplace's SSO that Dex has no way to send.
-issuer: https://sso:18933
+issuer: https://sso:18943
 
 storage:
   type: memory
@@ -19,13 +19,13 @@ staticClients:
     name: Twake Pages
     public: true
     redirectURIs:
-      - http://localhost:18930/auth/callback
+      - http://localhost:18940/auth/callback
   # The backend introspects the tokens with it; its audience is twakepages
   - id: twakepages-backend
     name: Twake Pages backend
     secret: qa-backend-secret
     redirectURIs:
-      - http://localhost:18930/
+      - http://localhost:18940/
 
 # Every password is "secret". The userID is the person's uuid (LDAP's
 # entryUUID on Twake Workplace), which the shim reads back from the subject.
