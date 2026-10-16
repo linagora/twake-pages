@@ -298,6 +298,7 @@
     "placeholder": "Écrire un commentaire…",
     "mentionsLabel": "Personnes à mentionner",
     "mentionsFailed": "Les personnes à mentionner n'ont pas pu être chargées.",
+    "tooLong": "%{over} caractère au-delà de la limite de %{max} |||| %{over} caractères au-delà de la limite de %{max}",
     "send": "Envoyer",
     "sendHint": "Ctrl+Entrée pour envoyer",
     "sendFailed": "Le commentaire n'a pas pu être envoyé.",

@@ -246,6 +246,27 @@ describe('a new comment', () => {
     expect(pagesApi.addComment).not.toHaveBeenCalled()
   })
 
+  it('says by how much a comment is too long', async () => {
+    const { pagesApi, wiki, page } = onboarding()
+    renderRoute(`/wikis/${wiki.id}/pages/${page.id}`, { pagesApi })
+    const comments = await findCommentSection()
+    const field = within(comments).getByRole('textbox', { name: 'Comment' })
+
+    typeIn(comments, 'Comment', 'x'.repeat(10_001))
+    expect(field).toBeInvalid()
+    expect(field).toHaveAccessibleDescription(
+      '1 character over the 10,000 limit'
+    )
+    typeIn(comments, 'Comment', ` ${'x'.repeat(11_500)} `)
+    expect(field).toHaveAccessibleDescription(
+      '1,500 characters over the 10,000 limit'
+    )
+    typeIn(comments, 'Comment', ` ${'x'.repeat(10_000)} `)
+
+    expect(field).toBeValid()
+    expect(field).not.toHaveAccessibleDescription()
+  })
+
   it('is sent once, though sent again while the backend answers', async () => {
     const { pagesApi, wiki, page } = onboarding()
     const addComment = pagesApi.addComment.getMockImplementation()
