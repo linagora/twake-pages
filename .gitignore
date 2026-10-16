@@ -5,3 +5,4 @@ coverage/
 apps/frontend/public/.env.js
 *.tsbuildinfo
 .scratch/
+scripts/qa-environment/.certs/
