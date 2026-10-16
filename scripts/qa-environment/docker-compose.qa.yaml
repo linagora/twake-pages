@@ -1,0 +1,115 @@
+# The QA stack, an override of the root docker-compose.yml that start.sh runs:
+#   docker compose -p twake-pages-qa -f docker-compose.yml \
+#     -f scripts/qa-environment/docker-compose.qa.yaml --profile app up
+# Paths are relative to the repository, the directory of the first file.
+#
+# The browser opens the app at http://localhost:18930, the SSO at
+# https://sso:18933 and Grist at http://localhost:18932: on the host, as
+# published below (sso mapped to 127.0.0.1); from a container on the network,
+# with --host-resolver-rules (start.sh prints them). localhost keeps the app a
+# secure context, which its sign-in needs.
+services:
+  rabbitmq:
+    ports: !reset []
+
+  postgres:
+    ports: !reset []
+    # No volume: every start begins with an empty database
+    volumes: !override
+      - ./postgres-init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+
+  dex:
+    # The Dex of Twake Calendar's e2e stack, pinned so that it never drifts
+    image: ghcr.io/dexidp/dex@sha256:edd1d651b502a6afd0cc18cffb3733b8ab7910718d83dbb44906f10f84970282
+    command: ['dex', 'serve', '/etc/dex/config.yaml']
+    environment:
+      # The password hashes hold "$"
+      DEX_EXPAND_ENV: 'false'
+      # Dex remembers who signed in, so that the app's silent sign-in reuses it
+      DEX_SESSIONS_ENABLED: 'true'
+    volumes:
+      - ./scripts/qa-environment/dex.yaml:/etc/dex/config.yaml:ro
+
+  sso:
+    image: node:24-slim
+    working_dir: /sso
+    command: ['node', 'server.ts']
+    depends_on:
+      dex:
+        condition: service_started
+    volumes:
+      - ./scripts/qa-environment/sso:/sso:ro
+      - ./scripts/qa-environment/.certs:/certs:ro
+    ports:
+      - '127.0.0.1:18933:18933'
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('https://localhost:18933/.well-known/openid-configuration').then(r => process.exit(r.ok ? 0 : 1), () => process.exit(1))"
+        ]
+      interval: 2s
+      retries: 30
+    environment:
+      NODE_EXTRA_CA_CERTS: /certs/sso.crt
+
+  # The stand-in Grist of the e2e suite, whose documents pages frame
+  grist:
+    image: node:24-slim
+    working_dir: /grist
+    command: ['node', 'server.ts']
+    volumes:
+      - ./e2e/grist:/grist:ro
+    ports:
+      - '127.0.0.1:18932:3504'
+    environment:
+      FRAME_ANCESTORS: http://localhost:18930
+
+  mailpit:
+    image: axllent/mailpit:v1.27
+    ports:
+      - '127.0.0.1:18931:8025'
+
+  backend:
+    ports: !reset []
+    depends_on:
+      sso:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+    volumes:
+      - ./scripts/qa-environment/.certs:/certs:ro
+    # Ready once it consumes its queue, since RabbitMQ drops an event published
+    # to the space exchange before the queue is bound
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:8080/health/ready').then(r => process.exit(r.ok ? 0 : 1), () => process.exit(1))"
+        ]
+      interval: 2s
+      retries: 60
+    environment:
+      APP_URL: http://localhost:18930
+      OIDC_ISSUER: https://sso:18933
+      OIDC_CLIENT_SECRET: qa-backend-secret
+      NODE_EXTRA_CA_CERTS: /certs/sso.crt
+      SPACE_INTEGRATION: 'true'
+      GRIST_ORIGINS: http://localhost:18932
+      SMTP_URL: smtp://mailpit:1025
+      MAIL_FROM: Twake Pages QA <pages@acme.test>
+
+  frontend:
+    ports: !override
+      - '127.0.0.1:18930:8080'
+    environment:
+      SSO_BASE_URL: https://sso:18933
+      SSO_CLIENT_ID: twakepages
+      SSO_SCOPE: openid email profile
+      SSO_REDIRECT_URI: http://localhost:18930/auth/callback
+      SSO_POST_LOGOUT_REDIRECT: http://localhost:18930/
+      GRIST_URL: http://localhost:18932

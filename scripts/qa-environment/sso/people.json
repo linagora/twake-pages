@@ -1,0 +1,6 @@
+{
+  "alice@acme.test": { "org_id": "acme.test", "org_role": "admin" },
+  "bob@acme.test": { "org_id": "acme.test", "org_role": "member" },
+  "charlie@acme.test": { "org_id": "acme.test", "org_role": "member" },
+  "dave@globex.test": { "org_id": "globex.test", "org_role": "member" }
+}
