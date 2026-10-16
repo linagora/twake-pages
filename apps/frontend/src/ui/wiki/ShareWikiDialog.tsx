@@ -20,7 +20,7 @@ import {
 import { useId, useState, type ReactElement } from 'react'
 import { useNavigate } from 'react-router'
 
-import type { Refusal } from '@/application/pages'
+import type { PagesApi, Refusal } from '@/application/pages'
 import { InviteRow, PersonRow } from '@/ds/PeopleList'
 import { displayName } from '@/domain/person'
 import { ROLES, type Role, type Wiki } from '@/domain/wiki'
@@ -197,15 +197,22 @@ export function ShareWikiDialog({
   const sharing = useSharing(wiki.id)
   const [email, setEmail] = useState('')
   const [role, setRole] = useState<Role>('viewer')
-  const [invited, setInvited] = useState<string | null>(null)
+  const [invite, setInvite] = useState<{
+    to: string
+    ask: (api: PagesApi) => Promise<void>
+  } | null>(null)
   const navigate = useNavigate()
   const change = useSharingChange(wiki.id)
   const remove = useRemoveMember(wiki.id, () => {
     void navigate('/')
   })
-  // The dialog tells why the last change asked failed, whichever it was.
-  const failure =
-    remove.submittedAt > change.submittedAt ? remove.error : change.error
+  // The dialog tells of the last change asked only, whichever it was.
+  const removedLast = remove.submittedAt > change.submittedAt
+  const failure = removedLast ? remove.error : change.error
+  const invited =
+    !removedLast && change.isSuccess && change.variables === invite?.ask
+      ? invite.to
+      : null
 
   return (
     <Dialog open onClose={onClose} aria-labelledby={titleId}>
@@ -232,9 +239,10 @@ export function ShareWikiDialog({
             label={t('sharing.invite')}
             onSubmit={() => {
               const to = email.trim().toLowerCase()
-              change.mutate(api => api.invite(wiki.id, to, role), {
+              const ask = (api: PagesApi) => api.invite(wiki.id, to, role)
+              setInvite({ to, ask })
+              change.mutate(ask, {
                 onSuccess: () => {
-                  setInvited(to)
                   setEmail('')
                 }
               })
