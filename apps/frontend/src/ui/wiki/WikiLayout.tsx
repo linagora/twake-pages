@@ -4,8 +4,8 @@ import {
   ListItemButton,
   ListItemText
 } from '@linagora/twake-mui'
-import type { ReactElement } from 'react'
-import { Outlet, useParams } from 'react-router'
+import { useState, type ReactElement } from 'react'
+import { Outlet, useLocation, useParams } from 'react-router'
 
 import { ApiError } from '@/application/pages'
 import { WikiFrame } from '@/ds/WikiFrame'
@@ -30,6 +30,15 @@ export function WikiLayout({ back = true }: { back?: boolean }): ReactElement {
   // Checked before the data, which a failed reload keeps.
   const missing = wiki.error instanceof ApiError && wiki.error.status === 404
   useLiveWiki(wikiId, listed && !missing)
+  // Any navigation closes the menu, a link to the open page or Back included,
+  // so the screen it leads to shows.
+  const { key } = useLocation()
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [shownKey, setShownKey] = useState(key)
+  if (key !== shownKey) {
+    setShownKey(key)
+    setMenuOpen(false)
+  }
 
   if (missing || !wiki.data) {
     return (
@@ -45,6 +54,9 @@ export function WikiLayout({ back = true }: { back?: boolean }): ReactElement {
 
   return (
     <WikiFrame
+      menuLabel={t('wiki.openNav')}
+      menuOpen={menuOpen}
+      onMenuOpenChange={setMenuOpen}
       sidebar={
         <nav aria-label={t('wiki.nav')}>
           <List>
