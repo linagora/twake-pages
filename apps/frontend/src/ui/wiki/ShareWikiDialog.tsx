@@ -35,11 +35,14 @@ import {
 } from '@/ui/wiki/queries'
 import { useWikiName } from '@/ui/wiki/useWikiName'
 
-// Unlike Twake Tasks, which says only that the change failed: these two the
-// admin meets in plain use, and can do something about.
+// Unlike Twake Tasks, which says only that the change failed: these the admin
+// meets in plain use, and can do something about. The email is the only thing
+// the admin types, so an invalid request is an email the browser took but the
+// backend's stricter check refused.
 const REFUSALS: Partial<Record<Refusal, TranslationKey>> = {
   last_admin: 'sharing.lastAdmin',
-  not_same_organization: 'sharing.notSameOrganization'
+  not_same_organization: 'sharing.notSameOrganization',
+  invalid_request: 'sharing.invalidEmail'
 }
 
 /** Why the last change of the members was not made. */

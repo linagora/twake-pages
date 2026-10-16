@@ -98,6 +98,7 @@
     "close": "Close",
     "failed": "The change could not be saved.",
     "notSameOrganization": "Only people of your organization can be invited.",
+    "invalidEmail": "This email address is not valid.",
     "lastAdmin": "A wiki keeps at least one admin.",
     "loadFailed": "The members could not be loaded.",
     "suggestionsFailed": "The suggestions could not be loaded."
