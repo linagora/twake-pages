@@ -1,6 +1,6 @@
 import { Breadcrumbs, Link, Typography } from '@linagora/twake-mui'
 import type { ReactElement } from 'react'
-import { Link as RouterLink, useParams } from 'react-router'
+import { Navigate, Link as RouterLink, useParams } from 'react-router'
 
 import { PageHeader } from '@/ds/PageHeader'
 import type { Page } from '@/domain/page'
@@ -17,7 +17,7 @@ import { TrashNotice } from '@/ui/page/TrashNotice'
 import { useWikiPage } from '@/ui/page/useWikiPage'
 import { UnavailableScreen } from '@/ui/shell/Problems'
 import { useDocumentTitle } from '@/ui/useDocumentTitle'
-import { historyInItsWiki } from '@/ui/wiki/pathInItsWiki'
+import { historyInItsWiki, pathInItsWiki } from '@/ui/wiki/pathInItsWiki'
 import { useWiki } from '@/ui/wiki/queries'
 import { useWikiName } from '@/ui/wiki/useWikiName'
 
@@ -36,6 +36,10 @@ export function PageScreen(): ReactElement {
         loadFailed={t('page.loadFailed')}
       />
     )
+  }
+
+  if (page.data.home) {
+    return <Navigate to={pathInItsWiki(page.data, true)} replace />
   }
 
   return (

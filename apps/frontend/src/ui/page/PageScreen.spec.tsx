@@ -350,6 +350,29 @@ describe('a page', () => {
     }
   )
 
+  it.each(WIKI_BASES)(
+    'shows the home page at %s/<wiki>/pages/<home> on the home of its wiki',
+    async base => {
+      const { pagesApi, wiki } = handbook()
+      await pagesApi.publish(wiki.homePageId, {
+        baseVersion: 1,
+        title: 'Welcome',
+        content: []
+      })
+      const { router } = renderRoute(
+        `${base}/${wiki.id}/pages/${wiki.homePageId}`,
+        { pagesApi }
+      )
+
+      await waitFor(() => {
+        expect(router.state.location.pathname).toBe(`${base}/${wiki.id}`)
+      })
+      expect(
+        await screen.findByRole('heading', { level: 1, name: 'Handbook' })
+      ).toBeVisible()
+    }
+  )
+
   it('names the home page of the personal wiki by its label', async () => {
     const pagesApi = fakePagesApi()
     const wiki = pagesApi.withWiki({ kind: 'personal' })

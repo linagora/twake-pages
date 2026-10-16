@@ -91,6 +91,8 @@ function PageEditor({
   const hidden = imageHostsNotShown(draft.content, imageSources)
   const blockOptions = useBlockOptions()
   const path = pathInItsWiki(page, page.home)
+  // A draft kept from before the home page hid its title may have changed it.
+  const title = page.home ? page.title : draft.title.trim()
 
   const restart = () => {
     drop()
@@ -99,7 +101,7 @@ function PageEditor({
 
   const publishFrom = (baseVersion: number) => {
     publish.mutate(
-      { baseVersion, title: draft.title.trim(), content: draft.content },
+      { baseVersion, title, content: draft.content },
       {
         // Unless the person left the editor meanwhile.
         onSuccess: () => {
@@ -129,7 +131,7 @@ function PageEditor({
         }
         actions={
           <Button
-            disabled={publish.isPending || !draft.title.trim()}
+            disabled={publish.isPending || !title}
             onClick={() => {
               publishFrom(draft.baseVersion)
             }}
@@ -177,17 +179,21 @@ function PageEditor({
           {t('editor.draftKept', { number: kept.baseVersion })}
         </Alert>
       )}
-      <TextField
-        label={t('editor.pageTitle')}
-        value={draft.title}
-        onChange={event => {
-          change({ title: event.target.value })
-        }}
-        required
-        fullWidth
-        margin="dense"
-        slotProps={{ htmlInput: { maxLength: 200 } }}
-      />
+      {/* The home page shows under the name of its wiki, which is renamed
+          with the wiki. */}
+      {!page.home && (
+        <TextField
+          label={t('editor.pageTitle')}
+          value={draft.title}
+          onChange={event => {
+            change({ title: event.target.value })
+          }}
+          required
+          fullWidth
+          margin="dense"
+          slotProps={{ htmlInput: { maxLength: 200 } }}
+        />
+      )}
       {hidden.length > 0 && (
         <ImagesNotShown hosts={hidden} added={imageSources.added} />
       )}
