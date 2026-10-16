@@ -95,10 +95,11 @@ describe('a wiki', () => {
       await carol.invite(wiki.id, 'alice@example.com', 'editor')
       const listWikis = pagesApi.listWikis.getMockImplementation()
       let answer = (): void => undefined
+      const answered = new Promise<void>(resolve => {
+        answer = resolve
+      })
       pagesApi.listWikis.mockImplementationOnce(async () => {
-        await new Promise<void>(resolve => {
-          answer = resolve
-        })
+        await answered
         return (await listWikis?.()) ?? []
       })
       renderRoute(`${base}/${wiki.id}`, { pagesApi })

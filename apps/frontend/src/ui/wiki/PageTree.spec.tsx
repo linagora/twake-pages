@@ -570,10 +570,11 @@ describe('a page dragged in the tree', () => {
     const movePage = pagesApi.movePage.getMockImplementation()
     if (!movePage) throw new Error('The fake moves no page')
     let answer = (): void => undefined
+    const answered = new Promise<void>(resolve => {
+      answer = resolve
+    })
     pagesApi.movePage.mockImplementationOnce(async (pageId, move) => {
-      await new Promise<void>(resolve => {
-        answer = resolve
-      })
+      await answered
       return movePage(pageId, move)
     })
     return () => {

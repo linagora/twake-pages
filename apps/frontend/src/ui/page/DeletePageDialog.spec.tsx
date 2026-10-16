@@ -75,11 +75,12 @@ describe('a page deleted from its menu', () => {
     const { pagesApi } = engineering()
     const deletePage = pagesApi.deletePage.getMockImplementation()
     let answer = (): void => undefined
+    const answered = new Promise<void>(resolve => {
+      answer = resolve
+    })
     pagesApi.deletePage.mockImplementationOnce(async pageId => {
       await deletePage?.(pageId)
-      await new Promise<void>(resolve => {
-        answer = resolve
-      })
+      await answered
     })
     const dialog = await openDelete('Laptop setup')
 

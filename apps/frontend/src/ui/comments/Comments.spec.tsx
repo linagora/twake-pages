@@ -250,10 +250,11 @@ describe('a new comment', () => {
     const { pagesApi, wiki, page } = onboarding()
     const addComment = pagesApi.addComment.getMockImplementation()
     let answer = (): void => undefined
+    const answered = new Promise<void>(resolve => {
+      answer = resolve
+    })
     pagesApi.addComment.mockImplementationOnce(async (pageId, comment) => {
-      await new Promise<void>(resolve => {
-        answer = resolve
-      })
+      await answered
       if (!addComment) throw new Error('The fake writes no comment')
       return addComment(pageId, comment)
     })
@@ -740,10 +741,11 @@ describe('a deletion', () => {
     const deleteComment = pagesApi.deleteComment.getMockImplementation()
     if (!deleteComment) throw new Error('The fake deletes no comment')
     let answer = (): void => undefined
+    const answered = new Promise<void>(resolve => {
+      answer = resolve
+    })
     pagesApi.deleteComment.mockImplementationOnce(async commentId => {
-      await new Promise<void>(resolve => {
-        answer = resolve
-      })
+      await answered
       return deleteComment(commentId)
     })
     renderRoute(`/wikis/${wiki.id}/pages/${page.id}`, { pagesApi })

@@ -164,11 +164,12 @@ describe('ShareWikiDialog', () => {
     })
     const removeMember = pagesApi.removeMember.getMockImplementation()
     let answer = (): void => undefined
+    const answered = new Promise<void>(resolve => {
+      answer = resolve
+    })
     pagesApi.removeMember.mockImplementationOnce(async (wikiId, userId) => {
       await removeMember?.(wikiId, userId)
-      await new Promise<void>(resolve => {
-        answer = resolve
-      })
+      await answered
     })
     const { router } = renderRoute(`/wikis/${wiki.id}`, { pagesApi })
     fireEvent.click(await screen.findByRole('button', { name: 'Share' }))

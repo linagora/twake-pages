@@ -61,10 +61,11 @@ describe('a favorite', () => {
     const plans = pagesApi.withPage(wiki.id, { title: 'Plans' })
     const setFavorite = pagesApi.setFavorite.getMockImplementation()
     let answer = (): void => undefined
+    const answered = new Promise<void>(resolve => {
+      answer = resolve
+    })
     pagesApi.setFavorite.mockImplementationOnce(async (pageId, favorite) => {
-      await new Promise<void>(resolve => {
-        answer = resolve
-      })
+      await answered
       await setFavorite?.(pageId, favorite)
     })
     renderRoute(`/wikis/${wiki.id}/pages/${plans.id}`, { pagesApi })

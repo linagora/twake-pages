@@ -206,11 +206,12 @@ describe('the admin of a wiki', () => {
     const wiki = pagesApi.withWiki({ name: 'Handbook' })
     const deleteWiki = pagesApi.deleteWiki.getMockImplementation()
     let answer = (): void => undefined
+    const answered = new Promise<void>(resolve => {
+      answer = resolve
+    })
     pagesApi.deleteWiki.mockImplementationOnce(async wikiId => {
       await deleteWiki?.(wikiId)
-      await new Promise<void>(resolve => {
-        answer = resolve
-      })
+      await answered
     })
     const { router } = renderRoute(`/wikis/${wiki.id}`, { pagesApi })
 

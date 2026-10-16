@@ -717,10 +717,11 @@ describe('the draft of a page', () => {
     const publish = pagesApi.publish.getMockImplementation()
     if (!publish) throw new Error('No publish to hold')
     let answer = (): void => undefined
+    const answered = new Promise<void>(resolve => {
+      answer = resolve
+    })
     pagesApi.publish.mockImplementationOnce(async (pageId, draft) => {
-      await new Promise<void>(resolve => {
-        answer = resolve
-      })
+      await answered
       return publish(pageId, draft)
     })
     renderRoute(editor, { pagesApi })
