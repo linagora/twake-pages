@@ -116,13 +116,14 @@ function CommentForm({
   /** Closes a form opened from a comment. */
   onClose?: () => void
 }): ReactElement {
-  const { t } = useI18n()
+  const { t, lang } = useI18n()
   const words = FORM_WORDS[kind]
   const mentionable = useMentionable(wikiId)
   const [body, setBody] = useState(initial)
   const text = body.trim()
-  const sendable =
-    !change.isPending && text !== '' && text.length <= MAX_COMMENT
+  const over = text.length - MAX_COMMENT
+  const tooLong = over > 0
+  const sendable = !change.isPending && text !== '' && !tooLong
   const send = () => {
     if (!sendable) return
     change.mutate(text, {
@@ -186,7 +187,18 @@ function CommentForm({
               )
             }))
         }}
-        helperText={mentionable.failed ? t('comments.mentionsFailed') : null}
+        helperText={
+          tooLong
+            ? t('comments.tooLong', {
+                smart_count: over,
+                over: over.toLocaleString(lang),
+                max: MAX_COMMENT.toLocaleString(lang)
+              })
+            : mentionable.failed
+              ? t('comments.mentionsFailed')
+              : null
+        }
+        error={tooLong}
         minRows={2}
       />
       <div className="u-flex u-flex-items-center u-mt-half">

@@ -160,6 +160,7 @@ export function SuggestionField({
   onSubmit,
   suggestions,
   helperText,
+  error = false,
   inputRef,
   minRows
 }: {
@@ -172,6 +173,8 @@ export function SuggestionField({
   suggestions: Suggestions
   /** Said below the field, such as why nothing is suggested, or null. */
   helperText: string | null
+  /** The value is refused, and the helper text says why. */
+  error?: boolean
   /** The text area's own ref, or null. */
   inputRef: ((element: HTMLTextAreaElement | null) => void) | null
   minRows: number
@@ -269,6 +272,7 @@ export function SuggestionField({
         }}
         onKeyDown={onKeyDown}
         helperText={helperText}
+        error={error}
         multiline
         minRows={minRows}
         fullWidth
