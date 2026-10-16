@@ -118,6 +118,6 @@ createServer(
     cert: readFileSync('/certs/sso.crt')
   },
   forward
-).listen(Number(process.env.PORT ?? 18933), () => {
+).listen(Number(process.env.PORT ?? 18943), () => {
   console.log(`SSO shim in front of ${DEX.href}`)
 })

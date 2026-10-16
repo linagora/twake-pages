@@ -66,18 +66,18 @@ cat <<INFO
 
 ==> The QA environment is up
 
-  App:      http://localhost:18930/
-  SSO:      https://sso:18933  (Dex; alice, bob, charlie @acme.test, dave@globex.test,
+  App:      http://localhost:18940/
+  SSO:      https://sso:18943  (Dex; alice, bob, charlie @acme.test, dave@globex.test,
             erin@mail.test; password "secret")
-  Grist:    http://localhost:18932/<any path>  (stand-in)
-  Emails:   http://127.0.0.1:18931  (Mailpit)
+  Grist:    http://localhost:18942/<any path>  (stand-in)
+  Emails:   http://127.0.0.1:18941  (Mailpit)
 
 From a browser on this host, map sso to 127.0.0.1 and accept its certificate:
   chromium --user-data-dir=\$(mktemp -d) --ignore-certificate-errors \\
-    --host-resolver-rules="MAP sso 127.0.0.1" http://localhost:18930/
+    --host-resolver-rules="MAP sso 127.0.0.1" http://localhost:18940/
 
 From a container (e.g. Playwright), join the network '${QA_PROJECT}_default' and use:
-  --host-resolver-rules="MAP localhost:18930 frontend:8080,MAP localhost:18932 grist:3504"
+  --host-resolver-rules="MAP localhost:18940 frontend:8080,MAP localhost:18942 grist:3504"
   --ignore-certificate-errors
 and open Mailpit at http://mailpit:8025.
 

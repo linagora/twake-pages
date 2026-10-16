@@ -3,8 +3,8 @@
 #     -f scripts/qa-environment/docker-compose.qa.yaml --profile app up
 # Paths are relative to the repository, the directory of the first file.
 #
-# The browser opens the app at http://localhost:18930, the SSO at
-# https://sso:18933 and Grist at http://localhost:18932: on the host, as
+# The browser opens the app at http://localhost:18940, the SSO at
+# https://sso:18943 and Grist at http://localhost:18942: on the host, as
 # published below (sso mapped to 127.0.0.1); from a container on the network,
 # with --host-resolver-rules (start.sh prints them). localhost keeps the app a
 # secure context, which its sign-in needs.
@@ -41,14 +41,14 @@ services:
       - ./scripts/qa-environment/sso:/sso:ro
       - ./scripts/qa-environment/.certs:/certs:ro
     ports:
-      - '127.0.0.1:18933:18933'
+      - '127.0.0.1:18943:18943'
     healthcheck:
       test:
         [
           'CMD',
           'node',
           '-e',
-          "fetch('https://localhost:18933/.well-known/openid-configuration').then(r => process.exit(r.ok ? 0 : 1), () => process.exit(1))"
+          "fetch('https://localhost:18943/.well-known/openid-configuration').then(r => process.exit(r.ok ? 0 : 1), () => process.exit(1))"
         ]
       interval: 2s
       retries: 30
@@ -63,14 +63,14 @@ services:
     volumes:
       - ./e2e/grist:/grist:ro
     ports:
-      - '127.0.0.1:18932:3504'
+      - '127.0.0.1:18942:3504'
     environment:
-      FRAME_ANCESTORS: http://localhost:18930
+      FRAME_ANCESTORS: http://localhost:18940
 
   mailpit:
     image: axllent/mailpit:v1.27
     ports:
-      - '127.0.0.1:18931:8025'
+      - '127.0.0.1:18941:8025'
 
   backend:
     ports: !reset []
@@ -94,22 +94,22 @@ services:
       interval: 2s
       retries: 60
     environment:
-      APP_URL: http://localhost:18930
-      OIDC_ISSUER: https://sso:18933
+      APP_URL: http://localhost:18940
+      OIDC_ISSUER: https://sso:18943
       OIDC_CLIENT_SECRET: qa-backend-secret
       NODE_EXTRA_CA_CERTS: /certs/sso.crt
       SPACE_INTEGRATION: 'true'
-      GRIST_ORIGINS: http://localhost:18932
+      GRIST_ORIGINS: http://localhost:18942
       SMTP_URL: smtp://mailpit:1025
       MAIL_FROM: Twake Pages QA <pages@acme.test>
 
   frontend:
     ports: !override
-      - '127.0.0.1:18930:8080'
+      - '127.0.0.1:18940:8080'
     environment:
-      SSO_BASE_URL: https://sso:18933
+      SSO_BASE_URL: https://sso:18943
       SSO_CLIENT_ID: twakepages
       SSO_SCOPE: openid email profile
-      SSO_REDIRECT_URI: http://localhost:18930/auth/callback
-      SSO_POST_LOGOUT_REDIRECT: http://localhost:18930/
-      GRIST_URL: http://localhost:18932
+      SSO_REDIRECT_URI: http://localhost:18940/auth/callback
+      SSO_POST_LOGOUT_REDIRECT: http://localhost:18940/
+      GRIST_URL: http://localhost:18942
