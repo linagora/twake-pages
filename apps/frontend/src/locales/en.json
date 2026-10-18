@@ -49,6 +49,7 @@
   },
   "wiki": {
     "nav": "Wiki",
+    "openNav": "Wiki menu",
     "home": "Home page",
     "notFound": "This wiki doesn't exist, or you can't open it.",
     "loadFailed": "The wiki could not be loaded.",
