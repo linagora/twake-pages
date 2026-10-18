@@ -298,6 +298,7 @@
     "placeholder": "Write a comment…",
     "mentionsLabel": "People to mention",
     "mentionsFailed": "The people to mention could not be loaded.",
+    "tooLong": "%{over} character over the %{max} limit |||| %{over} characters over the %{max} limit",
     "send": "Send",
     "sendHint": "Ctrl+Enter to send",
     "sendFailed": "The comment could not be sent.",
