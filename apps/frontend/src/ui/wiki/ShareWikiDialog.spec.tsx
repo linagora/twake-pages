@@ -234,6 +234,48 @@ describe('ShareWikiDialog', () => {
     })
   })
 
+  it('stops telling of an invitation once it is cancelled', async () => {
+    const pagesApi = fakePagesApi()
+    const wiki = pagesApi.withWiki({ name: 'Engineering' })
+    const dialog = await openSharing(pagesApi, wiki.id)
+    const form = within(dialog.getByRole('form', { name: 'Invite' }))
+    fireEvent.change(form.getByRole('combobox', { name: 'Email' }), {
+      target: { value: 'charlie@example.com' }
+    })
+    fireEvent.click(form.getByRole('button', { name: 'Invite' }))
+    await dialog.findByText('Invited charlie@example.com.')
+    const charlie = await dialog.findByRole('listitem', {
+      name: 'charlie@example.com'
+    })
+
+    fireEvent.click(
+      within(charlie).getByRole('button', { name: 'Role: Viewer' })
+    )
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Cancel invitation' }))
+
+    await waitForElementToBeRemoved(charlie)
+    expect(dialog.queryByRole('status')).toBeNull()
+  })
+
+  it('tells only why the next invitation failed, not of the one before', async () => {
+    const pagesApi = fakePagesApi()
+    const wiki = pagesApi.withWiki({ name: 'Engineering' })
+    const dialog = await openSharing(pagesApi, wiki.id)
+    const form = within(dialog.getByRole('form', { name: 'Invite' }))
+    const email = form.getByRole('combobox', { name: 'Email' })
+    fireEvent.change(email, { target: { value: 'charlie@example.com' } })
+    fireEvent.click(form.getByRole('button', { name: 'Invite' }))
+    await dialog.findByText('Invited charlie@example.com.')
+
+    fireEvent.change(email, { target: { value: 'bob@elsewhere.com' } })
+    fireEvent.click(form.getByRole('button', { name: 'Invite' }))
+
+    expect(await dialog.findByRole('alert')).toHaveTextContent(
+      'Only people of your organization can be invited.'
+    )
+    expect(dialog.queryByRole('status')).toBeNull()
+  })
+
   it('tells the admin that only people of their organization are invited, and keeps the email', async () => {
     const pagesApi = fakePagesApi()
     const wiki = pagesApi.withWiki({ name: 'Engineering' })
