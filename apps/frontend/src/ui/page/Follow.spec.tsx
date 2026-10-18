@@ -58,10 +58,11 @@ describe('following a page', () => {
     const plans = pagesApi.withPage(wiki.id, { title: 'Plans' })
     const setFollowing = pagesApi.setFollowing.getMockImplementation()
     let answer = (): void => undefined
+    const answered = new Promise<void>(resolve => {
+      answer = resolve
+    })
     pagesApi.setFollowing.mockImplementationOnce(async (pageId, following) => {
-      await new Promise<void>(resolve => {
-        answer = resolve
-      })
+      await answered
       await setFollowing?.(pageId, following)
     })
     renderRoute(`/wikis/${wiki.id}/pages/${plans.id}`, { pagesApi })

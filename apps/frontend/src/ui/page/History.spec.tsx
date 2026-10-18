@@ -401,10 +401,11 @@ describe('restoring a version', () => {
     const restore = pagesApi.restoreVersion.getMockImplementation()
     if (!restore) throw new Error('No restore to hold')
     let answer = (): void => undefined
+    const answered = new Promise<void>(resolve => {
+      answer = resolve
+    })
     pagesApi.restoreVersion.mockImplementationOnce(async (pageId, number) => {
-      await new Promise<void>(resolve => {
-        answer = resolve
-      })
+      await answered
       return restore(pageId, number)
     })
     const { router } = renderRoute(
