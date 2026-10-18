@@ -19,6 +19,7 @@ import {
 import { fakeSession, fakeUser } from '@/testing/fakeSession'
 import { typeIn } from '@/testing/forms'
 import { renderRoute } from '@/testing/renderWithProviders'
+import { keepDraft } from '@/ui/page/drafts'
 import { followZone } from '@/ui/settings/zone'
 
 /** The types of the blocks and of the blocks under them, in order. */
@@ -243,14 +244,43 @@ describe('the editor of a page', () => {
       await screen.findByRole('textbox', { name: 'Content' }),
       'Start with the onboarding.'
     )
+    expect(
+      screen.queryByRole('textbox', { name: 'Title' })
+    ).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Publish' }))
 
     expect(
       await screen.findByRole('heading', { level: 1, name: 'Handbook' })
     ).toBeVisible()
+    expect(pagesApi.publish).toHaveBeenCalledWith(
+      wiki.homePageId,
+      expect.objectContaining({ title: 'Handbook' })
+    )
     expect(router.state.location.pathname).toBe(`/wikis/${wiki.id}`)
     expect(screen.getByText('Version 2')).toBeVisible()
     expect(await screen.findByText('Start with the onboarding.')).toBeVisible()
+  })
+
+  it('publishes the home page under its own title, over a kept draft of none', async () => {
+    const pagesApi = fakePagesApi()
+    const wiki = pagesApi.withWiki({ name: 'Handbook' })
+    keepDraft(fakeUser().email, wiki.homePageId, {
+      baseVersion: 1,
+      title: '',
+      content: []
+    })
+    renderRoute(`/wikis/${wiki.id}/pages/${wiki.homePageId}/edit`, {
+      pagesApi
+    })
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Publish' }))
+
+    await waitFor(() => {
+      expect(pagesApi.publish).toHaveBeenCalledWith(
+        wiki.homePageId,
+        expect.objectContaining({ title: 'Handbook' })
+      )
+    })
   })
 
   it.each([
