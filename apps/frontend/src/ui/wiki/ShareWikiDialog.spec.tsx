@@ -251,6 +251,22 @@ describe('ShareWikiDialog', () => {
     expect(dialog.queryByRole('status')).toBeNull()
   })
 
+  it('tells the admin that an email the browser takes but the backend refuses is not valid, and keeps it', async () => {
+    const pagesApi = fakePagesApi()
+    const wiki = pagesApi.withWiki({ name: 'Engineering' })
+    const dialog = await openSharing(pagesApi, wiki.id)
+    const form = within(dialog.getByRole('form', { name: 'Invite' }))
+    const email = form.getByRole('combobox', { name: 'Email' })
+
+    fireEvent.change(email, { target: { value: 'bob@example' } })
+    fireEvent.click(form.getByRole('button', { name: 'Invite' }))
+
+    expect(await dialog.findByRole('alert')).toHaveTextContent(
+      'This email address is not valid.'
+    )
+    expect(email).toHaveValue('bob@example')
+  })
+
   it('tells the last admin that a wiki keeps one', async () => {
     const pagesApi = fakePagesApi()
     const wiki = pagesApi.withWiki({
