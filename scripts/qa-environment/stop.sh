@@ -14,4 +14,5 @@ QA_PROJECT="${QA_PROJECT:-twake-pages-qa}"
 docker compose -p "$QA_PROJECT" -f "$REPO_DIR/docker-compose.yml" \
   -f "$SCRIPT_DIR/docker-compose.qa.yaml" --profile app \
   down --volumes --remove-orphans
+rm -rf "$SCRIPT_DIR/.generated"
 echo "==> QA environment '$QA_PROJECT' stopped"

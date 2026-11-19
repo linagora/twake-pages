@@ -28,7 +28,8 @@ services:
       # Dex remembers who signed in, so that the app's silent sign-in reuses it
       DEX_SESSIONS_ENABLED: 'true'
     volumes:
-      - ./scripts/qa-environment/dex.yaml:/etc/dex/config.yaml:ro
+      # start.sh renders another with QA_PERF_USERS
+      - ${QA_DEX_CONFIG:-./scripts/qa-environment/dex.yaml}:/etc/dex/config.yaml:ro
 
   sso:
     image: node:24-slim
@@ -39,9 +40,10 @@ services:
         condition: service_started
     volumes:
       - ./scripts/qa-environment/sso:/sso:ro
+      - ${QA_PEOPLE:-./scripts/qa-environment/sso/people.json}:/sso/people.json:ro
       - ./scripts/qa-environment/.certs:/certs:ro
     ports:
-      - '127.0.0.1:18943:18943'
+      - '127.0.0.1:${QA_SSO_PORT:-18943}:18943'
     healthcheck:
       test:
         [
@@ -63,14 +65,14 @@ services:
     volumes:
       - ./e2e/grist:/grist:ro
     ports:
-      - '127.0.0.1:18942:3504'
+      - '127.0.0.1:${QA_GRIST_PORT:-18942}:3504'
     environment:
       FRAME_ANCESTORS: http://localhost:18940
 
   mailpit:
     image: axllent/mailpit:v1.27
     ports:
-      - '127.0.0.1:18941:8025'
+      - '127.0.0.1:${QA_MAILPIT_PORT:-18941}:8025'
 
   backend:
     ports: !reset []
@@ -105,7 +107,7 @@ services:
 
   frontend:
     ports: !override
-      - '127.0.0.1:18940:8080'
+      - '127.0.0.1:${QA_APP_PORT:-18940}:8080'
     environment:
       SSO_BASE_URL: https://sso:18943
       SSO_CLIENT_ID: twakepages

@@ -6,3 +6,4 @@ apps/frontend/public/.env.js
 *.tsbuildinfo
 .scratch/
 scripts/qa-environment/.certs/
+scripts/qa-environment/.generated/
